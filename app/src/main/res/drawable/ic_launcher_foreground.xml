@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Sophisticated shadow path representing depth -->
+    <path
+        android:fillColor="#15000000"
+        android:pathData="M 58 34 A 24 24 0 1 0 58 82 A 24 24 0 1 0 58 34 Z" />
+
+    <!-- Core Golden/Emerald Wealth Coin -->
+    <path
+        android:fillColor="#2D7D5F"
+        android:pathData="M 54 30 A 24 24 0 1 0 54 78 A 24 24 0 1 0 54 30 Z" />
+        
+    <!-- Golden Outer Rim Border -->
+    <path
+        android:strokeColor="#FCD34D"
+        android:strokeWidth="2.5"
+        android:fillColor="#00000000"
+        android:pathData="M 54 30 A 24 24 0 1 0 54 78 A 24 24 0 1 0 54 30 Z" />
+
+    <!-- Inner Elegant Sparkle Star representing Smart AI -->
+    <path
+        android:fillColor="#FCD34D"
+        android:pathData="M 54 42 L 56.5 48.5 L 63 51 L 56.5 53.5 L 54 60 L 51.5 53.5 L 45 51 L 51.5 48.5 Z" />
+
+    <!-- Rising Line Chart inside the coin -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="M 46 64 L 50 60 L 54 62 L 62 54" />
+
+</vector>

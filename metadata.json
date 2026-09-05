@@ -1,0 +1,6 @@
+{
+  "name": "تراز - Taraz",
+  "description": "دستیار مالی هوشمند تراز با تحلیل هوش مصنوعی و یادآور اقساط",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
