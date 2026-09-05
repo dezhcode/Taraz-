@@ -1014,8 +1014,31 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     }
 
     // Loan management
-    fun addLoan(bankName: String, loanName: String, totalAmount: Long, paidAmount: Long, installmentAmount: Long, dueDate: String) {
+    /** Extract an instalment day from free text the assistant produced. */
+    private fun parseDueDay(raw: String?): Int {
+        if (raw.isNullOrBlank()) return 1
+        val normalized = raw.map { ch ->
+            val p = "۰۱۲۳۴۵۶۷۸۹".indexOf(ch)
+            val a = "٠١٢٣٤٥٦٧٨٩".indexOf(ch)
+            when {
+                p >= 0 -> ('0' + p)
+                a >= 0 -> ('0' + a)
+                else -> ch
+            }
+        }.joinToString("")
+        return Regex("\\d{1,2}").find(normalized)?.value?.toIntOrNull()?.coerceIn(1, 31) ?: 1
+    }
+
+    fun addLoan(
+        bankName: String,
+        loanName: String,
+        totalAmount: Long,
+        paidAmount: Long,
+        installmentAmount: Long,
+        dueDay: Int
+    ) {
         viewModelScope.launch {
+            val day = dueDay.coerceIn(1, 31)
             repository.insertLoan(
                 Loan(
                     bankName = bankName,
@@ -1023,9 +1046,12 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     totalAmount = totalAmount,
                     paidAmount = paidAmount,
                     installmentAmount = installmentAmount,
-                    dueDate = dueDate
+                    dueDate = "روز ${com.example.utils.JalaliDate.toPersianDigits(day)} هر ماه",
+                    dueDay = day
                 )
             )
+            // Pick up a reminder that may already be within the warning window.
+            com.example.reminders.ReminderScheduler.runLoanCheckNow(getApplication())
             if (_alertsEnabled.value) {
                 com.example.utils.NotificationHelper.showNotification(
                     getApplication(),
@@ -1490,7 +1516,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                             totalAmount = action.loanTotalAmount ?: 0L,
                             paidAmount = action.loanPaidAmount ?: 0L,
                             installmentAmount = action.loanInstallmentAmount ?: 0L,
-                            dueDate = action.loanDueDate ?: "۱ام هر ماه"
+                            dueDate = action.loanDueDate ?: "۱ام هر ماه",
+                            dueDay = parseDueDay(action.loanDueDate)
                         )
                         repository.insertLoan(loan)
                     }
@@ -1508,7 +1535,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                             totalAmount = action.loanTotalAmount ?: (oldLoan?.totalAmount ?: 0L),
                             paidAmount = action.loanPaidAmount ?: (oldLoan?.paidAmount ?: 0L),
                             installmentAmount = action.loanInstallmentAmount ?: (oldLoan?.installmentAmount ?: 0L),
-                            dueDate = action.loanDueDate ?: (oldLoan?.dueDate ?: "۱ام هر ماه")
+                            dueDate = action.loanDueDate ?: (oldLoan?.dueDate ?: "۱ام هر ماه"),
+                            dueDay = action.loanDueDate?.let { parseDueDay(it) } ?: (oldLoan?.dueDay ?: 1)
                         )
                         repository.insertLoan(newLoan)
                     }
@@ -1602,17 +1630,16 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /**
+     * Hands the reminder to WorkManager instead of holding it in viewModelScope,
+     * which died as soon as the app was closed — so reminders never arrived.
+     */
     fun scheduleReminder(title: String, delaySeconds: Long) {
-        viewModelScope.launch {
-            kotlinx.coroutines.delay(delaySeconds * 1000)
-            if (_alertsEnabled.value) {
-                com.example.utils.NotificationHelper.showNotification(
-                    getApplication(),
-                    "یادآوری تراز",
-                    title
-                )
-            }
-        }
+        com.example.reminders.ReminderScheduler.scheduleOneOffReminder(
+            getApplication(),
+            title,
+            delaySeconds
+        )
     }
 
     private fun updatePendingMessageInState(aiMessageId: String, finalMsg: ChatMessage) {
@@ -1660,7 +1687,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         _isAiLoading.value = true
 
         val cardsCtx = cards.value.joinToString("\n") { "کارت: ${it.bankName} | شماره کارت: ${it.cardNumber} | موجودی: ${it.balance} تومان" }
-        val loansCtx = loans.value.joinToString("\n") { "وام: آیدی: ${it.id} | بانک: ${it.bankName} | نام وام: ${it.loanName} | مبلغ کل وام: ${it.totalAmount} | مبلغ پرداخت‌شده تا الان: ${it.paidAmount} | مبلغ هر قسط: ${it.installmentAmount} | تاریخ سررسید: ${it.dueDate}" }
+        val loansCtx = loans.value.joinToString("\n") { "وام: آیدی: ${it.id} | بانک: ${it.bankName} | نام وام: ${it.loanName} | مبلغ کل وام: ${it.totalAmount} | مبلغ پرداخت‌شده تا الان: ${it.paidAmount} | مبلغ هر قسط: ${it.installmentAmount} | تاریخ سررسید: روز ${it.dueDay} هر ماه | قسط بعدی: ${com.example.utils.JalaliDate.fromTimestamp(com.example.utils.JalaliDate.nextDueTimestamp(it.dueDay)).formatLong()}" }
         val latestTransactionsCtx = transactions.value.take(15).joinToString("\n") { "تراکنش: آیدی: ${it.id} | عنوان: ${it.title} | مبلغ: ${it.amount} | دسته‌بندی: ${it.category} | نوع: ${if (it.isExpense) "هزینه" else "درآمد"} | کارت/بانک: ${it.bankName}" }
 
         val systemPrompt = """

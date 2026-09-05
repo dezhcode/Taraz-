@@ -156,6 +156,36 @@ data class JalaliDate(
             return start to end
         }
 
+        /**
+         * Epoch millis of the next occurrence of [dueDay] of a Jalali month,
+         * at or after [from] (midnight of that day).
+         *
+         * A day that does not exist in the target month is clamped to the last
+         * day: an instalment due on the 31st falls on 30 Mehr and on 29 Esfand
+         * in an ordinary year, rather than silently rolling into the next month.
+         */
+        fun nextDueTimestamp(dueDay: Int, from: Long = System.currentTimeMillis()): Long {
+            val safeDay = dueDay.coerceIn(1, 31)
+            val today = fromTimestamp(from)
+
+            val thisMonthDay = safeDay.coerceAtMost(daysInMonth(today.year, today.month))
+            if (thisMonthDay >= today.day) {
+                return toTimestamp(today.year, today.month, thisMonthDay)
+            }
+
+            val nextYear = if (today.month == 12) today.year + 1 else today.year
+            val nextMonth = if (today.month == 12) 1 else today.month + 1
+            val nextMonthDay = safeDay.coerceAtMost(daysInMonth(nextYear, nextMonth))
+            return toTimestamp(nextYear, nextMonth, nextMonthDay)
+        }
+
+        /** Whole days from today until [timestamp]; 0 means today, negative is past. */
+        fun daysUntil(timestamp: Long, from: Long = System.currentTimeMillis()): Int {
+            val start = dayRange(from).first
+            val target = dayRange(timestamp).first
+            return ((target - start) / (24L * 60 * 60 * 1000)).toInt()
+        }
+
         /** [start, end) epoch-millis bounds of the Jalali day containing [timestamp]. */
         fun dayRange(timestamp: Long): Pair<Long, Long> {
             val date = fromTimestamp(timestamp)

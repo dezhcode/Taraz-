@@ -38,10 +38,22 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 
     private val viewModel: FinanceViewModel by viewModels()
 
+    /**
+     * From Android 13 notifications are silently dropped without this runtime
+     * grant — the app never asked, so no reminder could ever have been shown.
+     */
+    private val notificationPermissionLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { /* Declining is fine: reminders stay off until enabled in settings. */ }
+
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        com.example.utils.NotificationHelper.createNotificationChannel(this)
+        requestNotificationPermissionIfNeeded()
+        com.example.reminders.ReminderScheduler.scheduleDailyLoanCheck(this)
 
         setContent {
             // Force Fidar Design System Light Theme and custom styling
@@ -156,8 +168,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         onPayInstallment = { loan ->
                                             viewModel.payInstallment(loan)
                                         },
-                                        onAddLoan = { bankName, loanName, totalAmount, paidAmount, installmentAmount, dueDate ->
-                                            viewModel.addLoan(bankName, loanName, totalAmount, paidAmount, installmentAmount, dueDate)
+                                        onAddLoan = { bankName, loanName, totalAmount, paidAmount, installmentAmount, dueDay ->
+                                            viewModel.addLoan(bankName, loanName, totalAmount, paidAmount, installmentAmount, dueDay)
                                         }
                                     )
                                 }
@@ -477,4 +489,16 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
             }
             }
         }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+                this,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
     }
+}

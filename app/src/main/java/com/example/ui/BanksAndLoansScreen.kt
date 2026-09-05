@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -29,6 +30,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.font.FontWeight
@@ -392,7 +395,7 @@ fun LoansSubScreen(
     cards: List<BankCard>,
     onBack: () -> Unit,
     onPayInstallment: (Loan) -> Unit,
-    onAddLoan: (bankName: String, loanName: String, totalAmount: Long, paidAmount: Long, installmentAmount: Long, dueDate: String) -> Unit
+    onAddLoan: (bankName: String, loanName: String, totalAmount: Long, paidAmount: Long, installmentAmount: Long, dueDay: Int) -> Unit
 ) {
     var showAddLoanDialog by remember { mutableStateOf(false) }
 
@@ -570,7 +573,7 @@ fun LoanCardItem(
                         .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = "سررسید: ${loan.dueDate}",
+                        text = nextDueLabel(loan),
                         style = MaterialTheme.typography.labelMedium.copy(color = AlertOrange, fontWeight = FontWeight.Bold)
                     )
                 }
@@ -648,14 +651,14 @@ fun LoanCardItem(
 @Composable
 fun AddLoanDialog(
     onDismiss: () -> Unit,
-    onConfirm: (bankName: String, loanName: String, totalAmount: Long, paidAmount: Long, installmentAmount: Long, dueDate: String) -> Unit
+    onConfirm: (bankName: String, loanName: String, totalAmount: Long, paidAmount: Long, installmentAmount: Long, dueDay: Int) -> Unit
 ) {
     var bankName by remember { mutableStateOf("") }
     var loanName by remember { mutableStateOf("") }
     var totalAmount by remember { mutableStateOf("") }
     var paidAmount by remember { mutableStateOf("") }
     var installmentAmount by remember { mutableStateOf("") }
-    var dueDate by remember { mutableStateOf("") }
+    var dueDay by remember { mutableIntStateOf(1) }
     var showError by remember { mutableStateOf(false) }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -782,13 +785,51 @@ fun AddLoanDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                OutlinedTextField(
-                    value = dueDate,
-                    onValueChange = { dueDate = it },
-                    label = { Text("تاریخ قسط (مثال: 15 هر ماه)") },
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().testTag("input_loan_duedate")
+                // A free-text due date could not be turned into a reminder.
+                // The day of the Jalali month is picked, not typed.
+                Text(
+                    text = "روز سررسید قسط (در ماه شمسی)",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("input_loan_dueday")
+                ) {
+                    items((1..31).toList()) { day ->
+                        val selected = day == dueDay
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(if (selected) EmeraldPrimary else Color.Transparent)
+                                .border(
+                                    width = 1.dp,
+                                    color = if (selected) EmeraldPrimary else EbayBorderGray,
+                                    shape = CircleShape
+                                )
+                                .clickable { dueDay = day }
+                                .semantics { contentDescription = "روز $day" },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = com.example.utils.JalaliDate.toPersianDigits(day),
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    color = if (selected) Color.White else EbaySecondaryText,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = "قسط بعدی: " + com.example.utils.JalaliDate
+                        .fromTimestamp(com.example.utils.JalaliDate.nextDueTimestamp(dueDay))
+                        .formatLong(),
+                    style = MaterialTheme.typography.bodySmall.copy(color = EbaySecondaryText)
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -807,10 +848,10 @@ fun AddLoanDialog(
                         val paid = paidAmount.toLongOrNull()
                         val inst = installmentAmount.toLongOrNull()
 
-                        if (bankName.isBlank() || loanName.isBlank() || tot == null || paid == null || inst == null || dueDate.isBlank()) {
+                        if (bankName.isBlank() || loanName.isBlank() || tot == null || paid == null || inst == null) {
                             showError = true
                         } else {
-                            onConfirm(bankName, loanName, tot, paid, inst, dueDate)
+                            onConfirm(bankName, loanName, tot, paid, inst, dueDay)
                         }
                     },
                     modifier = Modifier
@@ -825,4 +866,20 @@ fun AddLoanDialog(
             }
         }
     }
+}
+
+/**
+ * "سررسید: ۵ مهر ۱۴۰۵ (۳ روز دیگر)" — a settled loan just says so.
+ */
+private fun nextDueLabel(loan: com.example.data.Loan): String {
+    if (loan.isSettled) return "تسویه شده"
+    val dueAt = com.example.utils.JalaliDate.nextDueTimestamp(loan.dueDay)
+    val date = com.example.utils.JalaliDate.fromTimestamp(dueAt)
+    val daysLeft = com.example.utils.JalaliDate.daysUntil(dueAt)
+    val suffix = when (daysLeft) {
+        0 -> "امروز"
+        1 -> "فردا"
+        else -> "${com.example.utils.JalaliDate.toPersianDigits(daysLeft)} روز دیگر"
+    }
+    return "سررسید: ${date.formatLong()} ($suffix)"
 }

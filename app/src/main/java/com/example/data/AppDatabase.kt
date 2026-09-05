@@ -88,7 +88,7 @@ interface GoalDao {
         PendingTransaction::class,
         UnknownSms::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -105,6 +105,43 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
+        /**
+         * v5 adds the machine-readable instalment day. The old free-text
+         * dueDate ("15 هر ماه", "۵ام") is parsed into it so nobody loses the
+         * loans they already entered; anything unparseable falls back to 1.
+         */
+        val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE loans ADD COLUMN dueDay INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE loans ADD COLUMN reminderEnabled INTEGER NOT NULL DEFAULT 1")
+
+                val cursor = db.query("SELECT id, dueDate FROM loans")
+                cursor.use {
+                    while (it.moveToNext()) {
+                        val id = it.getInt(0)
+                        val raw = it.getString(1) ?: ""
+                        val day = extractDay(raw)
+                        db.execSQL("UPDATE loans SET dueDay = ? WHERE id = ?", arrayOf<Any>(day, id))
+                    }
+                }
+            }
+        }
+
+        /** Pull the first 1..31 number out of a label, tolerating Persian digits. */
+        private fun extractDay(raw: String): Int {
+            val normalized = raw.map { ch ->
+                val persian = "۰۱۲۳۴۵۶۷۸۹".indexOf(ch)
+                val arabic = "٠١٢٣٤٥٦٧٨٩".indexOf(ch)
+                when {
+                    persian >= 0 -> ('0' + persian)
+                    arabic >= 0 -> ('0' + arabic)
+                    else -> ch
+                }
+            }.joinToString("")
+            val match = Regex("\\d{1,2}").find(normalized)?.value?.toIntOrNull() ?: return 1
+            return match.coerceIn(1, 31)
+        }
+
         fun getDatabase(context: Context, scope: CoroutineScope): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -113,6 +150,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "fidar_finance_database"
                 )
                 .addCallback(AppDatabaseCallback(scope))
+                .addMigrations(MIGRATION_4_5)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance

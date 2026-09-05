@@ -31,8 +31,14 @@ data class Loan(
     val totalAmount: Long,
     val paidAmount: Long,
     val installmentAmount: Long,
-    val dueDate: String
-)
+    /** Human-readable label, kept for display and for AI context. */
+    val dueDate: String,
+    /** Day of the Jalali month the instalment falls due, 1..31. Drives reminders. */
+    val dueDay: Int = 1,
+    val reminderEnabled: Boolean = true
+) {
+    val isSettled: Boolean get() = paidAmount >= totalAmount
+}
 
 @Entity(tableName = "financial_goals")
 data class FinancialGoal(

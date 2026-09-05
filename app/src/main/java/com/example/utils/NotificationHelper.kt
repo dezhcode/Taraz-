@@ -29,7 +29,22 @@ object NotificationHelper {
         }
     }
 
-    fun showNotification(context: Context, title: String, message: String) {
+    /** Persian-digit thousands separators, e.g. ۲٬۵۰۰٬۰۰۰ */
+    fun formatAmount(amount: Long): String {
+        val grouped = java.text.NumberFormat.getNumberInstance(java.util.Locale("fa", "IR")).format(amount)
+        return grouped
+    }
+
+    /**
+     * [notificationId] lets each loan own a stable slot, so three loans produce
+     * three notifications instead of overwriting one another.
+     */
+    fun showNotification(
+        context: Context,
+        title: String,
+        message: String,
+        notificationId: Int? = null
+    ) {
         // Ensure channel is created
         createNotificationChannel(context)
 
@@ -47,6 +62,7 @@ object NotificationHelper {
             .setSmallIcon(android.R.drawable.ic_dialog_info) // Fallback standard system drawable for reliable rendering
             .setContentTitle(title)
             .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
@@ -55,8 +71,7 @@ object NotificationHelper {
         try {
             with(NotificationManagerCompat.from(context)) {
                 // Post notification with a unique ID
-                val notificationId = System.currentTimeMillis().toInt()
-                notify(notificationId, builder.build())
+                notify(notificationId ?: System.currentTimeMillis().toInt(), builder.build())
             }
         } catch (e: SecurityException) {
             // Handled when user didn't grant POST_NOTIFICATIONS runtime permission yet
