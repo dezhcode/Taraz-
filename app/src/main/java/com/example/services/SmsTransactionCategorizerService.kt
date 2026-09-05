@@ -1,7 +1,6 @@
 package com.example.services
 
 import com.example.data.Transaction
-import java.util.Calendar
 
 object SmsTransactionCategorizerService {
 
@@ -77,58 +76,33 @@ object SmsTransactionCategorizerService {
      * Returns a list of MonthlyReport sorted by date.
      */
     fun generateMonthlyReports(transactions: List<Transaction>): List<MonthlyReport> {
-        val calendar = Calendar.getInstance()
-        
-        // Group transactions by Year and Month
-        val grouped = transactions.groupBy { tx ->
-            calendar.timeInMillis = tx.date
-            val year = calendar.get(Calendar.YEAR)
-            val month = calendar.get(Calendar.MONTH) + 1 // 1-indexed
-            getPersianMonthYear(year, month)
-        }
+        // Group by real Jalali month, not by the Gregorian month it happens to fall in.
+        return transactions
+            .groupBy { tx -> com.example.utils.JalaliDate.fromTimestamp(tx.date).monthKey() }
+            .map { (monthKey, txList) ->
+                val month = monthKey % 100
+                val year = monthKey / 100
+                val label = "${com.example.utils.JalaliDate.MONTH_NAMES[month - 1]} " +
+                        com.example.utils.JalaliDate.toPersianDigits(year)
 
-        return grouped.map { (monthYear, txList) ->
-            val income = txList.filter { !it.isExpense }.sumOf { it.amount }
-            val expense = txList.filter { it.isExpense }.sumOf { it.amount }
-            
-            val categoryBreakdown = txList.filter { it.isExpense }
-                .groupBy { it.category }
-                .mapValues { (_, list) -> list.sumOf { it.amount } }
-
-            MonthlyReport(
-                monthYear = monthYear,
-                totalIncome = income,
-                totalExpense = expense,
-                categoryBreakdown = categoryBreakdown,
-                transactionCount = txList.size
-            )
-        }.sortedBy { it.monthYear }
-    }
-
-    private fun getPersianMonthYear(gregorianYear: Int, gregorianMonth: Int): String {
-        val monthName = when (gregorianMonth) {
-            1 -> "دی"
-            2 -> "بهمن"
-            3 -> "اسفند"
-            4 -> "فروردین"
-            5 -> "اردیبهشت"
-            6 -> "خرداد"
-            7 -> "تیر"
-            8 -> "مرداد"
-            9 -> "شهریور"
-            10 -> "مهر"
-            11 -> "آبان"
-            12 -> "آذر"
-            else -> "نامشخص"
-        }
-        val yearOffset = if (gregorianMonth < 3) 622 else 621
-        val solarYear = gregorianYear - yearOffset
-        return "$monthName $solarYear"
+                MonthlyReport(
+                    monthYear = label,
+                    monthKey = monthKey,
+                    totalIncome = txList.filter { !it.isExpense }.sumOf { it.amount },
+                    totalExpense = txList.filter { it.isExpense }.sumOf { it.amount },
+                    categoryBreakdown = txList.filter { it.isExpense }
+                        .groupBy { it.category }
+                        .mapValues { (_, list) -> list.sumOf { it.amount } },
+                    transactionCount = txList.size
+                )
+            }
+            .sortedBy { it.monthKey }   // chronological; a month NAME cannot be sorted as text
     }
 }
 
 data class MonthlyReport(
     val monthYear: String,
+    val monthKey: Int = 0,
     val totalIncome: Long,
     val totalExpense: Long,
     val categoryBreakdown: Map<String, Long>,

@@ -276,6 +276,72 @@ fun AuthScreen(
                                     }
                                 }
                             }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Separator
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                HorizontalDivider(
+                                    modifier = Modifier.weight(1f),
+                                    color = EbayBorderGray
+                                )
+                                Text(
+                                    text = "یا",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = EbaySecondaryText,
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 12.sp
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 12.dp)
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.weight(1f),
+                                    color = EbayBorderGray
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Guest Login Button
+                            OutlinedButton(
+                                onClick = {
+                                    viewModel.loginAsGuest(fullName.ifBlank { "کاربر مهمان" })
+                                },
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(1.5.dp, EbayBluePrimary.copy(alpha = 0.35f)),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = EbayBlueLight.copy(alpha = 0.45f),
+                                    contentColor = EbayBluePrimary
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(50.dp)
+                                    .testTag("auth_guest_login_button")
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = null,
+                                        tint = EbayBluePrimary,
+                                        modifier = Modifier.size(19.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "ورود به عنوان مهمان (بدون شماره)",
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = EbayBluePrimary,
+                                            fontSize = 14.sp
+                                        )
+                                    )
+                                }
+                            }
                         }
                     } else {
                         // Step 2: Input 5-Digit OTP Code
@@ -462,6 +528,24 @@ fun AuthScreen(
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White,
                                         fontSize = 15.sp
+                                    )
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            TextButton(
+                                onClick = {
+                                    viewModel.loginAsGuest(fullName.ifBlank { "کاربر مهمان" })
+                                },
+                                modifier = Modifier.testTag("auth_step2_guest_button")
+                            ) {
+                                Text(
+                                    text = "انصراف و ورود مستقیم به عنوان مهمان",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = EbaySecondaryText,
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 12.5.sp
                                     )
                                 )
                             }

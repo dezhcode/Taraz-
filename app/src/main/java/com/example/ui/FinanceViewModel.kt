@@ -196,45 +196,25 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         .map { cardList -> cardList.sumOf { it.balance } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
+    // "This month" means the Jalali month: it starts on 1 Mehr, not 1 October.
     val monthlyIncome: StateFlow<Long> = transactions
         .map { txList ->
-            val cal = java.util.Calendar.getInstance()
-            val curMonth = cal.get(java.util.Calendar.MONTH)
-            val curYear = cal.get(java.util.Calendar.YEAR)
-            txList.filter {
-                if (it.isExpense) false else {
-                    val txCal = java.util.Calendar.getInstance().apply { timeInMillis = it.date }
-                    txCal.get(java.util.Calendar.MONTH) == curMonth && txCal.get(java.util.Calendar.YEAR) == curYear
-                }
-            }.sumOf { it.amount }
+            val (start, end) = com.example.utils.JalaliDate.monthRange(System.currentTimeMillis())
+            txList.filter { !it.isExpense && it.date >= start && it.date < end }.sumOf { it.amount }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
     val monthlyExpense: StateFlow<Long> = transactions
         .map { txList ->
-            val cal = java.util.Calendar.getInstance()
-            val curMonth = cal.get(java.util.Calendar.MONTH)
-            val curYear = cal.get(java.util.Calendar.YEAR)
-            txList.filter {
-                if (!it.isExpense) false else {
-                    val txCal = java.util.Calendar.getInstance().apply { timeInMillis = it.date }
-                    txCal.get(java.util.Calendar.MONTH) == curMonth && txCal.get(java.util.Calendar.YEAR) == curYear
-                }
-            }.sumOf { it.amount }
+            val (start, end) = com.example.utils.JalaliDate.monthRange(System.currentTimeMillis())
+            txList.filter { it.isExpense && it.date >= start && it.date < end }.sumOf { it.amount }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
     val todayExpense: StateFlow<Long> = transactions
         .map { txList ->
-            val cal = java.util.Calendar.getInstance()
-            val curDay = cal.get(java.util.Calendar.DAY_OF_YEAR)
-            val curYear = cal.get(java.util.Calendar.YEAR)
-            txList.filter {
-                if (!it.isExpense) false else {
-                    val txCal = java.util.Calendar.getInstance().apply { timeInMillis = it.date }
-                    txCal.get(java.util.Calendar.DAY_OF_YEAR) == curDay && txCal.get(java.util.Calendar.YEAR) == curYear
-                }
-            }.sumOf { it.amount }
+            val (start, end) = com.example.utils.JalaliDate.dayRange(System.currentTimeMillis())
+            txList.filter { it.isExpense && it.date >= start && it.date < end }.sumOf { it.amount }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 

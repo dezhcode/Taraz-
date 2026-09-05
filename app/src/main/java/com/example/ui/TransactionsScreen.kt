@@ -29,8 +29,6 @@ import androidx.compose.ui.unit.sp
 import com.example.data.Transaction
 import com.example.ui.theme.*
 import java.text.NumberFormat
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -359,8 +357,9 @@ fun TransactionItemCard(
     onDelete: () -> Unit,
     onClick: () -> Unit
 ) {
-    val df = SimpleDateFormat("dd MMM", Locale("fa", "IR"))
-    val formattedDate = df.format(Date(transaction.date))
+    // SimpleDateFormat with a fa locale still renders a Gregorian date in Persian
+    // digits; the user needs the Jalali date.
+    val formattedDate = com.example.utils.JalaliDate.fromTimestamp(transaction.date).formatShort()
     val formattedAmount = NumberFormat.getNumberInstance(Locale("fa", "IR")).format(transaction.amount)
 
     val (icon, bgColor, iconColor) = when (transaction.category) {
