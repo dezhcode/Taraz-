@@ -28,6 +28,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
@@ -418,6 +420,18 @@ fun DashboardScreen(
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Quick access to the two screens that were previously unreachable:
+        // BanksSubScreen and LoansSubScreen existed and worked, but nothing in
+        // the UI ever called onNavigateToCards / onNavigateToLoans.
+        QuickAccessSection(
+            loanCount = loans.count { !it.isSettled },
+            cardCount = cards.size,
+            onNavigateToLoans = onNavigateToLoans,
+            onNavigateToCards = onNavigateToCards
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -870,7 +884,7 @@ fun MonthlySummaryCard(
     modifier: Modifier = Modifier,
     title: String,
     value: Long,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     iconTint: Color,
     valueColor: Color,
     statusText: String,
@@ -1823,6 +1837,106 @@ fun FinancialOverviewCardsSkeleton(modifier: Modifier = Modifier) {
                 .clip(RoundedCornerShape(20.dp))
                 .skeletonShimmer()
         )
+    }
+}
+
+@Composable
+fun QuickAccessSection(
+    loanCount: Int,
+    cardCount: Int,
+    onNavigateToLoans: () -> Unit,
+    onNavigateToCards: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        QuickAccessCard(
+            title = "اقساط و وامها",
+            subtitle = if (loanCount > 0)
+                "${toPersianDigits(loanCount.toString())} وام فعال"
+            else "ثبت وام جدید",
+            icon = Icons.Default.AccountBalance,
+            accent = EbayBluePrimary,
+            onClick = onNavigateToLoans,
+            testTag = "quick_access_loans",
+            modifier = Modifier.weight(1f)
+        )
+        QuickAccessCard(
+            title = "کارتهای بانکی",
+            subtitle = if (cardCount > 0)
+                "${toPersianDigits(cardCount.toString())} کارت ثبتشده"
+            else "افزودن کارت",
+            icon = Icons.Default.CreditCard,
+            accent = EmeraldPrimary,
+            onClick = onNavigateToCards,
+            testTag = "quick_access_cards",
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun QuickAccessCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    accent: Color,
+    onClick: () -> Unit,
+    testTag: String,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .height(96.dp)
+            .clickable { onClick() }
+            .semantics { contentDescription = "$title، $subtitle" }
+            .testTag(testTag),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(accent.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    ),
+                    maxLines = 1
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = EbaySecondaryText,
+                        fontSize = 11.sp
+                    ),
+                    maxLines = 1
+                )
+            }
+        }
     }
 }
 
