@@ -530,9 +530,10 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
         // Trigger AI Backend calculation for financial health whenever SQLite data changes
         viewModelScope.launch {
+            @OptIn(kotlinx.coroutines.FlowPreview::class)
             combine(transactions, cards, loans, activeGoal) { txs, crds, lns, gl ->
                 listOf(txs, crds, lns, gl)
-            }.collectLatest { _ ->
+            }.debounce(800).collectLatest { _ ->
                 val txList = transactions.value
                 val cardList = cards.value
                 val loanList = loans.value
@@ -548,9 +549,10 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
         // Trigger AI Financial Coach calculation whenever SQLite financial data changes
         viewModelScope.launch {
+            @OptIn(kotlinx.coroutines.FlowPreview::class)
             combine(transactions, todayExpense, dailyBudget) { _, _, _ ->
                 Unit
-            }.collectLatest { _ ->
+            }.debounce(800).collectLatest { _ ->
                 val txList = transactions.value
                 val tExpense = todayExpense.value
                 val dBudget = dailyBudget.value

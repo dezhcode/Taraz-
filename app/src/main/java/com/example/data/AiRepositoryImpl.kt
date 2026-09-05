@@ -2,10 +2,13 @@ package com.example.data
 
 import android.content.Context
 import android.util.Log
+import com.example.data.remote.ApiClient
+import com.example.data.remote.ChatRequest
+import com.example.data.remote.CopilotDirectEngine
 import com.example.services.ApiConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.concurrent.TimeUnit
 
 class AiRepositoryImpl(private val context: Context) : AiRepository {
 
@@ -16,41 +19,61 @@ class AiRepositoryImpl(private val context: Context) : AiRepository {
 
     override suspend fun healthCheck(): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val apiService = com.example.data.remote.ApiClient.getApiService()
+            val apiService = ApiClient.getApiService()
             val response = apiService.healthCheck()
             if (response.status == "online" || response.service != null) {
                 Result.success(response.service ?: "سرور آنلاین است")
             } else {
                 Result.success("ارتباط با سرور برقرار شد")
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            Log.e("AiRepositoryImpl", "Health check failed", e)
-            Result.failure(e)
+            Log.w("AiRepositoryImpl", "Backend health check failed (${e.localizedMessage}), testing Copilot Native engine...")
+            val directTest = CopilotDirectEngine.askCopilot("تست")
+            if (directTest.isSuccess) {
+                Result.success("سرور کوپایلوت فعال است")
+            } else {
+                Result.failure(e)
+            }
         }
     }
 
     override suspend fun chat(message: String): Result<String> = withContext(Dispatchers.IO) {
+        // Step 1: Try the configured backend server (e.g. FastAPI)
         try {
-            val apiService = com.example.data.remote.ApiClient.getApiService()
-            val request = com.example.data.remote.ChatRequest(message = message)
+            val apiService = ApiClient.getApiService()
+            val request = ChatRequest(message = message)
             val response = apiService.chat(request)
             if (response.success && response.answer != null) {
-                Result.success(response.answer)
-            } else {
-                val errorMessage = response.error ?: "پاسخ ناموفق از سرور دریافت شد"
-                Result.failure(Exception("خطا در پاسخ سرور: $errorMessage"))
+                return@withContext Result.success(response.answer)
             }
-        } catch (e: java.net.SocketTimeoutException) {
-            Log.e("AiRepositoryImpl", "Network timeout calling FastAPI", e)
-            Result.failure(Exception("خطای زمان پاسخ‌دهی (Timeout): اتصال به سرور هوش مصنوعی برقرار نشد یا سرور بیش از حد شلوغ است. لطفا مجدداً تلاش کنید."))
-        } catch (e: java.net.UnknownHostException) {
-            Log.e("AiRepositoryImpl", "Host resolution failed calling FastAPI", e)
-            Result.failure(Exception("خطای عدم اتصال به شبکه: آدرس سرور یافت نشد. لطفا از فعال بودن اتصال اینترنت خود مطمئن شوید."))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: retrofit2.HttpException) {
+            Log.w("AiRepositoryImpl", "Backend returned HTTP ${e.code()}, falling back to Copilot Native engine")
         } catch (e: java.net.ConnectException) {
-            Log.e("AiRepositoryImpl", "Connection refused calling FastAPI", e)
-            Result.failure(Exception("خطای ارتباط با سرور: اتصال با سرور هوش مصنوعی برقرار نشد. احتمالاً سرور خاموش است یا دسترسی به آن محدود شده است."))
+            Log.w("AiRepositoryImpl", "Backend connection refused, falling back to Copilot Native engine")
+        } catch (e: java.net.UnknownHostException) {
+            Log.w("AiRepositoryImpl", "Backend host resolution failed, falling back to Copilot Native engine")
+        } catch (e: java.net.SocketTimeoutException) {
+            Log.w("AiRepositoryImpl", "Backend timeout, falling back to Copilot Native engine")
         } catch (e: Exception) {
-            Log.e("AiRepositoryImpl", "FastAPI chat call failed with unexpected error", e)
+            Log.w("AiRepositoryImpl", "Backend chat failed (${e.localizedMessage}), falling back to Copilot Native engine")
+        }
+
+        // Step 2: Fallback seamlessly to Copilot Native engine
+        try {
+            val copilotResult = CopilotDirectEngine.askCopilot(message)
+            if (copilotResult.isSuccess) {
+                return@withContext copilotResult
+            }
+            val copilotError = copilotResult.exceptionOrNull()?.localizedMessage ?: "پاسخی از هوش مصنوعی دریافت نشد"
+            Result.failure(Exception("خطا در ارتباط با دستیار هوش مصنوعی: $copilotError"))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("AiRepositoryImpl", "Copilot chat failed: ${e.localizedMessage}")
             Result.failure(Exception("خطای غیرمنتظره در ارتباط با دستیار هوش مصنوعی: ${e.localizedMessage ?: "مجدداً تلاش فرمایید"}"))
         }
     }
@@ -115,8 +138,10 @@ class AiRepositoryImpl(private val context: Context) : AiRepository {
                     recommendation = rec
                 )
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            Log.e("AiRepositoryImpl", "AI Financial Health evaluation failed, using fallback score", e)
+            Log.d("AiRepositoryImpl", "AI Financial Health evaluation using offline calculation: ${e.localizedMessage}")
             var baseScore = 100
             if (expense > income && income > 0) baseScore -= 25
             if (totalLoanDebt > balance && balance > 0) baseScore -= 20
@@ -223,8 +248,10 @@ class AiRepositoryImpl(private val context: Context) : AiRepository {
                     action = action
                 )
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            Log.e("AiRepositoryImpl", "AI Financial Coach evaluation failed, using fallback", e)
+            Log.d("AiRepositoryImpl", "AI Financial Coach evaluation using offline calculation: ${e.localizedMessage}")
             val type: String
             val priority: Int
             val message: String
