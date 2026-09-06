@@ -74,6 +74,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 val transactions by viewModel.transactions.collectAsStateWithLifecycle()
                 val cards by viewModel.cards.collectAsStateWithLifecycle()
                 val loans by viewModel.loans.collectAsStateWithLifecycle()
+                val categories by viewModel.categories.collectAsStateWithLifecycle()
                 val totalBalance by viewModel.totalBalance.collectAsStateWithLifecycle()
                 val monthlyIncome by viewModel.monthlyIncome.collectAsStateWithLifecycle()
                 val monthlyExpense by viewModel.monthlyExpense.collectAsStateWithLifecycle()
@@ -364,7 +365,27 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                  }
                              }
 
-                            if (isAddTransactionOpen || selectedTransactionForEdit != null) {
+                            // Adding uses the new sheet; editing an existing row keeps the
+                            // old one, which already knows how to delete and pre-fill.
+                            if (isAddTransactionOpen) {
+                                AddEntrySheet(
+                                    cards = cards,
+                                    categories = categories,
+                                    startAsExpense = initialIsExpenseForDialog,
+                                    onDismiss = { isAddTransactionOpen = false },
+                                    onSaveEntry = { title, amount, category, isExpense, bankName ->
+                                        viewModel.addTransaction(title, amount, category, isExpense, bankName)
+                                    },
+                                    onTransfer = { from, to, amount ->
+                                        viewModel.transferBetweenCards(from, to, amount)
+                                    },
+                                    onCreateCategory = { name, iconKey, colorHex, isIncome ->
+                                        viewModel.addCategory(name, iconKey, colorHex, isIncome)
+                                    }
+                                )
+                            }
+
+                            if (selectedTransactionForEdit != null) {
                                 PremiumTransactionSheet(
                                     cards = cards,
                                     existingTransaction = selectedTransactionForEdit,
@@ -373,19 +394,15 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         selectedTransactionForEdit = null
                                     },
                                     onConfirm = { title, amount, category, isExpense, bankName ->
-                                        if (selectedTransactionForEdit == null) {
-                                            viewModel.addTransaction(title, amount, category, isExpense, bankName)
-                                        } else {
-                                            val oldTx = selectedTransactionForEdit!!
-                                            val updatedTx = oldTx.copy(
-                                                title = title,
-                                                amount = amount,
-                                                category = category,
-                                                isExpense = isExpense,
-                                                bankName = bankName
-                                             )
-                                             viewModel.updateTransaction(oldTx, updatedTx)
-                                        }
+                                        val oldTx = selectedTransactionForEdit!!
+                                        val updatedTx = oldTx.copy(
+                                            title = title,
+                                            amount = amount,
+                                            category = category,
+                                            isExpense = isExpense,
+                                            bankName = bankName
+                                        )
+                                        viewModel.updateTransaction(oldTx, updatedTx)
                                         isAddTransactionOpen = false
                                         selectedTransactionForEdit = null
                                     },
