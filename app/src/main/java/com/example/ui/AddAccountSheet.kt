@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.AccountType
+import com.example.data.BankBin
+import com.example.ui.components.IranianBankLogo
 import com.example.ui.theme.*
 
 /**
@@ -49,6 +51,15 @@ fun AddAccountSheet(
     var cardNumber by remember { mutableStateOf("") }
     var balanceText by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+
+    // The first six digits identify the issuer, so the bank can be shown — and
+    // its name offered — before the user finishes typing.
+    val detectedBank = remember(cardNumber) { BankBin.bankFor(cardNumber) }
+
+    // Fill the name from the card, but never overwrite something the user typed.
+    LaunchedEffect(detectedBank) {
+        if (detectedBank != null && name.isBlank()) name = detectedBank
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -132,12 +143,34 @@ fun AddAccountSheet(
                         },
                         label = { Text("شمارهٔ کارت (اختیاری)") },
                         placeholder = { Text("6037 9911 1234 5678") },
+                        visualTransformation = CardNumberTransformation,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp),
+                        trailingIcon = {
+                            if (detectedBank != null) {
+                                IranianBankLogo(
+                                    bankName = detectedBank,
+                                    size = 28.dp,
+                                    modifier = Modifier
+                                        .padding(end = 10.dp)
+                                        .testTag("detected_bank_logo")
+                                )
+                            }
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("account_card_number")
+                    )
+                }
+                if (detectedBank != null) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "شناسایی شد: $detectedBank",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = HorizonGreen, fontWeight = FontWeight.Bold, fontSize = 11.5.sp
+                        ),
+                        modifier = Modifier.testTag("detected_bank_label")
                     )
                 }
             }
