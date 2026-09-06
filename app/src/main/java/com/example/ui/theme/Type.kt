@@ -8,7 +8,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.example.R
 
-val IranYekanFontFamily = FontFamily.SansSerif
+// The TTFs were already in res/font — they were simply never connected, so the
+// whole app fell back to the device's default face.
+val IranYekanFontFamily = FontFamily(
+    Font(R.font.iranyekan_regular, FontWeight.Normal),
+    Font(R.font.iranyekan_regular, FontWeight.Medium),
+    Font(R.font.iranyekan_bold, FontWeight.SemiBold),
+    Font(R.font.iranyekan_bold, FontWeight.Bold)
+)
 
 // Set of Material typography styles to start with using Iran Yekan
 val Typography = Typography(

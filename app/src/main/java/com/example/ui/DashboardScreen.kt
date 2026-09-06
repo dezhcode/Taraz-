@@ -122,6 +122,7 @@ fun DashboardScreen(
     onNavigateToLoans: () -> Unit,
     onNavigateToCards: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onSeeAllTransactions: () -> Unit = {},
     onTransactionClick: (Transaction) -> Unit
 ) {
     val scrollState = rememberScrollState()
@@ -280,6 +281,15 @@ fun DashboardScreen(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Income and expense for the month, folded into the balance block:
+                // they used to be three full-width cards competing with it.
+                MonthlyFlowRow(
+                    monthlyIncome = monthlyIncome,
+                    monthlyExpense = monthlyExpense
+                )
             }
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -435,37 +445,34 @@ fun DashboardScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Financial Overview Cards (Financial Health & Active Goal)
-        FinancialOverviewSection(
-            financialHealth = financialHealth,
-            activeGoal = activeGoal,
-            onNavigateToAI = onNavigateToAI,
-            onGoalClick = { showGoalDialog = true }
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // AI Financial Coach Card Section (کارت هوشمند مربی مالی AI)
-        AiFinancialCoachCardSection(
+        // One "today" card instead of three advice cards (health score, AI coach,
+        // budget) competing for the same attention.
+        TodayCard(
+            todayExpense = todayExpense,
+            dailyBudget = dailyBudget,
+            onSetDailyBudget = onSetDailyBudget,
             insight = financialCoachInsight,
             onNavigateToAI = onNavigateToAI
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Monthly Financial Summary Cards (درآمد ماه، هزینه ماه، پس‌انداز)
-        MonthlySummaryCardsSection(
-            monthlyIncome = monthlyIncome,
-            monthlyExpense = monthlyExpense
+        // The thing people open a finance app for: what happened lately.
+        RecentTransactionsSection(
+            transactions = transactions,
+            onTransactionClick = onTransactionClick,
+            onSeeAll = onSeeAllTransactions
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Daily Budget Card (کارت بودجه امروز)
-        DailyBudgetCardSection(
-            todayExpense = todayExpense,
-            dailyBudget = dailyBudget,
-            onSetDailyBudget = onSetDailyBudget
+        // Health score and goal are reflective numbers, looked at monthly rather
+        // than daily, so they sit below the daily material instead of above it.
+        FinancialOverviewSection(
+            financialHealth = financialHealth,
+            activeGoal = activeGoal,
+            onNavigateToAI = onNavigateToAI,
+            onGoalClick = { showGoalDialog = true }
         )
         }
 
@@ -1937,6 +1944,378 @@ private fun QuickAccessCard(
                 )
             }
         }
+    }
+}
+
+/**
+ * Income and expense for the month, as two quiet figures under the balance.
+ * Previously three full-width cards, which made the screen read as if the
+ * monthly totals mattered as much as the balance itself.
+ */
+@Composable
+fun MonthlyFlowRow(
+    monthlyIncome: Long,
+    monthlyExpense: Long,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        MonthlyFlowItem(
+            label = "دریافتی ماه",
+            amount = monthlyIncome,
+            icon = Icons.Default.ArrowDownward,
+            tint = EbayGreen
+        )
+        Box(
+            modifier = Modifier
+                .height(28.dp)
+                .width(1.dp)
+                .background(EbayBorderGray)
+        )
+        MonthlyFlowItem(
+            label = "هزینه ماه",
+            amount = monthlyExpense,
+            icon = Icons.Default.ArrowUpward,
+            tint = EbayRed
+        )
+    }
+}
+
+@Composable
+private fun MonthlyFlowItem(
+    label: String,
+    amount: Long,
+    icon: ImageVector,
+    tint: Color
+) {
+    Column(horizontalAlignment = Alignment.Start) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(13.dp)
+            )
+            Spacer(modifier = Modifier.width(3.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = EbaySecondaryText,
+                    fontSize = 11.sp
+                )
+            )
+        }
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = formatPersianNumber(amount),
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp
+            )
+        )
+    }
+}
+
+/**
+ * The single "today" card: budget progress, plus the coach's line inside it
+ * when there is something worth saying. Replaces two separate cards that both
+ * told the user how their day is going.
+ */
+@Composable
+fun TodayCard(
+    todayExpense: Long,
+    dailyBudget: Long,
+    onSetDailyBudget: (Long) -> Unit,
+    insight: FinancialCoachInsight,
+    onNavigateToAI: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var showBudgetDialog by remember { mutableStateOf(false) }
+
+    val ratio = if (dailyBudget > 0) (todayExpense.toFloat() / dailyBudget.toFloat()) else 0f
+    val progress by animateFloatAsState(
+        targetValue = ratio.coerceIn(0f, 1f),
+        animationSpec = tween(700),
+        label = "budget_progress"
+    )
+    val over = dailyBudget > 0 && todayExpense > dailyBudget
+    val near = dailyBudget > 0 && !over && ratio >= 0.8f
+    val accent = when {
+        over -> EbayRed
+        near -> AlertOrange
+        else -> EmeraldPrimary
+    }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .testTag("today_card"),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "امروز",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                )
+                Text(
+                    text = if (dailyBudget > 0) "تنظیم بودجه" else "تعیین بودجه روزانه",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = EbayBluePrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    ),
+                    modifier = Modifier
+                        .clickable { showBudgetDialog = true }
+                        .testTag("today_set_budget")
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text = formatPersianNumber(todayExpense),
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = accent
+                    )
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = if (dailyBudget > 0)
+                        "از ${formatPersianNumber(dailyBudget)} تومان"
+                    else "تومان خرج امروز",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = EbaySecondaryText,
+                        fontSize = 12.sp
+                    ),
+                    modifier = Modifier.padding(bottom = 3.dp)
+                )
+            }
+
+            if (dailyBudget > 0) {
+                Spacer(modifier = Modifier.height(10.dp))
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(7.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    color = accent,
+                    trackColor = accent.copy(alpha = 0.12f)
+                )
+            }
+
+            // The coach speaks inside this card rather than in one of its own.
+            if (insight.message.isNotBlank()) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(accent.copy(alpha = 0.07f))
+                        .clickable { onNavigateToAI() }
+                        .padding(12.dp)
+                        .testTag("today_coach_line"),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = insight.message,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 12.sp,
+                            lineHeight = 18.sp
+                        ),
+                        maxLines = 2,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
+
+    if (showBudgetDialog) {
+        SetDailyBudgetDialog(
+            currentBudget = dailyBudget,
+            onDismiss = { showBudgetDialog = false },
+            onConfirm = { amount ->
+                onSetDailyBudget(amount)
+                showBudgetDialog = false
+            }
+        )
+    }
+}
+
+/**
+ * Last few transactions, with a link into the full list.
+ * The data was already being passed to this screen and only used to compute a
+ * weekly delta; the user could not see a single transaction without leaving home.
+ */
+@Composable
+fun RecentTransactionsSection(
+    transactions: List<Transaction>,
+    onTransactionClick: (Transaction) -> Unit,
+    onSeeAll: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val recent = remember(transactions) {
+        transactions.sortedByDescending { it.date }.take(5)
+    }
+
+    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "تراکنش‌های اخیر",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                )
+            )
+            if (recent.isNotEmpty()) {
+                Text(
+                    text = "مشاهده همه",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = EbayBluePrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    ),
+                    modifier = Modifier
+                        .clickable { onSeeAll() }
+                        .testTag("recent_see_all")
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        if (recent.isEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Text(
+                    text = "هنوز تراکنشی ثبت نشده. با دکمه + اولین تراکنش را اضافه کنید.",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = EbaySecondaryText,
+                        fontSize = 12.5.sp
+                    ),
+                    modifier = Modifier.padding(18.dp)
+                )
+            }
+        } else {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Column {
+                    recent.forEachIndexed { index, tx ->
+                        RecentTransactionRow(
+                            transaction = tx,
+                            onClick = { onTransactionClick(tx) }
+                        )
+                        if (index < recent.lastIndex) {
+                            HorizontalDivider(
+                                color = EbayBorderGray.copy(alpha = 0.5f),
+                                modifier = Modifier.padding(horizontal = 14.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentTransactionRow(
+    transaction: Transaction,
+    onClick: () -> Unit
+) {
+    val tint = if (transaction.isExpense) EbayRed else EbayGreen
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(tint.copy(alpha = 0.10f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = if (transaction.isExpense) Icons.Default.ArrowUpward
+                              else Icons.Default.ArrowDownward,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(17.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = transaction.title,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                ),
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = com.example.utils.JalaliDate.fromTimestamp(transaction.date).formatShort() +
+                        " • " + transaction.category,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = EbaySecondaryText,
+                    fontSize = 11.sp
+                ),
+                maxLines = 1
+            )
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        Text(
+            text = (if (transaction.isExpense) "- " else "+ ") + formatPersianNumber(transaction.amount),
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontWeight = FontWeight.Bold,
+                color = tint,
+                fontSize = 13.sp
+            )
+        )
     }
 }
 

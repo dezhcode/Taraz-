@@ -218,10 +218,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                             ) { targetTab ->
                                                 when (targetTab) {
                                                     Tab.HOME -> {
-                                                        DashboardScreen(
-                                                            cards = cards,
-                                                            onCardClick = { card -> selectedCardForDetail = card },
-                                                            onAddCardClick = { isAddCardOpen = true },
+                                                        HorizonHomeScreen(
                                                             userProfile = userProfile,
                                                             totalBalance = totalBalance,
                                                             monthlyIncome = monthlyIncome,
@@ -229,29 +226,20 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             todayExpense = todayExpense,
                                                             dailyBudget = dailyBudget,
                                                             onSetDailyBudget = { viewModel.setDailyBudget(it) },
-                                                            loans = loans,
                                                             transactions = transactions,
+                                                            cards = cards,
+                                                            loans = loans,
                                                             activeGoal = activeGoal,
-                                                            financialHealth = financialHealth,
-                                                            financialCoachInsight = financialCoachInsight,
                                                             onSaveGoal = { title, target, saved ->
                                                                 viewModel.insertGoal(title, target, saved)
                                                             },
-                                                            onDeleteGoal = { goalId ->
-                                                                viewModel.deleteGoal(goalId)
-                                                            },
-                                                            onAddTransactionClick = { isExpense ->
-                                                                initialIsExpenseForDialog = isExpense
-                                                                isAddTransactionOpen = true
-                                                            },
-                                                            onTransferClick = { isTransferOpen = true },
-                                                            onNavigateToAI = { viewModel.prepareChatForOpening(); isAiSheetOpen = true },
-                                                            onNavigateToLoans = { activeSubScreen = "loans" },
+                                                            onDeleteGoal = { goalId -> viewModel.deleteGoal(goalId) },
+                                                            onCardClick = { card -> selectedCardForDetail = card },
                                                             onNavigateToCards = { activeSubScreen = "banks" },
+                                                            onNavigateToLoans = { activeSubScreen = "loans" },
                                                             onNavigateToSettings = { activeSubScreen = "settings" },
-                                                            onTransactionClick = { tx ->
-                                                                selectedTransactionForEdit = tx
-                                                            }
+                                                            onSeeAllTransactions = { viewModel.setTab(Tab.TRANSACTIONS) },
+                                                            onTransactionClick = { tx -> selectedTransactionForEdit = tx }
                                                         )
                                                     }
 
