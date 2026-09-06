@@ -1,6 +1,8 @@
 package com.example.services
 
 import com.example.data.Transaction
+import com.example.data.countsAsExpense
+import com.example.data.countsAsIncome
 
 object SmsTransactionCategorizerService {
 
@@ -88,9 +90,9 @@ object SmsTransactionCategorizerService {
                 MonthlyReport(
                     monthYear = label,
                     monthKey = monthKey,
-                    totalIncome = txList.filter { !it.isExpense }.sumOf { it.amount },
-                    totalExpense = txList.filter { it.isExpense }.sumOf { it.amount },
-                    categoryBreakdown = txList.filter { it.isExpense }
+                    totalIncome = txList.filter { it.countsAsIncome }.sumOf { it.amount },
+                    totalExpense = txList.filter { it.countsAsExpense }.sumOf { it.amount },
+                    categoryBreakdown = txList.filter { it.countsAsExpense }
                         .groupBy { it.category }
                         .mapValues { (_, list) -> list.sumOf { it.amount } },
                     transactionCount = txList.size

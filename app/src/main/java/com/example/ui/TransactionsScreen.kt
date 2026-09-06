@@ -27,6 +27,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.Transaction
+import com.example.data.countsAsExpense
+import com.example.data.countsAsIncome
 import com.example.ui.theme.*
 import java.text.NumberFormat
 import java.util.Locale
@@ -52,8 +54,8 @@ fun TransactionsScreen(
         matchesSearch && matchesFilter
     }
 
-    val totalIncome = transactions.filter { !it.isExpense }.sumOf { it.amount }
-    val totalExpense = transactions.filter { it.isExpense }.sumOf { it.amount }
+    val totalIncome = transactions.filter { it.countsAsIncome }.sumOf { it.amount }
+    val totalExpense = transactions.filter { it.countsAsExpense }.sumOf { it.amount }
 
     Column(
         modifier = Modifier

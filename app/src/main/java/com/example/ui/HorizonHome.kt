@@ -37,6 +37,7 @@ import com.example.data.BankCard
 import com.example.data.FinancialGoal
 import com.example.data.Loan
 import com.example.data.Transaction
+import com.example.data.netFlow
 import com.example.ui.theme.*
 import com.example.utils.JalaliDate
 import com.example.utils.MoneyFormat
@@ -301,7 +302,7 @@ private fun netWorthTrend(
         val start = end - weekMs
         val net = transactions
             .filter { it.date in start until end }
-            .sumOf { if (it.isExpense) -it.amount else it.amount }
+            .sumOf { it.netFlow }
         balance -= net
         series.add(balance)
     }

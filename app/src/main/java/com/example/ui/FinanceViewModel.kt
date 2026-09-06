@@ -84,7 +84,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         db.transactionDao(),
         db.bankCardDao(),
         db.loanDao(),
-        db.goalDao()
+        db.goalDao(),
+        db.categoryDao()
     )
 
     private val aiRepository: AiRepository = AiRepositoryImpl(application)
@@ -199,21 +200,21 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     val monthlyIncome: StateFlow<Long> = transactions
         .map { txList ->
             val (start, end) = com.example.utils.JalaliDate.monthRange(System.currentTimeMillis())
-            txList.filter { !it.isExpense && it.date >= start && it.date < end }.sumOf { it.amount }
+            txList.filter { it.countsAsIncome && it.date >= start && it.date < end }.sumOf { it.amount }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
     val monthlyExpense: StateFlow<Long> = transactions
         .map { txList ->
             val (start, end) = com.example.utils.JalaliDate.monthRange(System.currentTimeMillis())
-            txList.filter { it.isExpense && it.date >= start && it.date < end }.sumOf { it.amount }
+            txList.filter { it.countsAsExpense && it.date >= start && it.date < end }.sumOf { it.amount }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
     val todayExpense: StateFlow<Long> = transactions
         .map { txList ->
             val (start, end) = com.example.utils.JalaliDate.dayRange(System.currentTimeMillis())
-            txList.filter { it.isExpense && it.date >= start && it.date < end }.sumOf { it.amount }
+            txList.filter { it.countsAsExpense && it.date >= start && it.date < end }.sumOf { it.amount }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
@@ -244,8 +245,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         } else if (aiResult != null) {
             aiResult
         } else {
-            val income = txList.filter { !it.isExpense }.sumOf { it.amount }
-            val expense = txList.filter { it.isExpense }.sumOf { it.amount }
+            val income = txList.filter { it.countsAsIncome }.sumOf { it.amount }
+            val expense = txList.filter { it.countsAsExpense }.sumOf { it.amount }
             val balance = cardList.sumOf { it.balance }
             val totalLoanDebt = loanList.sumOf { it.totalAmount - it.paidAmount }
 
@@ -341,6 +342,38 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FinancialCoachInsight())
+
+    // ---- Categories -------------------------------------------------------
+
+    val categories: StateFlow<List<Category>> = repository.allCategories
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun addCategory(name: String, iconKey: String, colorHex: String, isIncome: Boolean) {
+        val clean = name.trim()
+        if (clean.isBlank()) return
+        viewModelScope.launch {
+            val existing = categories.value
+            if (existing.any { it.name.equals(clean, ignoreCase = true) }) return@launch
+            repository.insertCategory(
+                Category(
+                    name = clean,
+                    iconKey = iconKey,
+                    colorHex = colorHex,
+                    isIncome = isIncome,
+                    sortOrder = existing.size
+                )
+            )
+        }
+    }
+
+    /**
+     * Removing a category never rewrites the transactions that used it — their
+     * category is stored as text, so old rows keep their label and only the
+     * chooser loses the entry.
+     */
+    fun deleteCategory(categoryId: Int) {
+        viewModelScope.launch { repository.deleteCategory(categoryId) }
+    }
 
     fun insertGoal(title: String, targetAmount: Long, currentAmount: Long) {
         viewModelScope.launch {
@@ -921,7 +954,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     amount = amount,
                     category = category,
                     isExpense = isExpense,
-                    bankName = bankName
+                    bankName = bankName,
+                    type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME
                 )
             )
             if (_alertsEnabled.value) {
@@ -937,6 +971,10 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
     fun transferBetweenCards(fromCardName: String, toCardName: String, amount: Long) {
         viewModelScope.launch {
+            // Both halves share one id so the pair can always be found again —
+            // and both are typed TRANSFER so neither lands in income or spending.
+            val groupId = java.util.UUID.randomUUID().toString()
+
             // 1. Withdrawal transaction from source card
             repository.insertTransaction(
                 Transaction(
@@ -944,7 +982,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     amount = amount,
                     category = "انتقال",
                     isExpense = true,
-                    bankName = fromCardName
+                    bankName = fromCardName,
+                    type = TransactionType.TRANSFER,
+                    transferGroupId = groupId
                 )
             )
             // 2. Deposit transaction to destination card
@@ -954,7 +994,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     amount = amount,
                     category = "انتقال",
                     isExpense = false,
-                    bankName = toCardName
+                    bankName = toCardName,
+                    type = TransactionType.TRANSFER,
+                    transferGroupId = groupId
                 )
             )
             if (_alertsEnabled.value) {

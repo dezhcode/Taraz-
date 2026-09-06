@@ -6,13 +6,23 @@ class FinanceRepository(
     private val transactionDao: TransactionDao,
     private val bankCardDao: BankCardDao,
     private val loanDao: LoanDao,
-    private val goalDao: GoalDao
+    private val goalDao: GoalDao,
+    private val categoryDao: CategoryDao
 ) {
     val allTransactions: Flow<List<Transaction>> = transactionDao.getAllTransactions()
     val allCards: Flow<List<BankCard>> = bankCardDao.getAllCards()
     val allLoans: Flow<List<Loan>> = loanDao.getAllLoans()
     val activeGoal: Flow<FinancialGoal?> = goalDao.getActiveGoal()
     val allGoals: Flow<List<FinancialGoal>> = goalDao.getAllGoals()
+    val allCategories: Flow<List<Category>> = categoryDao.getAllCategories()
+
+    suspend fun insertCategory(category: Category) {
+        categoryDao.insertCategory(category)
+    }
+
+    suspend fun deleteCategory(id: Int) {
+        categoryDao.deleteCategory(id)
+    }
 
     suspend fun insertTransaction(transaction: Transaction) {
         // Insert transaction first

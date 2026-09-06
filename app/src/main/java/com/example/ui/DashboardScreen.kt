@@ -58,6 +58,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.example.ui.theme.*
 import com.example.data.Loan
 import com.example.data.Transaction
+import com.example.data.countsAsExpense
+import com.example.data.countsAsIncome
 import com.example.data.BankCard
 import com.example.data.FinancialGoal
 import com.example.data.FinancialHealthResult
@@ -247,8 +249,8 @@ fun DashboardScreen(
                     val now = System.currentTimeMillis()
                     val sevenDaysMs = 7 * 24 * 60 * 60 * 1000L
                     val thisWeekTx = transactions.filter { it.date >= now - sevenDaysMs }
-                    val thisWeekIncome = thisWeekTx.filter { !it.isExpense }.sumOf { it.amount }
-                    val thisWeekExpense = thisWeekTx.filter { it.isExpense }.sumOf { it.amount }
+                    val thisWeekIncome = thisWeekTx.filter { it.countsAsIncome }.sumOf { it.amount }
+                    val thisWeekExpense = thisWeekTx.filter { it.countsAsExpense }.sumOf { it.amount }
                     val thisWeekNetFlow = thisWeekIncome - thisWeekExpense
 
                     val balanceSevenDaysAgo = totalBalance - thisWeekNetFlow

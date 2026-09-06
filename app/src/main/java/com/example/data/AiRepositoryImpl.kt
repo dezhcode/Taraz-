@@ -94,8 +94,8 @@ class AiRepositoryImpl(private val context: Context) : AiRepository {
             )
         }
 
-        val income = transactions.filter { !it.isExpense }.sumOf { it.amount }
-        val expense = transactions.filter { it.isExpense }.sumOf { it.amount }
+        val income = transactions.filter { it.countsAsIncome }.sumOf { it.amount }
+        val expense = transactions.filter { it.countsAsExpense }.sumOf { it.amount }
         val balance = cards.sumOf { it.balance }
         val totalLoanDebt = loans.sumOf { it.totalAmount - it.paidAmount }
         val goalInfo = activeGoal?.let { "عنوان: ${it.title} (هدف: ${it.targetAmount} تومان، ذخیره‌شده: ${it.currentAmount} تومان)" } ?: "بدون هدف فعال"
@@ -186,7 +186,7 @@ class AiRepositoryImpl(private val context: Context) : AiRepository {
         }
 
         val sevenDaysAgo = System.currentTimeMillis() - 7 * 24 * 3600 * 1000L
-        val recentExpenses = transactions.filter { it.isExpense && it.date >= sevenDaysAgo }
+        val recentExpenses = transactions.filter { it.countsAsExpense && it.date >= sevenDaysAgo }
         val weeklyExpenseSum = recentExpenses.sumOf { it.amount }
         val weeklyAvgDailyExpense = if (recentExpenses.isNotEmpty()) weeklyExpenseSum / 7 else 0L
 

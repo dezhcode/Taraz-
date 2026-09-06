@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.Transaction
+import com.example.data.countsAsExpense
 import com.example.services.SmsTransactionCategorizerService
 import com.example.ui.theme.*
 
@@ -43,7 +44,7 @@ fun ReportsScreen(
     val scrollState = rememberScrollState()
 
     // Group expenses by category
-    val expenses = transactions.filter { it.isExpense }
+    val expenses = transactions.filter { it.countsAsExpense }
     val totalExpenseSum = expenses.sumOf { it.amount }
 
     val categoryStats = expenses

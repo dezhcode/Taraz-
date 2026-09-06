@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.Loan
 import com.example.data.Transaction
+import com.example.data.countsAsIncome
 import com.example.ui.EmeraldPrimary
 import com.example.ui.NavySecondary
 import com.example.ui.SlateGray
@@ -64,7 +65,7 @@ fun AiFloatingButton(
         else {
             val lastTwoDays = System.currentTimeMillis() - (2 * 24 * 60 * 60 * 1000)
             val recentSalary = transactions.firstOrNull { 
-                it.date >= lastTwoDays && (it.category == "حقوق" || (!it.isExpense && it.amount >= 1000000))
+                it.date >= lastTwoDays && (it.category == "حقوق" || (it.countsAsIncome && it.amount >= 1000000))
             }
             if (recentSalary != null) {
                 val formattedAmount = formatToman(recentSalary.amount)
