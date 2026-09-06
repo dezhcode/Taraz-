@@ -21,9 +21,8 @@ enum class Screen {
 enum class Tab {
     HOME,
     TRANSACTIONS,
-    AI,
-    REPORTS,
-    SETTINGS
+    LOANS,
+    REPORTS
 }
 
 data class UserProfile(

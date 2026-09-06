@@ -259,70 +259,35 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                         )
                                                     }
 
-                                                    Tab.AI -> {
-                                                         LaunchedEffect(Unit) {
-                                                             viewModel.setTab(Tab.HOME)
-                                                             isAiSheetOpen = true
-                                                         }
-                                                         Box(modifier = Modifier.fillMaxSize())
-                                                     }
+                                                    Tab.LOANS -> {
+                                                        LoansSubScreen(
+                                                            loans = loans,
+                                                            cards = cards,
+                                                            onBack = { viewModel.setTab(Tab.HOME) },
+                                                            onPayInstallment = { loan ->
+                                                                viewModel.payInstallment(loan)
+                                                            },
+                                                            onAddLoan = { bankName, loanName, totalAmount, paidAmount, installmentAmount, dueDay ->
+                                                                viewModel.addLoan(bankName, loanName, totalAmount, paidAmount, installmentAmount, dueDay)
+                                                            }
+                                                        )
+                                                    }
 
-                                                     Tab.REPORTS -> {
+                                                    Tab.REPORTS -> {
                                                         ReportsScreen(
                                                             transactions = transactions,
                                                             monthlyIncome = monthlyIncome,
                                                             monthlyExpense = monthlyExpense
                                                         )
                                                     }
-
-                                                    Tab.SETTINGS -> {
-                                                        Column(
-                                                            modifier = Modifier
-                                                                .fillMaxSize()
-                                                                .background(BackgroundLight)
-                                                                .padding(16.dp),
-                                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                                            verticalArrangement = Arrangement.Center
-                                                        ) {
-                                                            Box(
-                                                                modifier = Modifier
-                                                                    .size(100.dp)
-                                                                    .background(EmeraldPrimary.copy(alpha = 0.1f), androidx.compose.foundation.shape.CircleShape),
-                                                                contentAlignment = Alignment.Center
-                                                            ) {
-                                                                Icon(
-                                                                    imageVector = Icons.Default.Person,
-                                                                    contentDescription = null,
-                                                                    tint = EmeraldPrimary,
-                                                                    modifier = Modifier.size(48.dp)
-                                                                )
-                                                            }
-                                                            Spacer(modifier = Modifier.height(16.dp))
-                                                            Text(
-                                                                text = "پروفایل کاربری تراز",
-                                                                style = MaterialTheme.typography.titleLarge.copy(
-                                                                    fontWeight = FontWeight.Bold,
-                                                                    color = NavySecondary
-                                                                )
-                                                            )
-                                                            Spacer(modifier = Modifier.height(8.dp))
-                                                            Text(
-                                                                text = "این صفحه در حال حاضر خالی است.",
-                                                                style = MaterialTheme.typography.bodyMedium.copy(
-                                                                    color = SlateGray
-                                                                ),
-                                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                                            )
-                                                        }
-                                                    }
                                                 }
                                             }
 
                                             } // Close the inner content Box
                                             
-                                            // ElegantBottomBar floating on top
+                                            // HorizonBottomBar floating on top
                                             if (!isKeyboardVisible) {
-                                                ElegantBottomBar(
+                                                HorizonBottomBar(
                                                     currentTab = tabState,
                                                     onTabSelected = { viewModel.setTab(it) },
                                                     onAddClick = {
