@@ -33,7 +33,6 @@ import com.example.ui.*
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.components.AiFloatingButton
 import com.example.ui.components.CardDetailBottomSheet
-import com.example.ui.components.AddCardBottomSheet
 
 class MainActivity : androidx.fragment.app.FragmentActivity() {
 
@@ -383,6 +382,14 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     },
                                     onCreateCategory = { name, iconKey, colorHex, isIncome ->
                                         viewModel.addCategory(name, iconKey, colorHex, isIncome)
+                                    },
+                                    onCreateAccount = { name, cardNumber, balance, accountType ->
+                                        viewModel.addCard(
+                                            bankName = name,
+                                            cardNumber = cardNumber,
+                                            balance = balance,
+                                            accountType = accountType
+                                        )
                                     }
                                 )
                             }
@@ -434,11 +441,18 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 )
                             }
 
+                            // One sheet for adding an account, wherever it is reached from.
                             if (isAddCardOpen) {
-                                AddCardBottomSheet(
+                                AddAccountSheet(
+                                    existingNames = cards.map { it.bankName },
                                     onDismiss = { isAddCardOpen = false },
-                                    onConfirm = { bankName, cardNumber, balance, cardHolderName ->
-                                        viewModel.addCard(bankName, cardNumber, balance, cardHolderName)
+                                    onConfirm = { name, cardNumber, balance, accountType ->
+                                        viewModel.addCard(
+                                            bankName = name,
+                                            cardNumber = cardNumber,
+                                            balance = balance,
+                                            accountType = accountType
+                                        )
                                         isAddCardOpen = false
                                     }
                                 )

@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -34,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.BankCard
 import com.example.data.Category
+import com.example.data.isCash
 import com.example.ui.theme.*
 import com.example.utils.MoneyFormat
 import kotlinx.coroutines.delay
@@ -73,7 +76,8 @@ fun AddEntrySheet(
     onDismiss: () -> Unit,
     onSaveEntry: (title: String, amount: Long, category: String, isExpense: Boolean, bankName: String) -> Unit,
     onTransfer: (fromCardName: String, toCardName: String, amount: Long) -> Unit,
-    onCreateCategory: (name: String, iconKey: String, colorHex: String, isIncome: Boolean) -> Unit
+    onCreateCategory: (name: String, iconKey: String, colorHex: String, isIncome: Boolean) -> Unit,
+    onCreateAccount: (name: String, cardNumber: String, balance: Long, accountType: String) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -85,6 +89,7 @@ fun AddEntrySheet(
     var fromAccount by remember { mutableStateOf(cards.firstOrNull()) }
     var toAccount by remember { mutableStateOf(cards.firstOrNull { it.bankName != cards.firstOrNull()?.bankName }) }
     var showCategoryPicker by remember { mutableStateOf(false) }
+    var showAccountSheet by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
     val amount = amountText.toLongOrNull() ?: 0L
@@ -148,7 +153,8 @@ fun AddEntrySheet(
                     fromAccount = fromAccount,
                     toAccount = toAccount,
                     onFromChange = { fromAccount = it },
-                    onToChange = { toAccount = it }
+                    onToChange = { toAccount = it },
+                    onAddAccount = { showAccountSheet = true }
                 )
             } else {
                 CategoryRow(
@@ -157,10 +163,11 @@ fun AddEntrySheet(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 AccountPicker(
-                    label = "از حساب",
+                    label = "انتخاب حساب",
                     cards = cards,
                     selected = selectedAccount,
-                    onSelect = { selectedAccount = it }
+                    onSelect = { selectedAccount = it },
+                    onAddAccount = { showAccountSheet = true }
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
@@ -236,6 +243,17 @@ fun AddEntrySheet(
                 )
             }
         }
+    }
+
+    if (showAccountSheet) {
+        AddAccountSheet(
+            existingNames = cards.map { it.bankName },
+            onDismiss = { showAccountSheet = false },
+            onConfirm = { name, cardNumber, balance, accountType ->
+                onCreateAccount(name, cardNumber, balance, accountType)
+                showAccountSheet = false
+            }
+        )
     }
 
     if (showCategoryPicker) {
@@ -472,30 +490,20 @@ private fun AccountPicker(
     label: String,
     cards: List<BankCard>,
     selected: BankCard?,
-    onSelect: (BankCard) -> Unit
+    onSelect: (BankCard) -> Unit,
+    onAddAccount: () -> Unit
 ) {
-    if (cards.isEmpty()) {
-        Text(
-            text = "هنوز کارتی ثبت نشده. ابتدا از بخش کارت‌های بانکی یک کارت اضافه کنید.",
-            style = MaterialTheme.typography.bodySmall.copy(color = HorizonClay, fontSize = 12.sp)
-        )
-        return
-    }
     Column {
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall.copy(color = HorizonInkMuted, fontSize = 11.sp)
         )
         Spacer(modifier = Modifier.height(7.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            cards.take(3).forEach { card ->
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(cards) { card ->
                 val on = card.bankName == selected?.bankName
-                Box(
+                Row(
                     modifier = Modifier
-                        .weight(1f)
                         .clip(RoundedCornerShape(12.dp))
                         .background(if (on) HorizonGreenTint else Color.Transparent)
                         .border(
@@ -504,9 +512,17 @@ private fun AccountPicker(
                             RoundedCornerShape(12.dp)
                         )
                         .clickable { onSelect(card) }
-                        .padding(vertical = 10.dp, horizontal = 6.dp),
-                    contentAlignment = Alignment.Center
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                        .testTag("account_${card.id}"),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Icon(
+                        imageVector = if (card.isCash) Icons.Default.Wallet else Icons.Default.CreditCard,
+                        contentDescription = null,
+                        tint = if (on) HorizonGreen else HorizonInkMuted,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = card.bankName,
                         style = MaterialTheme.typography.bodySmall.copy(
@@ -515,6 +531,35 @@ private fun AccountPicker(
                             color = if (on) HorizonGreen else HorizonInkMuted
                         ),
                         maxLines = 1
+                    )
+                }
+            }
+
+            // Noticing the account you need is missing happens here, not in
+            // settings — so the way to add one is here too.
+            item {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(1.dp, HorizonBorder, RoundedCornerShape(12.dp))
+                        .clickable { onAddAccount() }
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                        .semantics { contentDescription = "افزودن حساب جدید" }
+                        .testTag("account_add"),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        tint = HorizonGreen,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "حساب جدید",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = HorizonGreen
+                        )
                     )
                 }
             }
@@ -528,10 +573,11 @@ private fun TransferFields(
     fromAccount: BankCard?,
     toAccount: BankCard?,
     onFromChange: (BankCard) -> Unit,
-    onToChange: (BankCard) -> Unit
+    onToChange: (BankCard) -> Unit,
+    onAddAccount: () -> Unit
 ) {
     Column {
-        AccountPicker("از حساب", cards, fromAccount, onFromChange)
+        AccountPicker("از حساب", cards, fromAccount, onFromChange, onAddAccount)
         Spacer(modifier = Modifier.height(14.dp))
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             Icon(
@@ -542,7 +588,7 @@ private fun TransferFields(
             )
         }
         Spacer(modifier = Modifier.height(14.dp))
-        AccountPicker("به حساب", cards, toAccount, onToChange)
+        AccountPicker("به حساب", cards, toAccount, onToChange, onAddAccount)
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = "انتقال بین حساب‌های خودتان در درآمد و هزینهٔ ماه شمرده نمی‌شود.",

@@ -1031,14 +1031,41 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     }
 
     // Card management
-    fun addCard(bankName: String, cardNumber: String, balance: Long, cardHolderName: String = "کاربر تراز") {
+    /**
+     * Balances are updated by account NAME (see BankCardDao.updateBalance), so two
+     * accounts sharing a name would move together. The add sheet blocks that, and
+     * this is the second gate for anything that calls in from elsewhere.
+     */
+    fun addCard(
+        bankName: String,
+        cardNumber: String,
+        balance: Long,
+        cardHolderName: String = "کاربر تراز",
+        accountType: String = AccountType.BANK
+    ) {
+        val clean = bankName.trim()
+        if (clean.isBlank()) return
         viewModelScope.launch {
-            repository.insertCard(BankCard(bankName = bankName, cardNumber = cardNumber, balance = balance, cardHolderName = cardHolderName))
+            if (cards.value.any { it.bankName.equals(clean, ignoreCase = true) }) return@launch
+            repository.insertCard(
+                BankCard(
+                    bankName = clean,
+                    cardNumber = cardNumber,
+                    balance = balance,
+                    cardHolderName = cardHolderName,
+                    accountType = accountType
+                )
+            )
             if (_alertsEnabled.value) {
+                val label = when (accountType) {
+                    AccountType.CASH -> "حساب نقدی"
+                    AccountType.OTHER -> "حساب"
+                    else -> "کارت بانک"
+                }
                 com.example.utils.NotificationHelper.showNotification(
                     getApplication(),
-                    "اتصال کارت بانکی جدید",
-                    "کارت بانک $bankName با موجودی اولیه ${formatNumber(balance)} تومان با موفقیت همگام شد."
+                    "حساب جدید ثبت شد",
+                    "$label $clean با موجودی اولیه ${formatNumber(balance)} تومان اضافه شد."
                 )
             }
         }

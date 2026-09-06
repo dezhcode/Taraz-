@@ -104,7 +104,7 @@ interface GoalDao {
         UnknownSms::class,
         Category::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -121,6 +121,18 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
+
+        /**
+         * v7 lets an account be something other than a bank card. Cash is the
+         * account most spending actually comes out of, and it has no card
+         * number — the add form used to demand sixteen digits, so it could not
+         * be recorded at all. Everything already in the table is a bank card.
+         */
+        val MIGRATION_6_7 = object : androidx.room.migration.Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE bank_cards ADD COLUMN accountType TEXT NOT NULL DEFAULT 'BANK'")
+            }
+        }
 
         /**
          * v6 separates what a transaction IS from which way the money went, and
@@ -225,7 +237,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "fidar_finance_database"
                 )
                 .addCallback(AppDatabaseCallback(scope))
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance

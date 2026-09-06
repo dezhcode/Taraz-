@@ -64,14 +64,34 @@ data class Category(
     val sortOrder: Int = 0
 )
 
+/**
+ * Where money sits. Not every account is a bank card: cash in a pocket is the
+ * commonest account of all here, and it has no card number to give.
+ */
+object AccountType {
+    const val BANK = "BANK"     // a card of your own
+    const val CASH = "CASH"     // notes in a wallet
+    const val OTHER = "OTHER"   // someone else's card, a savings box, anything
+}
+
 @Entity(tableName = "bank_cards")
 data class BankCard(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    /** The account's display name. Doubles as its key — see [Transaction.bankName]. */
     val bankName: String,
-    val cardNumber: String,
+    /** Empty for cash and for accounts that simply have no card. */
+    val cardNumber: String = "",
     val balance: Long,
-    val cardHolderName: String = "کاربر تراز"
+    val cardHolderName: String = "کاربر تراز",
+    val accountType: String = AccountType.BANK
 )
+
+val BankCard.isCash: Boolean
+    get() = accountType == AccountType.CASH
+
+/** Only a real card has digits worth showing. */
+val BankCard.maskedNumber: String
+    get() = if (cardNumber.length >= 4) "•••• " + cardNumber.takeLast(4) else ""
 
 @Entity(tableName = "loans")
 data class Loan(
