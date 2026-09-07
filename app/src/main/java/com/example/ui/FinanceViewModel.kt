@@ -844,26 +844,42 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         _currentScreen.value = Screen.MAIN
     }
 
-    fun sendFarazOtp(name: String, phone: String, onResult: (Boolean, String, String) -> Unit) {
+    /**
+     * Ask the backend to send an OTP. The code is generated and stored server
+     * side — it is never returned to, or held by, the app.
+     */
+    fun requestOtp(name: String, phone: String, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch {
-            val generatedOtp = (10000..99999).random().toString()
-            val result = com.example.data.remote.FarazSmsService.sendOtpSms(
+            com.example.data.remote.OtpService.requestOtp(
                 recipientPhone = phone,
-                otpCode = generatedOtp,
                 userName = name
-            )
-            result.fold(
-                onSuccess = { msg ->
-                    onResult(true, generatedOtp, msg)
-                },
-                onFailure = { err ->
-                    onResult(false, generatedOtp, err.message ?: "خطا در ارتباط با پنل پیامکی")
-                }
+            ).fold(
+                onSuccess = { msg -> onResult(true, msg) },
+                onFailure = { err -> onResult(false, err.message ?: "خطا در ارسال کد تأیید") }
             )
         }
     }
 
-    fun loginWithOtp(name: String, phone: String) {
+    /**
+     * Verify the typed code against the backend. Login happens only when the
+     * server confirms it: no local comparison, no bypass code.
+     */
+    fun verifyOtp(name: String, phone: String, code: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            com.example.data.remote.OtpService.verifyOtp(
+                recipientPhone = phone,
+                code = code
+            ).fold(
+                onSuccess = { token ->
+                    loginWithOtp(name, phone, token)
+                    onResult(true, "")
+                },
+                onFailure = { err -> onResult(false, err.message ?: "کد وارد شده نادرست است.") }
+            )
+        }
+    }
+
+    fun loginWithOtp(name: String, phone: String, sessionToken: String = "") {
         val email = "$phone@fidar.app"
         _userProfile.value = UserProfile(
             name = name,
@@ -879,6 +895,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             putString("user_email", email)
             putBoolean("user_is_guest", false)
             putBoolean("user_logged_in", true)
+            if (sessionToken.isNotBlank()) putString("session_token", sessionToken)
         }.apply()
         _currentScreen.value = Screen.MAIN
     }
@@ -913,6 +930,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             remove("user_email")
             remove("user_google")
             remove("user_is_guest")
+            remove("session_token")
             putBoolean("user_logged_in", false)
         }.apply()
         _currentScreen.value = Screen.AUTH

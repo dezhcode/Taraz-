@@ -295,7 +295,7 @@ fun SettingsScreen(
                         OutlinedTextField(
                             value = serverInput,
                             onValueChange = { serverInput = it },
-                            label = { Text("آدرس URL سرور (مثال: http://dezhcode.pyho.ir)") },
+                            label = { Text("آدرس URL سرور (مثال: https://dezhcode.pyho.ir/taraz)") },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("ai_server_url_input"),

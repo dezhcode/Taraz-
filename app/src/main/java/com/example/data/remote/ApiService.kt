@@ -12,7 +12,40 @@ interface ApiService {
     suspend fun chat(
         @Body request: ChatRequest
     ): ChatResponse
+
+    @POST("c/api/otp/request")
+    suspend fun requestOtp(
+        @Body request: OtpRequest
+    ): OtpResponse
+
+    @POST("c/api/otp/verify")
+    suspend fun verifyOtp(
+        @Body request: OtpVerifyRequest
+    ): OtpVerifyResponse
 }
+
+data class OtpRequest(
+    val phone: String,
+    val name: String
+)
+
+data class OtpResponse(
+    val success: Boolean = false,
+    val message: String? = null,
+    val error: String? = null
+)
+
+data class OtpVerifyRequest(
+    val phone: String,
+    val code: String
+)
+
+data class OtpVerifyResponse(
+    val success: Boolean = false,
+    val verified: Boolean = false,
+    val token: String? = null,
+    val error: String? = null
+)
 
 data class ChatRequest(
     val message: String

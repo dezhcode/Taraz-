@@ -47,7 +47,7 @@ fun AuthScreen(
     var phoneNumber by remember { mutableStateOf("") }
     var otpInput by remember { mutableStateOf("") }
     
-    var generatedOtpCode by remember { mutableStateOf("") }
+    var isVerifyingOtp by remember { mutableStateOf(false) }
     var isSendingOtp by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -224,10 +224,9 @@ fun AuthScreen(
 
                                     isSendingOtp = true
                                     errorMessage = null
-                                    viewModel.sendFarazOtp(fullName, phoneNumber) { success, code, msg ->
+                                    viewModel.requestOtp(fullName, phoneNumber) { success, msg ->
                                         isSendingOtp = false
                                         if (success) {
-                                            generatedOtpCode = code
                                             statusMessage = msg
                                             step = 2
                                             timerSeconds = 120
@@ -459,11 +458,10 @@ fun AuthScreen(
                                     onClick = {
                                         isSendingOtp = true
                                         errorMessage = null
-                                        viewModel.sendFarazOtp(fullName, phoneNumber) { success, code, msg ->
+                                        viewModel.requestOtp(fullName, phoneNumber) { success, msg ->
                                             isSendingOtp = false
                                             if (success) {
-                                                generatedOtpCode = code
-                                                statusMessage = "کد تأیید جدید مجدداً ارسال شد."
+                                                statusMessage = msg.ifBlank { "کد تأیید جدید مجدداً ارسال شد." }
                                                 timerSeconds = 120
                                                 isTimerRunning = true
                                             } else {
@@ -505,13 +503,18 @@ fun AuthScreen(
                                         errorMessage = "لطفاً کد ۵ رقمی را کامل وارد نمایید."
                                         return@Button
                                     }
-                                    if (otpInput == generatedOtpCode || otpInput == "12345") {
-                                        viewModel.loginWithOtp(fullName, phoneNumber)
-                                    } else {
-                                        errorMessage = "کد وارد شده نادرست است. لطفاً مجدداً بررسی کنید."
+                                    isVerifyingOtp = true
+                                    errorMessage = null
+                                    // The code is verified by the server; the app never holds it.
+                                    viewModel.verifyOtp(fullName, phoneNumber, otpInput) { success, msg ->
+                                        isVerifyingOtp = false
+                                        if (!success) {
+                                            otpInput = ""
+                                            errorMessage = msg
+                                        }
                                     }
                                 },
-                                enabled = otpInput.length == 5,
+                                enabled = otpInput.length == 5 && !isVerifyingOtp,
                                 shape = RoundedCornerShape(14.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = EbayBluePrimary),
                                 modifier = Modifier
@@ -519,8 +522,16 @@ fun AuthScreen(
                                     .height(52.dp)
                                     .testTag("auth_verify_otp_button")
                             ) {
+                                if (isVerifyingOtp) {
+                                    CircularProgressIndicator(
+                                        color = Color.White,
+                                        modifier = Modifier.size(22.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
                                 Text(
-                                    text = "تأیید و ورود به اپلیکیشن",
+                                    text = if (isVerifyingOtp) "در حال بررسی کد..." else "تأیید و ورود به اپلیکیشن",
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White,

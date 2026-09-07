@@ -7,7 +7,7 @@ object ApiConfig {
     private const val KEY_SERVER_URL = "ai_server_url"
     
     // Single source of truth for the default base URL
-    const val DEFAULT_BASE_URL = "http://dezhcode.pyho.ir"
+    const val DEFAULT_BASE_URL = "https://dezhcode.pyho.ir/taraz"
     
     private var activeBaseUrl: String = DEFAULT_BASE_URL
 
@@ -44,8 +44,12 @@ object ApiConfig {
         var clean = url.trim()
         clean = clean.replace(Regex("/c/api/chat/?$", RegexOption.IGNORE_CASE), "")
         clean = clean.removeSuffix("/")
-        if (clean.isNotEmpty() && !clean.startsWith("http://", ignoreCase = true) && !clean.startsWith("https://", ignoreCase = true)) {
-            clean = "http://$clean"
+        // Financial data must never travel in cleartext: a bare host gets https,
+        // and an explicit http:// URL is upgraded rather than honoured.
+        if (clean.isNotEmpty() && clean.startsWith("http://", ignoreCase = true)) {
+            clean = "https://" + clean.substring("http://".length)
+        } else if (clean.isNotEmpty() && !clean.startsWith("https://", ignoreCase = true)) {
+            clean = "https://$clean"
         }
         return clean
     }

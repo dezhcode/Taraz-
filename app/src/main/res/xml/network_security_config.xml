@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext traffic is disabled app-wide. The app carries account balances,
+  loan figures and transaction history; none of it may travel over plain HTTP.
+  If a debug backend ever needs HTTP, add it under a debug-only overlay
+  manifest rather than relaxing this file.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
