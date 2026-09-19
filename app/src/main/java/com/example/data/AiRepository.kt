@@ -18,5 +18,6 @@ interface AiRepository {
         activeGoal: FinancialGoal?
     ): Result<FinancialCoachInsight>
     fun getBaseUrl(): String
-    fun setBaseUrl(url: String)
+    /** Returns false when the address is rejected; the active one is unchanged. */
+    fun setBaseUrl(url: String): Boolean
 }

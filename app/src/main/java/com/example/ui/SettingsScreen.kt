@@ -317,7 +317,7 @@ fun SettingsScreen(
                                         )
                                     )
                                     Text(
-                                        text = "دسترسی امن با پروتکل HTTPS",
+                                        text = "آدرس سرور تراز برای حفاظت از اطلاعات مالی شما قابل تغییر نیست.",
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             color = SlateGray
                                         )

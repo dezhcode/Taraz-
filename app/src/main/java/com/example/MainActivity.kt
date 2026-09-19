@@ -146,7 +146,17 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             onUnlockSuccess = { viewModel.unlockApp() },
                             onLockUnavailable = { viewModel.disableLockUnavailableOnDevice() }
                         )
-                    } else if (screenState == Screen.AUTH || screenState == Screen.ONBOARDING || screenState == Screen.SPLASH) {
+                    } else if (screenState == Screen.SPLASH) {
+                        // The session is still being restored from the encrypted
+                        // store. Showing AuthScreen here would flash the login
+                        // form at a user who is in fact already signed in.
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = EmeraldPrimary)
+                        }
+                    } else if (screenState == Screen.AUTH || screenState == Screen.ONBOARDING) {
                         AuthScreen(viewModel = viewModel)
                     } else {
                         if (screenState == Screen.MAIN) {
