@@ -52,7 +52,11 @@ fun BiometricLockScreen(
     )
 
     fun triggerBiometricAuthentication() {
-        if (activity != null && BiometricHelper.isBiometricAvailable(context)) {
+        if (activity == null) {
+            authError = "نمایش صفحه احراز هویت ممکن نشد. لطفاً برنامه را دوباره باز کنید."
+            return
+        }
+        if (BiometricHelper.isBiometricAvailable(context)) {
             isUnavailableOnDevice = false
             BiometricHelper.showBiometricPrompt(
                 activity = activity,
@@ -72,7 +76,6 @@ fun BiometricLockScreen(
         } else {
             isUnavailableOnDevice = true
             authError = "روی این دستگاه قفل صفحه تعریف نشده است. برای فعال شدن قفل تراز، ابتدا از تنظیمات اندروید رمز یا اثر انگشت تعریف کنید."
-            onLockUnavailable()
         }
     }
 
@@ -173,7 +176,7 @@ fun BiometricLockScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp)
-                    .testTag("biometric_error_card"),
+                    .testTag(if (isUnavailableOnDevice) "biometric_unavailable_message" else "biometric_error_card"),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF7F1D1D).copy(alpha = 0.2f)),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -199,8 +202,23 @@ fun BiometricLockScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Retry button to trigger BiometricPrompt again
-        if (!isUnavailableOnDevice) {
+        if (isUnavailableOnDevice) {
+            Button(
+                onClick = { onLockUnavailable() },
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D7D5F)),
+                modifier = Modifier
+                    .width(220.dp)
+                    .height(48.dp)
+                    .testTag("biometric_unavailable_ack_button")
+            ) {
+                Text(
+                    text = "متوجه شدم، ادامه",
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                )
+            }
+        } else {
+            // Retry button to trigger BiometricPrompt again
             Button(
                 onClick = { triggerBiometricAuthentication() },
                 shape = RoundedCornerShape(12.dp),

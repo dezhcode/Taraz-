@@ -778,16 +778,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         sharedPrefs.edit().putBoolean("alerts_enabled", enabled).apply()
     }
 
-    fun setAiServerUrl(url: String) {
-        aiRepository.setBaseUrl(url)
-        _aiServerUrl.value = aiRepository.getBaseUrl()
-    }
-
-    fun testAiServerConnection(url: String, onResult: (Boolean, String) -> Unit) {
+    fun testAiServerConnection(onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch {
             try {
-                aiRepository.setBaseUrl(url)
-                _aiServerUrl.value = aiRepository.getBaseUrl()
                 val result = aiRepository.healthCheck()
                 result.fold(
                     onSuccess = { info ->

@@ -35,10 +35,8 @@ fun SettingsScreen(
     userProfile: UserProfile?,
     biometricEnabled: Boolean,
     alertsEnabled: Boolean,
-    aiServerUrl: String,
     onBiometricChange: (Boolean) -> Unit,
     onAlertsChange: (Boolean) -> Unit,
-    onAiServerUrlChange: (String) -> Unit,
     onResetAll: () -> Unit,
     onLogout: () -> Unit,
     onScheduleReminder: (String, Long) -> Unit,
@@ -310,7 +308,7 @@ fun SettingsScreen(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = com.example.services.ApiConfig.ALLOWED_HOST,
+                                        text = com.example.services.ApiConfig.DEFAULT_BASE_URL,
                                         style = MaterialTheme.typography.bodyMedium.copy(
                                             fontWeight = FontWeight.Bold,
                                             color = NavySecondary
@@ -331,7 +329,7 @@ fun SettingsScreen(
                         Button(
                             onClick = {
                                 isTestingServer = true
-                                viewModel.testAiServerConnection(com.example.services.ApiConfig.DEFAULT_BASE_URL) { success, msg ->
+                                viewModel.testAiServerConnection { success, msg ->
                                     isTestingServer = false
                                     showToastMessage = msg
                                 }

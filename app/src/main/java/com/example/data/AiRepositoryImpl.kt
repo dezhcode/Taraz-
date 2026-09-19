@@ -29,7 +29,7 @@ class AiRepositoryImpl(private val context: Context) : AiRepository {
             throw e
         } catch (e: Exception) {
             Log.w("AiRepositoryImpl", "Backend health check failed (${e.localizedMessage})")
-            Result.failure(e)
+            Result.failure(Exception(com.example.utils.NetworkErrors.message(e), e))
         }
     }
 
@@ -47,7 +47,7 @@ class AiRepositoryImpl(private val context: Context) : AiRepository {
             throw e
         } catch (e: Exception) {
             Log.w("AiRepositoryImpl", "Backend chat failed: ${e.localizedMessage}")
-            Result.failure(e)
+            Result.failure(Exception(com.example.utils.NetworkErrors.message(e), e))
         }
     }
 
@@ -266,9 +266,5 @@ class AiRepositoryImpl(private val context: Context) : AiRepository {
 
     override fun getBaseUrl(): String {
         return ApiConfig.getBaseUrl()
-    }
-
-    override fun setBaseUrl(url: String) {
-        ApiConfig.setBaseUrl(context, url)
     }
 }

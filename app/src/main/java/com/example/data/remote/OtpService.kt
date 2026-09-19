@@ -1,6 +1,7 @@
 package com.example.data.remote
 
 import android.util.Log
+import com.example.utils.NetworkErrors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -32,7 +33,7 @@ object OtpService {
             }
         } catch (e: Exception) {
             Log.e(TAG, "requestOtp failed", e)
-            Result.failure(Exception(networkMessage(e)))
+            Result.failure(Exception(NetworkErrors.message(e), e))
         }
     }
 
@@ -55,7 +56,7 @@ object OtpService {
             }
         } catch (e: Exception) {
             Log.e(TAG, "verifyOtp failed", e)
-            Result.failure(Exception(networkMessage(e)))
+            Result.failure(Exception(NetworkErrors.message(e), e))
         }
     }
 
@@ -65,23 +66,5 @@ object OtpService {
         if (phone.startsWith("+98")) phone = "0" + phone.substring(3)
         else if (phone.startsWith("98") && phone.length == 12) phone = "0" + phone.substring(2)
         return phone
-    }
-
-    private fun networkMessage(e: Exception): String = when (e) {
-        is retrofit2.HttpException -> {
-            val code = e.code()
-            when (code) {
-                404 -> "مسیر سرویس در سرور یافت نشد (خطای ۴۰۴). لطفاً از صحت آدرس سرور اطمینان حاصل کنید."
-                500, 502, 503 -> "خطای داخلی سرور (کد $code). لطفاً اتصال سرور و متغیرهای آن را بررسی فرمایید."
-                else -> "خطای ارتباط با سرور (کد $code)."
-            }
-        }
-        is java.net.SocketTimeoutException ->
-            "زمان پاسخ‌دهی سرور به پایان رسید. لطفاً مجدداً تلاش کنید."
-        is java.net.UnknownHostException ->
-            "اتصال به اینترنت برقرار نیست یا آدرس سرور در دسترس نمی‌باشد."
-        is java.net.ConnectException ->
-            "ارتباط با سرور برقرار نشد. لطفاً بعداً تلاش کنید."
-        else -> e.localizedMessage ?: "خطای غیرمنتظره در ارتباط با سرور."
     }
 }

@@ -8,6 +8,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import java.io.File
 import java.security.GeneralSecurityException
+import java.security.KeyStore
 
 object SecurePrefs {
     private const val TAG = "SecurePrefs"
@@ -76,14 +77,20 @@ object SecurePrefs {
         } catch (e: Exception) {
             Log.e(TAG, "Error deleting encrypted shared prefs file", e)
         }
+
+        try {
+            val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            keyStore.deleteEntry(MasterKey.DEFAULT_MASTER_KEY_ALIAS)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error deleting master key from AndroidKeyStore", e)
+        }
     }
 
     internal fun migrateFromLegacyIfNeeded(context: Context, securePrefs: SharedPreferences) {
         if (!securePrefs.getBoolean(KEY_MIGRATED_V1, false)) {
             val legacyPrefs = context.getSharedPreferences(LEGACY_PREFS_NAME, Context.MODE_PRIVATE)
             val secureEditor = securePrefs.edit()
-            val legacyEditor = legacyPrefs.edit()
-            var hasMigratedAny = false
+            val migratedKeys = mutableListOf<String>()
 
             for (key in SENSITIVE_KEYS) {
                 if (legacyPrefs.contains(key)) {
@@ -91,15 +98,23 @@ object SecurePrefs {
                     if (value != null) {
                         secureEditor.putString(key, value)
                     }
-                    legacyEditor.remove(key)
-                    hasMigratedAny = true
+                    migratedKeys.add(key)
                 }
             }
 
             secureEditor.putBoolean(KEY_MIGRATED_V1, true)
-            secureEditor.apply()
-            legacyEditor.apply()
-            if (hasMigratedAny) {
+            val commitSuccess = secureEditor.commit()
+            if (!commitSuccess) {
+                Log.e(TAG, "Failed to commit migrated credentials to securePrefs. Leaving legacy prefs intact.")
+                return
+            }
+
+            if (migratedKeys.isNotEmpty()) {
+                val legacyEditor = legacyPrefs.edit()
+                for (key in migratedKeys) {
+                    legacyEditor.remove(key)
+                }
+                legacyEditor.apply()
                 Log.i(TAG, "Successfully migrated sensitive credentials from fidar_prefs to taraz_secure_prefs")
             }
         }
