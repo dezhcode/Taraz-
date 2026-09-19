@@ -255,7 +255,7 @@ fun AuthScreen(
                                 } else {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            text = "ارسال کد تأیید ۵ رقمی",
+                                            text = "ارسال کد تأیید ۶ رقمی",
                                             style = MaterialTheme.typography.titleMedium.copy(
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color.White,
@@ -379,19 +379,19 @@ fun AuthScreen(
 
                             Spacer(modifier = Modifier.height(20.dp))
 
-                            // 5 Digit Box UI (Left to Right filling in Latin digits)
+                            // 6 Digit Box UI (Left to Right filling in Latin digits)
                             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                                 Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    for (i in 0 until 5) {
+                                    for (i in 0 until 6) {
                                         val digitChar = otpInput.getOrNull(i)?.toString() ?: ""
-                                        val isFocused = otpInput.length == i || (i == 4 && otpInput.length == 5)
+                                        val isFocused = otpInput.length == i || (i == 5 && otpInput.length == 6)
 
                                         Box(
                                             modifier = Modifier
-                                                .size(50.dp)
+                                                .size(44.dp)
                                                 .clip(RoundedCornerShape(12.dp))
                                                 .background(SurfaceWhite)
                                                 .border(
@@ -408,7 +408,7 @@ fun AuthScreen(
                                                 style = MaterialTheme.typography.titleLarge.copy(
                                                     fontWeight = FontWeight.Bold,
                                                     color = EbayDarkText,
-                                                    fontSize = 22.sp
+                                                    fontSize = 20.sp
                                                 )
                                             )
                                         }
@@ -416,7 +416,7 @@ fun AuthScreen(
                                 }
                             }
 
-                            // Hidden TextField for 5-digit OTP input
+                            // Hidden TextField for 6-digit OTP input
                             val focusRequester = remember { FocusRequester() }
                             LaunchedEffect(Unit) {
                                 delay(200)
@@ -426,7 +426,7 @@ fun AuthScreen(
                             OutlinedTextField(
                                 value = otpInput,
                                 onValueChange = { newValue ->
-                                    if (newValue.length <= 5 && newValue.all { it.isDigit() }) {
+                                    if (newValue.length <= 6 && newValue.all { it.isDigit() }) {
                                         otpInput = newValue
                                         errorMessage = null
                                     }
@@ -499,8 +499,8 @@ fun AuthScreen(
                             // Confirm & Login Button
                             Button(
                                 onClick = {
-                                    if (otpInput.length != 5) {
-                                        errorMessage = "لطفاً کد ۵ رقمی را کامل وارد نمایید."
+                                    if (otpInput.length != 6) {
+                                        errorMessage = "لطفاً کد ۶ رقمی را کامل وارد نمایید."
                                         return@Button
                                     }
                                     isVerifyingOtp = true
@@ -514,7 +514,7 @@ fun AuthScreen(
                                         }
                                     }
                                 },
-                                enabled = otpInput.length == 5 && !isVerifyingOtp,
+                                enabled = otpInput.length == 6 && !isVerifyingOtp,
                                 shape = RoundedCornerShape(14.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = EbayBluePrimary),
                                 modifier = Modifier

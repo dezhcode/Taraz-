@@ -97,6 +97,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         aiRepository
     )
     private val sharedPrefs = application.getSharedPreferences("fidar_prefs", android.content.Context.MODE_PRIVATE)
+    private val securePrefs = com.example.utils.SecurePrefs.get(application)
 
     // SMS Import & Learning state
     val bankSenders: StateFlow<List<BankSender>> = smsParserRepository.allSendersFlow
@@ -607,9 +608,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             }
         }
         
-        val userName = sharedPrefs.getString("user_name", "") ?: ""
-        val userPhone = sharedPrefs.getString("user_phone", "") ?: ""
-        val userEmail = sharedPrefs.getString("user_email", if (userPhone.isNotEmpty()) "$userPhone@fidar.app" else "") ?: ""
+        val userName = securePrefs.getString("user_name", null) ?: sharedPrefs.getString("user_name", "") ?: ""
+        val userPhone = securePrefs.getString("user_phone", null) ?: sharedPrefs.getString("user_phone", "") ?: ""
+        val userEmail = securePrefs.getString("user_email", null) ?: sharedPrefs.getString("user_email", if (userPhone.isNotEmpty()) "$userPhone@fidar.app" else "") ?: ""
         val isGoogle = sharedPrefs.getBoolean("user_google", false)
         val isLoggedIn = sharedPrefs.getBoolean("user_logged_in", false)
         val isGuest = sharedPrefs.getBoolean("user_is_guest", false)
@@ -814,6 +815,12 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         _isAppLocked.value = false
     }
 
+    fun disableLockUnavailableOnDevice() {
+        _biometricEnabled.value = false
+        _isAppLocked.value = false
+        sharedPrefs.edit().putBoolean("biometric_enabled", false).apply()
+    }
+
     fun lockApp() {
         if (_biometricEnabled.value) {
             _isAppLocked.value = true
@@ -823,9 +830,11 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     fun registerUser(name: String, email: String) {
         val profile = UserProfile(name = name, email = email, isGoogleConnected = false, isLoggedIn = true)
         _userProfile.value = profile
-        sharedPrefs.edit().apply {
+        securePrefs.edit().apply {
             putString("user_name", name)
             putString("user_email", email)
+        }.apply()
+        sharedPrefs.edit().apply {
             putBoolean("user_google", false)
             putBoolean("user_logged_in", true)
         }.apply()
@@ -835,9 +844,11 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     fun connectWithGoogle(name: String, email: String) {
         val profile = UserProfile(name = name, email = email, isGoogleConnected = true, isLoggedIn = true)
         _userProfile.value = profile
-        sharedPrefs.edit().apply {
+        securePrefs.edit().apply {
             putString("user_name", name)
             putString("user_email", email)
+        }.apply()
+        sharedPrefs.edit().apply {
             putBoolean("user_google", true)
             putBoolean("user_logged_in", true)
         }.apply()
@@ -889,13 +900,15 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             isLoggedIn = true,
             isGuest = false
         )
-        sharedPrefs.edit().apply {
+        securePrefs.edit().apply {
             putString("user_name", name)
             putString("user_phone", phone)
             putString("user_email", email)
+            if (sessionToken.isNotBlank()) putString("session_token", sessionToken)
+        }.apply()
+        sharedPrefs.edit().apply {
             putBoolean("user_is_guest", false)
             putBoolean("user_logged_in", true)
-            if (sessionToken.isNotBlank()) putString("session_token", sessionToken)
         }.apply()
         _currentScreen.value = Screen.MAIN
     }
@@ -911,10 +924,12 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             isLoggedIn = true,
             isGuest = true
         )
-        sharedPrefs.edit().apply {
+        securePrefs.edit().apply {
             putString("user_name", name)
             putString("user_phone", "")
             putString("user_email", email)
+        }.apply()
+        sharedPrefs.edit().apply {
             putBoolean("user_is_guest", true)
             putBoolean("user_google", false)
             putBoolean("user_logged_in", true)
@@ -924,6 +939,12 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
     fun logout() {
         _userProfile.value = null
+        securePrefs.edit().apply {
+            remove("user_name")
+            remove("user_phone")
+            remove("user_email")
+            remove("session_token")
+        }.apply()
         sharedPrefs.edit().apply {
             remove("user_name")
             remove("user_phone")

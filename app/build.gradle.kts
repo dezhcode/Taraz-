@@ -14,7 +14,7 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.fidarfinance.txrwqa"
+    applicationId = "ir.taraz.finance"
     minSdk = 24
     targetSdk = 36
     versionCode = 1
@@ -95,6 +95,7 @@ dependencies {
   implementation(libs.androidx.core.ktx)
   implementation("androidx.core:core-splashscreen:1.0.1")
   implementation("androidx.biometric:biometric:1.2.0-alpha05")
+  implementation("androidx.security:security-crypto:1.1.0-alpha06")
   implementation("androidx.appcompat:appcompat:1.6.1")
   implementation("androidx.credentials:credentials:1.2.2")
   implementation("androidx.credentials:credentials-play-services-auth:1.2.2")

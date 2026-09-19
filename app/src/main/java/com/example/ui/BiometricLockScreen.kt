@@ -32,11 +32,12 @@ import com.example.utils.BiometricHelper
 @Composable
 fun BiometricLockScreen(
     onUnlockSuccess: () -> Unit,
-    onUnlockFallback: () -> Unit
+    onLockUnavailable: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val activity = context as? FragmentActivity
     var authError by remember { mutableStateOf<String?>(null) }
+    var isUnavailableOnDevice by remember { mutableStateOf(false) }
 
     // Pulsing animation for the biometric ring
     val infiniteTransition = rememberInfiniteTransition(label = "BiometricPulse")
@@ -52,20 +53,26 @@ fun BiometricLockScreen(
 
     fun triggerBiometricAuthentication() {
         if (activity != null && BiometricHelper.isBiometricAvailable(context)) {
+            isUnavailableOnDevice = false
             BiometricHelper.showBiometricPrompt(
                 activity = activity,
                 title = "امنیت تراز",
-                subtitle = "برای ورود به برنامه اثر انگشت خود را لمس کنید",
+                subtitle = "برای ورود به برنامه اثر انگشت یا رمز دستگاه را وارد نمایید",
                 onSuccess = {
                     authError = null
                     onUnlockSuccess()
                 },
                 onError = { errorMsg ->
                     authError = errorMsg
+                },
+                onFailedAttempt = {
+                    authError = "احراز هویت انجام نشد. لطفاً مجدداً تلاش کنید."
                 }
             )
         } else {
-            authError = "سنسور اثر انگشت در این دستگاه یافت نشد یا تعریف نشده است."
+            isUnavailableOnDevice = true
+            authError = "روی این دستگاه قفل صفحه تعریف نشده است. برای فعال شدن قفل تراز، ابتدا از تنظیمات اندروید رمز یا اثر انگشت تعریف کنید."
+            onLockUnavailable()
         }
     }
 
@@ -190,26 +197,24 @@ fun BiometricLockScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
-        // Bypass / Fallback button for testing on Emulators or devices without physical biometric modules
-        OutlinedButton(
-            onClick = {
-                // If fingerprint fails or is missing, user can bypass using local simulation password
-                onUnlockFallback()
-            },
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF94A3B8)),
-            modifier = Modifier
-                .width(220.dp)
-                .height(48.dp)
-                .border(1.dp, Color(0xFF334155), RoundedCornerShape(12.dp))
-                .testTag("biometric_fallback_bypass_button")
-        ) {
-            Text(
-                text = "استفاده از رمز عبور / لغو قفل",
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = Color(0xFF94A3B8))
-            )
+        // Retry button to trigger BiometricPrompt again
+        if (!isUnavailableOnDevice) {
+            Button(
+                onClick = { triggerBiometricAuthentication() },
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D7D5F)),
+                modifier = Modifier
+                    .width(220.dp)
+                    .height(48.dp)
+                    .testTag("biometric_retry_button")
+            ) {
+                Text(
+                    text = "تلاش مجدد",
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                )
+            }
         }
     }
 }

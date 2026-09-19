@@ -282,48 +282,58 @@ fun SettingsScreen(
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                 ) {
                     Column(modifier = Modifier.padding(20.dp)) {
-                        var serverInput by remember(aiServerUrl) { mutableStateOf(aiServerUrl) }
                         var isTestingServer by remember { mutableStateOf(false) }
 
                         Text(
-                            text = "آدرس آدرس بک‌اند تراز (FastAPI):",
+                            text = "سرور اختصاصی تراز:",
                             style = MaterialTheme.typography.bodyMedium.copy(color = SlateGray, fontWeight = FontWeight.Bold)
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        OutlinedTextField(
-                            value = serverInput,
-                            onValueChange = { serverInput = it },
-                            label = { Text("آدرس URL سرور (مثال: https://dezhcode.pyho.ir/taraz)") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("ai_server_url_input"),
-                            singleLine = true,
-                            leadingIcon = {
-                                Icon(imageVector = Icons.Default.Dns, contentDescription = null, tint = EmeraldPrimary)
-                            },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = EmeraldPrimary,
-                                focusedLabelColor = EmeraldPrimary
-                            )
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = BackgroundLight,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Dns,
+                                    contentDescription = null,
+                                    tint = EmeraldPrimary
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = com.example.services.ApiConfig.ALLOWED_HOST,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = NavySecondary
+                                        )
+                                    )
+                                    Text(
+                                        text = "دسترسی امن با پروتکل HTTPS",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = SlateGray
+                                        )
+                                    )
+                                }
+                            }
+                        }
 
                         Spacer(modifier = Modifier.height(12.dp))
 
                         Button(
                             onClick = {
-                                if (serverInput.isNotBlank()) {
-                                    isTestingServer = true
-                                    viewModel.testAiServerConnection(serverInput) { success, msg ->
-                                        isTestingServer = false
-                                        showToastMessage = msg
-                                        if (success) {
-                                            onAiServerUrlChange(serverInput)
-                                        }
-                                    }
-                                } else {
-                                    showToastMessage = "لطفاً آدرس معتبر سرور را وارد نمایید."
+                                isTestingServer = true
+                                viewModel.testAiServerConnection(com.example.services.ApiConfig.DEFAULT_BASE_URL) { success, msg ->
+                                    isTestingServer = false
+                                    showToastMessage = msg
                                 }
                             },
                             enabled = !isTestingServer,
@@ -345,7 +355,7 @@ fun SettingsScreen(
                             } else {
                                 Icon(imageVector = Icons.Default.CloudSync, contentDescription = null, tint = Color.White)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("تست اتصال و ذخیره آدرس سرور", style = MaterialTheme.typography.bodyMedium.copy(color = Color.White, fontWeight = FontWeight.Bold))
+                                Text("تست اتصال به سرور", style = MaterialTheme.typography.bodyMedium.copy(color = Color.White, fontWeight = FontWeight.Bold))
                             }
                         }
                     }

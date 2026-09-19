@@ -144,7 +144,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                     if (isAppLocked) {
                         BiometricLockScreen(
                             onUnlockSuccess = { viewModel.unlockApp() },
-                            onUnlockFallback = { viewModel.unlockApp() }
+                            onLockUnavailable = { viewModel.disableLockUnavailableOnDevice() }
                         )
                     } else if (screenState == Screen.AUTH || screenState == Screen.ONBOARDING || screenState == Screen.SPLASH) {
                         AuthScreen(viewModel = viewModel)

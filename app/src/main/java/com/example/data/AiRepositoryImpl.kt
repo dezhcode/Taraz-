@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import com.example.data.remote.ApiClient
 import com.example.data.remote.ChatRequest
-import com.example.data.remote.CopilotDirectEngine
 import com.example.services.ApiConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -29,52 +28,26 @@ class AiRepositoryImpl(private val context: Context) : AiRepository {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w("AiRepositoryImpl", "Backend health check failed (${e.localizedMessage}), testing Copilot Native engine...")
-            val directTest = CopilotDirectEngine.askCopilot("تست")
-            if (directTest.isSuccess) {
-                Result.success("سرور کوپایلوت فعال است")
-            } else {
-                Result.failure(e)
-            }
+            Log.w("AiRepositoryImpl", "Backend health check failed (${e.localizedMessage})")
+            Result.failure(e)
         }
     }
 
     override suspend fun chat(message: String): Result<String> = withContext(Dispatchers.IO) {
-        // Step 1: Try the configured backend server (e.g. FastAPI)
         try {
             val apiService = ApiClient.getApiService()
             val request = ChatRequest(message = message)
             val response = apiService.chat(request)
             if (response.success && response.answer != null) {
-                return@withContext Result.success(response.answer)
+                Result.success(response.answer)
+            } else {
+                Result.failure(Exception(response.error ?: "پاسخی از سرور هوش مصنوعی دریافت نشد"))
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: retrofit2.HttpException) {
-            Log.w("AiRepositoryImpl", "Backend returned HTTP ${e.code()}, falling back to Copilot Native engine")
-        } catch (e: java.net.ConnectException) {
-            Log.w("AiRepositoryImpl", "Backend connection refused, falling back to Copilot Native engine")
-        } catch (e: java.net.UnknownHostException) {
-            Log.w("AiRepositoryImpl", "Backend host resolution failed, falling back to Copilot Native engine")
-        } catch (e: java.net.SocketTimeoutException) {
-            Log.w("AiRepositoryImpl", "Backend timeout, falling back to Copilot Native engine")
         } catch (e: Exception) {
-            Log.w("AiRepositoryImpl", "Backend chat failed (${e.localizedMessage}), falling back to Copilot Native engine")
-        }
-
-        // Step 2: Fallback seamlessly to Copilot Native engine
-        try {
-            val copilotResult = CopilotDirectEngine.askCopilot(message)
-            if (copilotResult.isSuccess) {
-                return@withContext copilotResult
-            }
-            val copilotError = copilotResult.exceptionOrNull()?.localizedMessage ?: "پاسخی از هوش مصنوعی دریافت نشد"
-            Result.failure(Exception("خطا در ارتباط با دستیار هوش مصنوعی: $copilotError"))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w("AiRepositoryImpl", "Copilot chat failed: ${e.localizedMessage}")
-            Result.failure(Exception("خطای غیرمنتظره در ارتباط با دستیار هوش مصنوعی: ${e.localizedMessage ?: "مجدداً تلاش فرمایید"}"))
+            Log.w("AiRepositoryImpl", "Backend chat failed: ${e.localizedMessage}")
+            Result.failure(e)
         }
     }
 
