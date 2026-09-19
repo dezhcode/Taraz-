@@ -97,7 +97,15 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         aiRepository
     )
     private val sharedPrefs = application.getSharedPreferences("fidar_prefs", android.content.Context.MODE_PRIVATE)
-    private val securePrefs = com.example.utils.SecurePrefs.get(application)
+    /**
+     * Built on first use, never in the constructor: creating an
+     * EncryptedSharedPreferences instance does AndroidKeyStore work that is
+     * slow enough to be felt on the main thread at launch. Every read of it
+     * below happens inside a coroutine.
+     */
+    private val securePrefs: android.content.SharedPreferences by lazy {
+        com.example.utils.SecurePrefs.get(application)
+    }
 
     // SMS Import & Learning state
     val bankSenders: StateFlow<List<BankSender>> = smsParserRepository.allSendersFlow
@@ -608,29 +616,41 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             }
         }
         
-        val userName = securePrefs.getString("user_name", null) ?: sharedPrefs.getString("user_name", "") ?: ""
-        val userPhone = securePrefs.getString("user_phone", null) ?: sharedPrefs.getString("user_phone", "") ?: ""
-        val userEmail = securePrefs.getString("user_email", null) ?: sharedPrefs.getString("user_email", if (userPhone.isNotEmpty()) "$userPhone@fidar.app" else "") ?: ""
-        val isGoogle = sharedPrefs.getBoolean("user_google", false)
-        val isLoggedIn = sharedPrefs.getBoolean("user_logged_in", false)
-        val isGuest = sharedPrefs.getBoolean("user_is_guest", false)
+        // Reading the encrypted store touches the keystore, so the restore runs
+        // off the main thread. The screen stays on SPLASH until it finishes,
+        // which is why MainActivity draws a loader for that state rather than
+        // the login form — otherwise a signed-in user would see a flash of it.
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val userName = securePrefs.getString("user_name", null)
+                ?: sharedPrefs.getString("user_name", "") ?: ""
+            val userPhone = securePrefs.getString("user_phone", null)
+                ?: sharedPrefs.getString("user_phone", "") ?: ""
+            val userEmail = securePrefs.getString("user_email", null)
+                ?: sharedPrefs.getString(
+                    "user_email",
+                    if (userPhone.isNotEmpty()) "$userPhone@fidar.app" else ""
+                ) ?: ""
+            val isGoogle = sharedPrefs.getBoolean("user_google", false)
+            val isLoggedIn = sharedPrefs.getBoolean("user_logged_in", false)
+            val isGuest = sharedPrefs.getBoolean("user_is_guest", false)
 
-        if (isLoggedIn && (userPhone.isNotEmpty() || isGuest)) {
-            _userProfile.value = UserProfile(
-                name = userName.ifEmpty { if (isGuest) "کاربر مهمان" else "کاربر تراز" },
-                email = userEmail.ifEmpty { "guest@fidar.app" },
-                phone = userPhone,
-                isGoogleConnected = isGoogle,
-                isLoggedIn = true,
-                isGuest = isGuest
-            )
-            if (_biometricEnabled.value) {
-                _isAppLocked.value = true
+            if (isLoggedIn && (userPhone.isNotEmpty() || isGuest)) {
+                _userProfile.value = UserProfile(
+                    name = userName.ifEmpty { if (isGuest) "کاربر مهمان" else "کاربر تراز" },
+                    email = userEmail.ifEmpty { "guest@fidar.app" },
+                    phone = userPhone,
+                    isGoogleConnected = isGoogle,
+                    isLoggedIn = true,
+                    isGuest = isGuest
+                )
+                if (_biometricEnabled.value) {
+                    _isAppLocked.value = true
+                }
+                _currentScreen.value = Screen.MAIN
+            } else {
+                _userProfile.value = UserProfile("", "", "", false, false, false)
+                _currentScreen.value = Screen.AUTH
             }
-            _currentScreen.value = Screen.MAIN
-        } else {
-            _userProfile.value = UserProfile("", "", "", false, false, false)
-            _currentScreen.value = Screen.AUTH
         }
 
         viewModelScope.launch {
@@ -778,15 +798,20 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         sharedPrefs.edit().putBoolean("alerts_enabled", enabled).apply()
     }
 
-    fun setAiServerUrl(url: String) {
-        aiRepository.setBaseUrl(url)
+    /** Returns false when the address was refused by the allowlist. */
+    fun setAiServerUrl(url: String): Boolean {
+        val accepted = aiRepository.setBaseUrl(url)
         _aiServerUrl.value = aiRepository.getBaseUrl()
+        return accepted
     }
 
     fun testAiServerConnection(url: String, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch {
             try {
-                aiRepository.setBaseUrl(url)
+                if (!aiRepository.setBaseUrl(url)) {
+                    onResult(false, "آدرس سرور مجاز نیست و تغییر داده نشد.")
+                    return@launch
+                }
                 _aiServerUrl.value = aiRepository.getBaseUrl()
                 val result = aiRepository.healthCheck()
                 result.fold(

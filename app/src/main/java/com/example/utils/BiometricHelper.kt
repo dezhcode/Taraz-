@@ -1,5 +1,6 @@
 package com.example.utils
 
+import android.app.KeyguardManager
 import android.content.Context
 import android.os.Build
 import androidx.biometric.BiometricManager
@@ -9,15 +10,31 @@ import androidx.fragment.app.FragmentActivity
 
 object BiometricHelper {
 
+    /**
+     * Can this device actually hold the lock shut?
+     *
+     * Below API 30 the answer needs two questions, not one. The no-argument
+     * `canAuthenticate()` is `canAuthenticate(BIOMETRIC_WEAK)`: it reports
+     * only on fingerprint/face and says nothing about a PIN or pattern. A
+     * phone secured with a PIN alone would come back "unavailable" and the
+     * lock would switch itself off — even though [showBiometricPrompt] asks
+     * for exactly that PIN through `setDeviceCredentialAllowed`. So the
+     * device credential is checked separately via [KeyguardManager].
+     */
     fun isBiometricAvailable(context: Context): Boolean {
         val biometricManager = BiometricManager.from(context)
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
-            biometricManager.canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS
-        } else {
-            @Suppress("DEPRECATION")
-            biometricManager.canAuthenticate() == BiometricManager.BIOMETRIC_SUCCESS
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            return biometricManager.canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS
         }
+
+        @Suppress("DEPRECATION")
+        val hasBiometric = biometricManager.canAuthenticate() == BiometricManager.BIOMETRIC_SUCCESS
+        if (hasBiometric) return true
+
+        val keyguard = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+        return keyguard?.isDeviceSecure == true
     }
 
     fun showBiometricPrompt(

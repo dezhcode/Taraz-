@@ -67,21 +67,6 @@ object OtpService {
         return phone
     }
 
-    private fun networkMessage(e: Exception): String = when (e) {
-        is retrofit2.HttpException -> {
-            val code = e.code()
-            when (code) {
-                404 -> "مسیر سرویس در سرور یافت نشد (خطای ۴۰۴). لطفاً از صحت آدرس سرور اطمینان حاصل کنید."
-                500, 502, 503 -> "خطای داخلی سرور (کد $code). لطفاً اتصال سرور و متغیرهای آن را بررسی فرمایید."
-                else -> "خطای ارتباط با سرور (کد $code)."
-            }
-        }
-        is java.net.SocketTimeoutException ->
-            "زمان پاسخ‌دهی سرور به پایان رسید. لطفاً مجدداً تلاش کنید."
-        is java.net.UnknownHostException ->
-            "اتصال به اینترنت برقرار نیست یا آدرس سرور در دسترس نمی‌باشد."
-        is java.net.ConnectException ->
-            "ارتباط با سرور برقرار نشد. لطفاً بعداً تلاش کنید."
-        else -> e.localizedMessage ?: "خطای غیرمنتظره در ارتباط با سرور."
-    }
+    private fun networkMessage(e: Exception): String =
+        com.example.utils.NetworkErrors.message(e)
 }

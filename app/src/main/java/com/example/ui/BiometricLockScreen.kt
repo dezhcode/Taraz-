@@ -52,28 +52,35 @@ fun BiometricLockScreen(
     )
 
     fun triggerBiometricAuthentication() {
-        if (activity != null && BiometricHelper.isBiometricAvailable(context)) {
-            isUnavailableOnDevice = false
-            BiometricHelper.showBiometricPrompt(
-                activity = activity,
-                title = "امنیت تراز",
-                subtitle = "برای ورود به برنامه اثر انگشت یا رمز دستگاه را وارد نمایید",
-                onSuccess = {
-                    authError = null
-                    onUnlockSuccess()
-                },
-                onError = { errorMsg ->
-                    authError = errorMsg
-                },
-                onFailedAttempt = {
-                    authError = "احراز هویت انجام نشد. لطفاً مجدداً تلاش کنید."
-                }
-            )
-        } else {
-            isUnavailableOnDevice = true
-            authError = "روی این دستگاه قفل صفحه تعریف نشده است. برای فعال شدن قفل تراز، ابتدا از تنظیمات اندروید رمز یا اثر انگشت تعریف کنید."
-            onLockUnavailable()
+        if (activity == null) {
+            // Not a FragmentActivity, so no prompt can be shown. This is a
+            // wiring mistake, never a property of the device — do NOT treat it
+            // as "no lock available" and switch the lock off, or a bug here
+            // would quietly leave the app unprotected for good.
+            authError = "نمایش صفحه احراز هویت ممکن نشد. لطفاً برنامه را دوباره باز کنید."
+            return
         }
+        if (!BiometricHelper.isBiometricAvailable(context)) {
+            isUnavailableOnDevice = true
+            authError = null
+            return
+        }
+        isUnavailableOnDevice = false
+        BiometricHelper.showBiometricPrompt(
+            activity = activity,
+            title = "امنیت تراز",
+            subtitle = "برای ورود به برنامه اثر انگشت یا رمز دستگاه را وارد نمایید",
+            onSuccess = {
+                authError = null
+                onUnlockSuccess()
+            },
+            onError = { errorMsg ->
+                authError = errorMsg
+            },
+            onFailedAttempt = {
+                authError = "احراز هویت انجام نشد. لطفاً مجدداً تلاش کنید."
+            }
+        )
     }
 
     // Automatically trigger biometric authentication when the screen loads
@@ -199,8 +206,38 @@ fun BiometricLockScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Retry button to trigger BiometricPrompt again
-        if (!isUnavailableOnDevice) {
+        // Retry, or — when the device cannot hold the lock at all — an
+        // explicit acknowledgement. The lock is only switched off once the
+        // user has confirmed they read why: calling back immediately would
+        // unmount this screen in the same frame and the explanation would
+        // never be drawn.
+        if (isUnavailableOnDevice) {
+            Text(
+                text = "روی این دستگاه قفل صفحه تعریف نشده است. برای فعال شدن قفل تراز، ابتدا از تنظیمات اندروید رمز یا اثر انگشت تعریف کنید.",
+                style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFFFCD34D), lineHeight = 22.sp),
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .testTag("biometric_unavailable_message")
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Button(
+                onClick = { onLockUnavailable() },
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D7D5F)),
+                modifier = Modifier
+                    .width(220.dp)
+                    .height(48.dp)
+                    .testTag("biometric_unavailable_ack_button")
+            ) {
+                Text(
+                    text = "متوجه شدم، ادامه",
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                )
+            }
+        } else {
             Button(
                 onClick = { triggerBiometricAuthentication() },
                 shape = RoundedCornerShape(12.dp),
