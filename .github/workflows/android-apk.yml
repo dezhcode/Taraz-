@@ -1,0 +1,70 @@
+name: Android APK
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The debug keystore is git-ignored. Use a stable one from the
+      # DEBUG_KEYSTORE_B64 secret when it exists so new builds install over
+      # old ones; otherwise create a throwaway key for this run.
+      - name: Prepare debug keystore
+        env:
+          DEBUG_KEYSTORE_B64: ${{ secrets.DEBUG_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$DEBUG_KEYSTORE_B64" ]; then
+            echo "$DEBUG_KEYSTORE_B64" | base64 -d > debug.keystore
+          else
+            keytool -genkeypair -v -keystore debug.keystore -storepass android \
+              -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 \
+              -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+      - name: Name APK
+        id: apk
+        run: |
+          SHORT=$(git rev-parse --short HEAD)
+          OUT="taraz-${SHORT}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$OUT"
+          echo "file=$OUT" >> "$GITHUB_OUTPUT"
+          echo "short=$SHORT" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: taraz-apk-${{ steps.apk.outputs.short }}
+          path: ${{ steps.apk.outputs.file }}
+
+      - name: Publish pre-release with the APK
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}-${{ steps.apk.outputs.short }}
+          target_commitish: ${{ github.sha }}
+          name: "تراز — نسخهٔ آزمایشی ${{ github.run_number }}"
+          body: "APK ساخته‌شده از شاخهٔ ${{ github.ref_name }} (کامیت ${{ steps.apk.outputs.short }})."
+          prerelease: true
+          files: ${{ steps.apk.outputs.file }}
