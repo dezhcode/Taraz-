@@ -14,10 +14,10 @@ import androidx.compose.ui.graphics.Color
  */
 
 // Brand
-val HorizonGreen = Color(0xFF0B7A57)        // primary — panel, actions, income
+val HorizonGreen = Color(0xFF2250F4)        // primary — panel, actions, income
 val HorizonGreenBright = Color(0xFF0E9C6E)  // the area under the trend line
 val HorizonGreenGlow = Color(0xFF6FE3B4)    // the trend line itself
-val HorizonGreenTint = Color(0xFFE9F4EF)    // icon wells, quick tiles
+val HorizonGreenTint = Color(0xFFEEF2FF)    // icon wells, quick tiles
 val HorizonOnGreen = Color(0xFF9BD8C0)      // secondary text on the green panel
 
 // Expense
@@ -25,10 +25,10 @@ val HorizonClay = Color(0xFFB0532F)
 val HorizonClayTint = Color(0xFFFBEDE7)
 
 // Neutrals — greyed toward green so the whole screen reads as one temperature
-val HorizonBackground = Color(0xFFF4F7F4)
+val HorizonBackground = Color(0xFFF5F6F8)
 val HorizonSurface = Color(0xFFFFFFFF)
-val HorizonBorder = Color(0xFFE4EBE7)
-val HorizonDivider = Color(0xFFE7EDE9)
-val HorizonInk = Color(0xFF16211C)          // primary text
-val HorizonInkMuted = Color(0xFF6C7C75)     // secondary text — passes 4.5:1 on white
-val HorizonInkFaint = Color(0xFF8A9A93)     // timestamps, units
+val HorizonBorder = Color(0xFFE1E4EA)
+val HorizonDivider = Color(0xFFECEEF2)
+val HorizonInk = Color(0xFF0E1116)          // primary text
+val HorizonInkMuted = Color(0xFF5D6573)     // secondary text — passes 4.5:1 on white
+val HorizonInkFaint = Color(0xFF6E7684)     // timestamps, units

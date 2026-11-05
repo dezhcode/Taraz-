@@ -8,14 +8,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.example.R
 
-// The TTFs were already in res/font — they were simply never connected, so the
-// whole app fell back to the device's default face.
-val IranYekanFontFamily = FontFamily(
-    Font(R.font.iranyekan_regular, FontWeight.Normal),
-    Font(R.font.iranyekan_regular, FontWeight.Medium),
-    Font(R.font.iranyekan_bold, FontWeight.SemiBold),
-    Font(R.font.iranyekan_bold, FontWeight.Bold)
+// Vazirmatn in every weight the design uses. The old "IranYekan" files were
+// Vazirmatn Regular/Bold under another name, so the name is kept for the
+// screens that still refer to it.
+val VazirmatnFontFamily = FontFamily(
+    Font(R.font.vazirmatn_extra_light, FontWeight.ExtraLight),
+    Font(R.font.vazirmatn_light, FontWeight.Light),
+    Font(R.font.vazirmatn_regular, FontWeight.Normal),
+    Font(R.font.vazirmatn_medium, FontWeight.Medium),
+    Font(R.font.vazirmatn_semi_bold, FontWeight.SemiBold),
+    Font(R.font.vazirmatn_bold, FontWeight.Bold)
 )
+
+val IranYekanFontFamily = VazirmatnFontFamily
 
 // Set of Material typography styles to start with using Iran Yekan
 val Typography = Typography(
