@@ -151,7 +151,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             onLockUnavailable = { viewModel.disableLockUnavailableOnDevice() }
                         )
                     } else if (screenState == Screen.AUTH || screenState == Screen.ONBOARDING || screenState == Screen.SPLASH) {
-                        AuthScreen(viewModel = viewModel)
+                        com.example.ui.taraz.TarazAuthScreen(vm = viewModel)
                     } else {
                         if (screenState == Screen.MAIN) {
                             // Sub-screens override main tab navigation
@@ -185,16 +185,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 }
 
                                 "settings" -> {
-                                    SettingsScreen(
-                                        viewModel = viewModel,
-                                        userProfile = userProfile,
-                                        biometricEnabled = biometricEnabled,
-                                        alertsEnabled = alertsEnabled,
-                                        onBiometricChange = { viewModel.setBiometricEnabled(it) },
-                                        onAlertsChange = { viewModel.setAlertsEnabled(it) },
-                                        onResetAll = { viewModel.resetAllData() },
-                                        onLogout = { viewModel.logout() },
-                                        onScheduleReminder = { title, delay -> viewModel.scheduleReminder(title, delay) },
+                                    com.example.ui.taraz.TarazSettingsScreen(
+                                        vm = viewModel,
                                         onBack = { activeSubScreen = null }
                                     )
                                 }
@@ -373,30 +365,18 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 )
                             }
 
-                            if (selectedTransactionForEdit != null) {
-                                PremiumTransactionSheet(
+                            selectedTransactionForEdit?.let { oldTx ->
+                                com.example.ui.taraz.TarazTxSheet(
+                                    tx = oldTx,
                                     cards = cards,
-                                    existingTransaction = selectedTransactionForEdit,
-                                    onDismiss = {
-                                        isAddTransactionOpen = false
-                                        selectedTransactionForEdit = null
-                                    },
-                                    onConfirm = { title, amount, category, isExpense, bankName ->
-                                        val oldTx = selectedTransactionForEdit!!
-                                        val updatedTx = oldTx.copy(
-                                            title = title,
-                                            amount = amount,
-                                            category = category,
-                                            isExpense = isExpense,
-                                            bankName = bankName
-                                        )
-                                        viewModel.updateTransaction(oldTx, updatedTx)
-                                        isAddTransactionOpen = false
+                                    categories = categories,
+                                    onDismiss = { selectedTransactionForEdit = null },
+                                    onSave = { updated ->
+                                        viewModel.updateTransaction(oldTx, updated)
                                         selectedTransactionForEdit = null
                                     },
                                     onDelete = { tx ->
                                         viewModel.deleteTransaction(tx)
-                                        isAddTransactionOpen = false
                                         selectedTransactionForEdit = null
                                     }
                                 )
