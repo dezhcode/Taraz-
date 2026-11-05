@@ -29,6 +29,14 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Payment
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -69,7 +77,15 @@ fun AiAssistantScreen(
     onSendMessage: (String) -> Unit,
     onOpenChat: () -> Unit = {},
     onApproveAction: (String) -> Unit = {},
-    onCancelAction: (String) -> Unit = {}
+    onCancelAction: (String) -> Unit = {},
+    // ─── قابلیت‌های صوتی (منتقل‌شده از AI Studio) ───
+    isDictating: Boolean = false,
+    dictationAmplitude: Float = 0f,
+    onToggleDictation: ((onText: (String) -> Unit) -> Unit)? = null,
+    speakingMessageId: String? = null,
+    onSpeakMessage: ((ChatMessage) -> Unit)? = null,
+    onStartLiveVoice: (() -> Unit)? = null,
+    onMicPermissionDenied: () -> Unit = {}
 ) {
     LaunchedEffect(Unit) {
         onOpenChat()
@@ -87,6 +103,30 @@ fun AiAssistantScreen(
     var isFocused by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // عملی که پس از گرفتن مجوز میکروفون اجرا می‌شود (دیکته یا گفت‌وگوی زنده)
+    var pendingMicAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) pendingMicAction?.invoke() else onMicPermissionDenied()
+        pendingMicAction = null
+    }
+    fun withMicPermission(action: () -> Unit) {
+        val granted = ContextCompat.checkSelfPermission(
+            context, android.Manifest.permission.RECORD_AUDIO
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (granted) action() else {
+            pendingMicAction = action
+            micPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+        }
+    }
+    val startDictation: () -> Unit = {
+        withMicPermission {
+            onToggleDictation?.invoke { recognized -> textInput = recognized }
+        }
+    }
 
     val presets = listOf(
         "هزینه امروز من چقدر است؟",
@@ -127,7 +167,13 @@ fun AiAssistantScreen(
                     if (msg.status == "pending") {
                         AiTypingIndicator()
                     } else {
-                        ChatBubble(message = msg, onApprove = onApproveAction, onCancel = onCancelAction)
+                        ChatBubble(
+                            message = msg,
+                            onApprove = onApproveAction,
+                            onCancel = onCancelAction,
+                            isSpeaking = speakingMessageId == msg.id,
+                            onSpeak = onSpeakMessage
+                        )
                     }
                 }
 
@@ -336,7 +382,11 @@ fun AiAssistantScreen(
                         enabled = !isLoading,
                         placeholder = { 
                             Text(
-                                if (isLoading) "در حال پردازش پاسخ توسط دستیار مالی..." else "سوال خود را از دستیار مالی بپرسید...", 
+                                when {
+                                    isLoading -> "در حال پردازش پاسخ توسط دستیار مالی..."
+                                    isDictating -> "در حال شنیدن… صحبت کنید"
+                                    else -> "سوال خود را از دستیار مالی بپرسید..."
+                                }, 
                                 style = MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = if (isLoading) 0.35f else 0.5f))
                             ) 
                         },
@@ -359,6 +409,48 @@ fun AiAssistantScreen(
                             .onFocusChanged { isFocused = it.isFocused }
                             .testTag("ai_chat_text_input")
                     )
+
+                    // دکمه دیکته صوتی (صدا → متن)
+                    if (onToggleDictation != null) {
+                        val micPulse = if (isDictating) 1f + dictationAmplitude.coerceIn(0f, 1f) * 0.25f else 1f
+                        IconButton(
+                            onClick = startDictation,
+                            enabled = !isLoading,
+                            modifier = Modifier
+                                .size((40 * micPulse).dp)
+                                .clip(CircleShape)
+                                .background(if (isDictating) ErrorRed else Color.White.copy(alpha = 0.1f))
+                                .testTag("ai_chat_mic_button")
+                        ) {
+                            Icon(
+                                imageVector = if (isDictating) Icons.Default.Stop else Icons.Default.Mic,
+                                contentDescription = if (isDictating) "توقف دیکته" else "تبدیل صدا به متن",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
+
+                    // دکمه گفت‌وگوی زنده صوتی
+                    if (onStartLiveVoice != null) {
+                        IconButton(
+                            onClick = { withMicPermission { onStartLiveVoice() } },
+                            enabled = !isLoading && !isDictating,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.1f))
+                                .testTag("ai_chat_live_voice_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.GraphicEq,
+                                contentDescription = "گفت‌وگوی زنده صوتی",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -369,7 +461,9 @@ fun AiAssistantScreen(
 fun ChatBubble(
     message: ChatMessage,
     onApprove: (String) -> Unit,
-    onCancel: (String) -> Unit
+    onCancel: (String) -> Unit,
+    isSpeaking: Boolean = false,
+    onSpeak: ((ChatMessage) -> Unit)? = null
 ) {
     val isUser = message.sender == "user"
     
@@ -413,6 +507,28 @@ fun ChatBubble(
                         onApprove = onApprove,
                         onCancel = onCancel
                     )
+                }
+
+                // پخش صوتی پاسخ دستیار (متن → صدا)
+                if (onSpeak != null && message.status == "success" && message.text.isNotBlank()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        IconButton(
+                            onClick = { onSpeak(message) },
+                            modifier = Modifier
+                                .size(32.dp)
+                                .testTag("chat_speak_${message.id}")
+                        ) {
+                            Icon(
+                                imageVector = if (isSpeaking) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
+                                contentDescription = if (isSpeaking) "توقف پخش" else "پخش صوتی پاسخ",
+                                tint = if (isSpeaking) ErrorRed else SlateGray,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                 }
             }
         }

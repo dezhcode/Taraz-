@@ -2,6 +2,7 @@ package com.example.data
 
 import android.content.Context
 import android.util.Log
+import com.example.ai.DuckAiClient
 import com.example.data.remote.ApiClient
 import com.example.data.remote.ChatRequest
 import com.example.services.ApiConfig
@@ -33,7 +34,26 @@ class AiRepositoryImpl(private val context: Context) : AiRepository {
         }
     }
 
-    override suspend fun chat(message: String): Result<String> = withContext(Dispatchers.IO) {
+    private val duckClient = DuckAiClient.get(context)
+
+    /**
+     * هوش مصنوعی متنی: ابتدا از Duck.ai (منتقل‌شده از پروژه AI Studio) استفاده می‌شود و
+     * در صورت در دسترس نبودن آن، درخواست به سرور اختصاصی تراز ارسال می‌شود.
+     */
+    override suspend fun chat(message: String): Result<String> {
+        val duckResult = try {
+            duckClient.complete(message)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+        if (duckResult.isSuccess) return duckResult
+        Log.w("AiRepositoryImpl", "Duck.ai unavailable, falling back to backend: ${duckResult.exceptionOrNull()?.message}")
+        return backendChat(message)
+    }
+
+    private suspend fun backendChat(message: String): Result<String> = withContext(Dispatchers.IO) {
         try {
             val apiService = ApiClient.getApiService()
             val request = ChatRequest(message = message)

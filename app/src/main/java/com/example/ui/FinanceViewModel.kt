@@ -89,6 +89,19 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     )
 
     private val aiRepository: AiRepository = AiRepositoryImpl(application)
+
+    // ─── قابلیت‌های صوتی منتقل‌شده از AI Studio (دیکته، پخش صوتی، گفت‌وگوی زنده) ───
+    private val voiceController = com.example.ai.DuckVoiceController(
+        application,
+        com.example.ai.DuckAiClient.get(application),
+        viewModelScope
+    ).also { controller ->
+        controller.liveResponder = { spokenText -> awaitChatReply(spokenText) }
+    }
+    val liveVoiceState: StateFlow<com.example.ai.LiveVoiceState> = voiceController.liveState
+    val isDictating: StateFlow<Boolean> = voiceController.isDictating
+    val dictationAmplitude: StateFlow<Float> = voiceController.dictationAmplitude
+    val speakingMessageId: StateFlow<String?> = voiceController.speakingMessageId
     private val smsParserRepository = SmsParserRepository(
         db.bankSenderDao(),
         db.bankSmsParserDao(),
@@ -1763,11 +1776,16 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun sendChatMessage(text: String) {
-        if (text.isBlank()) return
+    /**
+     * @param onReplyReady در صورت ارسال، متن نهایی (پاکسازی‌شده) پاسخ دستیار را دریافت می‌کند؛
+     *   برای گفت‌وگوی زنده صوتی استفاده می‌شود.
+     * @return false اگر پیام پذیرفته نشد (خالی بود یا درخواست دیگری در جریان است)
+     */
+    fun sendChatMessage(text: String, onReplyReady: ((String) -> Unit)? = null): Boolean {
+        if (text.isBlank()) return false
         if (_isAiLoading.value) {
             Log.w("FinanceViewModel", "Chat request already in progress, ignoring message: $text")
-            return
+            return false
         }
         val userMsg = ChatMessage(sender = "user", text = text, status = "success")
         val aiMessageId = UUID.randomUUID().toString()
@@ -1924,6 +1942,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                             status = "success"
                         )
                         updatePendingMessageInState(aiMessageId, aiMsg)
+                        onReplyReady?.invoke(cleanedText)
                     },
                     onFailure = { error ->
                         Log.e("FinanceViewModel", "AI chat failed: ${error.message}")
@@ -1942,6 +1961,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                             status = "error"
                         )
                         updatePendingMessageInState(aiMessageId, fallbackMsg)
+                        onReplyReady?.invoke("هوش مصنوعی تراز الان در دسترس نیست، چند دقیقه دیگه دوباره امتحان کن.")
                     }
                 )
             } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
@@ -1960,6 +1980,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     status = "error"
                 )
                 updatePendingMessageInState(aiMessageId, fallbackMsg)
+                onReplyReady?.invoke("پاسخی در زمان مقرر دریافت نشد، لطفاً دوباره امتحان کن.")
             } catch (e: Exception) {
                 Log.e("FinanceViewModel", "Unexpected error in sendChatMessage coroutine", e)
                 _chatErrorToast.value = "خطای غیرمنتظره: ${e.localizedMessage ?: "مجدداً تلاش فرمایید"}"
@@ -1976,10 +1997,12 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     status = "error"
                 )
                 updatePendingMessageInState(aiMessageId, fallbackMsg)
+                onReplyReady?.invoke("ارتباط با دستیار تراز با خطا مواجه شد.")
             } finally {
                 _isAiLoading.value = false
             }
         }
+        return true
     }
 
     private fun getLocalFallbackResponse(prompt: String): String {
@@ -2034,6 +2057,66 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 )
             }
         }
+    }
+
+    // ─── صوت: دیکته، پخش صوتی و گفت‌وگوی زنده ───
+
+    fun toggleVoiceDictation(onText: (String) -> Unit) {
+        voiceController.stopSpeaking()
+        voiceController.toggleDictation(
+            onResult = onText,
+            onError = { error -> _chatErrorToast.value = error }
+        )
+    }
+
+    fun reportMicPermissionDenied() {
+        _chatErrorToast.value = "برای استفاده از قابلیت‌های صوتی، دسترسی میکروفون لازم است."
+    }
+
+    fun speakChatMessage(message: ChatMessage) {
+        voiceController.speakMessageAloud(message.id, message.text)
+    }
+
+    fun startLiveVoiceCall() {
+        voiceController.startLiveSession()
+    }
+
+    fun endLiveVoiceCall() {
+        voiceController.endLiveSession()
+    }
+
+    fun toggleLiveVoiceMute() {
+        voiceController.toggleLiveMute()
+    }
+
+    fun selectLiveVoicePreset(voiceId: String) {
+        voiceController.setVoicePreset(voiceId)
+    }
+
+    fun sendLiveVoiceText(text: String) {
+        voiceController.sendUserVoiceTurnInLiveSession(text)
+    }
+
+    /**
+     * یک نوبت گفت‌وگوی زنده را از همان مسیر چت مالی تراز عبور می‌دهد تا پیام‌ها در تاریخچه
+     * ذخیره شوند و پیشنهادهای عملیاتی (PROPOSE_ACTION) برای تایید در چت نمایش داده شوند.
+     */
+    private suspend fun awaitChatReply(text: String): String {
+        // اگر درخواست دیگری در جریان است، کمی صبر کن
+        var waited = 0L
+        while (_isAiLoading.value && waited < 30_000L) {
+            kotlinx.coroutines.delay(250)
+            waited += 250
+        }
+        val deferred = kotlinx.coroutines.CompletableDeferred<String>()
+        val accepted = sendChatMessage(text) { reply -> deferred.complete(reply) }
+        if (!accepted) return "یک لحظه صبر کن، هنوز دارم جواب قبلی رو آماده می‌کنم."
+        return deferred.await()
+    }
+
+    override fun onCleared() {
+        voiceController.release()
+        super.onCleared()
     }
 
     fun resetAllData() {

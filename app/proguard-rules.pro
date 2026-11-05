@@ -27,3 +27,9 @@
     public static *** v(...);
     public static *** i(...);
 }
+
+# Duck.ai JSA challenge bridge (WebView → Kotlin)
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+-keepattributes JavascriptInterface

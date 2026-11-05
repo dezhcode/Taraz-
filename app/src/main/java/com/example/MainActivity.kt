@@ -70,6 +70,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 val biometricEnabled by viewModel.biometricEnabled.collectAsStateWithLifecycle()
                 val alertsEnabled by viewModel.alertsEnabled.collectAsStateWithLifecycle()
                 val aiServerUrl by viewModel.aiServerUrl.collectAsStateWithLifecycle()
+                val liveVoiceState by viewModel.liveVoiceState.collectAsStateWithLifecycle()
+                val isDictating by viewModel.isDictating.collectAsStateWithLifecycle()
+                val dictationAmplitude by viewModel.dictationAmplitude.collectAsStateWithLifecycle()
+                val speakingMessageId by viewModel.speakingMessageId.collectAsStateWithLifecycle()
 
                 // Core financial states
                 val transactions by viewModel.transactions.collectAsStateWithLifecycle()
@@ -326,22 +330,42 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             // AI Assistant bottom sheet overlay
                              if (isAiSheetOpen) {
                                  ModalBottomSheet(
-                                     onDismissRequest = { isAiSheetOpen = false },
+                                     onDismissRequest = {
+                                         viewModel.endLiveVoiceCall()
+                                         isAiSheetOpen = false
+                                     },
                                      sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
                                      dragHandle = { BottomSheetDefaults.DragHandle() },
                                      containerColor = BackgroundLight
                                  ) {
                                      Box(modifier = Modifier.fillMaxHeight(0.85f)) {
-                                         AiAssistantScreen(
-                                             messages = chatMessages, toastMessage = chatErrorToast, onDismissToast = { viewModel.clearChatErrorToast() },
-                                             isLoading = isAiLoading,
-                                             onOpenChat = { viewModel.prepareChatForOpening() },
-                                             onApproveAction = { viewModel.executeProposedAction(it) },
-                                             onCancelAction = { viewModel.cancelProposedAction(it) },
-                                             onSendMessage = { prompt ->
-                                                 viewModel.sendChatMessage(prompt)
-                                             }
-                                         )
+                                         if (liveVoiceState.isActive) {
+                                             LiveVoiceOverlayScreen(
+                                                 liveState = liveVoiceState,
+                                                 onSelectVoice = { viewModel.selectLiveVoicePreset(it) },
+                                                 onToggleMute = { viewModel.toggleLiveVoiceMute() },
+                                                 onSendSpokenPrompt = { viewModel.sendLiveVoiceText(it) },
+                                                 onEndCall = { viewModel.endLiveVoiceCall() }
+                                             )
+                                         } else {
+                                             AiAssistantScreen(
+                                                 messages = chatMessages, toastMessage = chatErrorToast, onDismissToast = { viewModel.clearChatErrorToast() },
+                                                 isLoading = isAiLoading,
+                                                 onOpenChat = { viewModel.prepareChatForOpening() },
+                                                 onApproveAction = { viewModel.executeProposedAction(it) },
+                                                 onCancelAction = { viewModel.cancelProposedAction(it) },
+                                                 onSendMessage = { prompt ->
+                                                     viewModel.sendChatMessage(prompt)
+                                                 },
+                                                 isDictating = isDictating,
+                                                 dictationAmplitude = dictationAmplitude,
+                                                 onToggleDictation = { onText -> viewModel.toggleVoiceDictation(onText) },
+                                                 speakingMessageId = speakingMessageId,
+                                                 onSpeakMessage = { viewModel.speakChatMessage(it) },
+                                                 onStartLiveVoice = { viewModel.startLiveVoiceCall() },
+                                                 onMicPermissionDenied = { viewModel.reportMicPermissionDenied() }
+                                             )
+                                         }
                                      }
                                  }
                              }
