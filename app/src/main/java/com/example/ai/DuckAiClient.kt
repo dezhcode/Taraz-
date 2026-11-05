@@ -1,8 +1,7 @@
 package com.example.ai
 
+import android.annotation.SuppressLint
 import android.content.Context
-import android.os.Handler
-import android.os.Looper
 import android.util.Base64
 import android.util.Log
 import android.webkit.JavascriptInterface
@@ -10,6 +9,9 @@ import android.webkit.WebView
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -123,131 +125,143 @@ class DuckAiClient(context: Context) {
         return b64Json(obj)
     }
 
-    // ─────────────────── ۱. Handshake & JSA Challenge Solver ───────────────────
+    // ─────────────────── ۱. Handshake & JSA Challenge (مطابق DuckAI.bootstrap/fetch_challenge/solve در duck_cli.py) ───────────────────
 
-    suspend fun rehandshake(): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val req = Request.Builder()
-                .url("$BASE_URL/")
-                .header("User-Agent", USER_AGENT)
-                .header("Accept-Language", "en-US,en;q=0.9")
-                .build()
+    class DuckAiException(message: String, val status: Int? = null) : Exception(message)
 
-            okHttp.newCall(req).execute().use { resp ->
-                val html = resp.body?.string().orEmpty()
-                val tag = Regex("""data-version-tag="([^"]*)"""").find(html)?.groupValues?.get(1) ?: "2026.11"
-                val sha = Regex("""data-version-sha="([^"]*)"""").find(html)?.groupValues?.get(1) ?: "a8c4e19"
-                feVersion = "$tag-$sha"
-            }
+    private val handshakeMutex = Mutex()
 
-            val statusReq = Request.Builder()
-                .url("$BASE_URL/duckchat/v1/status")
-                .header("User-Agent", USER_AGENT)
-                .header("x-vqd-accept", "1")
-                .header("Cache-Control", "no-store")
-                .header("x-fe-version", feVersion)
-                .header("Origin", BASE_URL)
-                .header("Referer", "$BASE_URL/")
-                .build()
+    /** WebView ثابت برای حل چالش؛ ساختن WebView تازه در هر بار، روی گوشی کند است و از مهلت می‌گذشت */
+    @Volatile
+    private var solverWebView: WebView? = null
+    @Volatile
+    private var pendingSolve: CompletableDeferred<JSONObject>? = null
 
-            val rawChallengeB64 = okHttp.newCall(statusReq).execute().use { resp ->
-                resp.header("x-vqd-hash-1").orEmpty()
-            }
-
-            jsaProof = if (rawChallengeB64.isNotEmpty()) {
-                val decodedJs = String(Base64.decode(rawChallengeB64, Base64.DEFAULT), Charsets.UTF_8)
-                buildProof(solveJsChallengeInWebView(decodedJs))
-            } else {
-                buildSyntheticProof()
-            }
-            true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            if (feVersion.isEmpty()) feVersion = "2026.11.05-duckai"
-            if (jsaProof.isEmpty()) jsaProof = buildSyntheticProof()
-            Log.w(TAG, "Handshake failed: ${e.message}")
-            false
+    /** GET / → x-fe-version (مطابق bootstrap) */
+    private fun bootstrap() {
+        val req = Request.Builder()
+            .url("$BASE_URL/")
+            .header("User-Agent", USER_AGENT)
+            .header("Accept-Language", "en-US,en;q=0.9")
+            .build()
+        okHttp.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) throw DuckAiException("duck.ai در دسترس نیست (HTTP ${resp.code})", resp.code)
+            val html = resp.body?.string().orEmpty()
+            val tag = Regex("""data-version-tag="([^"]*)"""").find(html)?.groupValues?.get(1) ?: "dev"
+            val sha = Regex("""data-version-sha="([^"]*)"""").find(html)?.groupValues?.get(1) ?: "hash"
+            feVersion = "$tag-$sha"
         }
     }
 
-    private suspend fun solveJsChallengeInWebView(jsSource: String): JSONObject {
+    /** GET /duckchat/v1/status با x-vqd-accept: 1 → متن JS چالش (مطابق fetch_challenge) */
+    private fun fetchChallenge(): String {
+        val req = Request.Builder()
+            .url("$BASE_URL/duckchat/v1/status")
+            .header("User-Agent", USER_AGENT)
+            .header("Accept-Language", "en-US,en;q=0.9")
+            .header("x-vqd-accept", "1")
+            .header("Cache-Control", "no-store")
+            .header("x-fe-version", feVersion)
+            .header("Origin", BASE_URL)
+            .header("Referer", "$BASE_URL/")
+            .build()
+        okHttp.newCall(req).execute().use { resp ->
+            val raw = resp.header("x-vqd-hash-1")
+            if (raw.isNullOrBlank()) {
+                throw DuckAiException("چالشی دریافت نشد (HTTP ${resp.code})", resp.code)
+            }
+            val padded = raw + "=".repeat((4 - raw.length % 4) % 4)
+            return String(Base64.decode(padded, Base64.DEFAULT), Charsets.UTF_8)
+        }
+    }
+
+    /**
+     * چالش تازه (مطابق rehandshake): bootstrap → fetch_challenge → solve → build_proof.
+     * اگر هر مرحله شکست بخورد استثنا پرتاب می‌شود؛ هرگز اثبات ساختگی ساخته نمی‌شود،
+     * چون سرور آن را رد می‌کند (۴۱۸) و فقط خطا را پنهان می‌کند.
+     */
+    suspend fun rehandshakeOrThrow() = handshakeMutex.withLock {
+        withContext(Dispatchers.IO) {
+            bootstrap()
+            val js = fetchChallenge()
+            val solved = solveInWebView(js)
+            if (solved.has("__error")) {
+                throw DuckAiException("خطای داخل چالش: ${solved.optString("__error").take(200)}")
+            }
+            if (solved.optJSONArray("client_hashes") == null) {
+                throw DuckAiException("پاسخ چالش ناقص بود")
+            }
+            jsaProof = buildProof(solved)
+        }
+    }
+
+    /** نسخهٔ بی‌استثنا برای گرم‌کردن اولیه */
+    suspend fun rehandshake(): Boolean = try {
+        rehandshakeOrThrow()
+        true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, "Handshake failed: ${e.message}")
+        false
+    }
+
+    /** معادل اجرای چالش با Node + jsdom: داخل یک WebView با مبدأ https://duck.ai */
+    @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
+    private suspend fun solveInWebView(jsSource: String): JSONObject {
         val deferred = CompletableDeferred<JSONObject>()
-        var webViewRef: WebView? = null
-        val mainHandler = Handler(Looper.getMainLooper())
-        mainHandler.post {
-            try {
-                val webView = WebView(appContext)
-                webViewRef = webView
-                webView.settings.javaScriptEnabled = true
-                webView.settings.userAgentString = USER_AGENT
-                webView.addJavascriptInterface(object {
-                    @JavascriptInterface
-                    fun onSolved(jsonStr: String) {
-                        deferred.complete(
-                            try {
-                                JSONObject(jsonStr)
-                            } catch (e: Exception) {
-                                createDefaultSolvedJson()
-                            }
-                        )
+        pendingSolve = deferred
+        withContext(Dispatchers.Main) {
+            val wv = solverWebView ?: WebView(appContext).also { w ->
+                w.settings.javaScriptEnabled = true
+                w.settings.domStorageEnabled = true
+                w.settings.userAgentString = USER_AGENT
+                w.addJavascriptInterface(SolverBridge(), "DuckBridge")
+                solverWebView = w
+            }
+            val html = """
+                <!DOCTYPE html>
+                <html><head><meta charset="utf-8"></head><body>
+                <script>
+                (async function() {
+                    try {
+                        const res = await eval(${JSONObject.quote(jsSource)});
+                        DuckBridge.onSolved(JSON.stringify(res && typeof res === 'object' ? res : {__error: 'empty result'}));
+                    } catch (e) {
+                        DuckBridge.onSolved(JSON.stringify({__error: String((e && e.stack) || e)}));
                     }
-                }, "DuckBridge")
-
-                val wrapperHtml = """
-                    <!DOCTYPE html>
-                    <html><head><meta charset="utf-8"></head><body>
-                    <script>
-                    (async function() {
-                        try {
-                            const res = await eval(${JSONObject.quote(jsSource)});
-                            if (res && typeof res === 'object') {
-                                DuckBridge.onSolved(JSON.stringify(res));
-                            } else {
-                                DuckBridge.onSolved('{}');
-                            }
-                        } catch (e) {
-                            DuckBridge.onSolved(JSON.stringify({__error: String(e)}));
-                        }
-                    })();
-                    </script>
-                    </body></html>
-                """.trimIndent()
-                webView.loadDataWithBaseURL(BASE_URL, wrapperHtml, "text/html", "utf-8", null)
-            } catch (e: Exception) {
-                deferred.complete(createDefaultSolvedJson())
-            }
+                })();
+                </script>
+                </body></html>
+            """.trimIndent()
+            wv.loadDataWithBaseURL("$BASE_URL/", html, "text/html", "utf-8", null)
         }
-        val result = withTimeoutOrNull(4500L) { deferred.await() } ?: createDefaultSolvedJson()
-        // آزادسازی WebView تا نشت حافظه رخ ندهد
-        mainHandler.post {
-            try {
-                webViewRef?.destroy()
-            } catch (_: Exception) {
-            }
-        }
-        return result
+        // duck_cli.py مهلت ۹۰ ثانیه می‌دهد؛ اینجا ۲۵ ثانیه کافی است (اولین راه‌اندازی WebView کند است)
+        return withTimeoutOrNull(25_000L) { deferred.await() }
+            ?: throw DuckAiException("حل چالش بیش از حد طول کشید")
     }
 
-    private fun createDefaultSolvedJson(): JSONObject = JSONObject().apply {
-        put("server_hashes", JSONArray().put("vqd_srv_${System.currentTimeMillis() / 1000}"))
-        put("client_hashes", JSONArray().put(USER_AGENT).put("dom_proof_2026"))
-        put("signals", JSONObject())
-        put("meta", JSONObject().put("v", "2"))
+    private inner class SolverBridge {
+        @JavascriptInterface
+        fun onSolved(jsonStr: String) {
+            val result = try {
+                JSONObject(jsonStr)
+            } catch (e: Exception) {
+                JSONObject().put("__error", "invalid JSON from challenge")
+            }
+            pendingSolve?.complete(result)
+        }
     }
 
     /** مطابق build_proof در duck_cli.py: client_hashes = [sha256_b64(x) for x in solved["client_hashes"]] */
     private fun buildProof(solved: JSONObject): String {
         val proof = JSONObject(solved.toString())
-        val rawClients = solved.optJSONArray("client_hashes") ?: JSONArray().put(USER_AGENT)
+        val rawClients = solved.getJSONArray("client_hashes")
         val hashedClients = JSONArray()
         for (i in 0 until rawClients.length()) {
-            hashedClients.put(sha256B64(rawClients.optString(i, USER_AGENT)))
+            hashedClients.put(sha256B64(rawClients.optString(i)))
         }
         proof.put("client_hashes", hashedClients)
-        if (!proof.has("server_hashes")) {
-            proof.put("server_hashes", JSONArray().put(sha256B64("duckai_server_seed")))
-        }
         val meta = proof.optJSONObject("meta") ?: JSONObject()
         meta.put("origin", BASE_URL)
         meta.put(
@@ -259,45 +273,33 @@ class DuckAiClient(context: Context) {
         return b64Json(proof)
     }
 
-    private fun buildSyntheticProof(): String = buildProof(createDefaultSolvedJson())
-
-    // ─────────────────── ۲. استریم چت متنی (/duckchat/v1/chat) ───────────────────
+    // ─────────────────── ۲. چت (مطابق DuckAI.chat و stream_events در duck_cli.py) ───────────────────
 
     /**
      * @param historyMessages جفت‌های (role, text) با role برابر "user" یا "assistant"
+     *   (مثل تاریخچه‌ای که chat_turn نگه می‌دارد)
      */
     fun streamChat(
         prompt: String,
         model: String = DEFAULT_MODEL,
-        historyMessages: List<Pair<String, String>> = emptyList()
+        historyMessages: List<Pair<String, String>> = emptyList(),
+        retries: Int = 4
     ): Flow<DuckStreamEvent> = flow {
-        if (feVersion.isEmpty() || jsaProof.isEmpty()) {
-            emit(DuckStreamEvent.HandshakeLog("Handshake", "در حال دریافت x-fe-version و حل چالش x-vqd-hash-1..."))
-            rehandshake()
-        }
-
         val messagesArray = JSONArray()
-        for ((role, contentText) in historyMessages.takeLast(10)) {
+        for ((role, contentText) in historyMessages) {
             if (contentText.isBlank()) continue
             val msgObj = JSONObject().put("role", role)
             if (role == "user") {
-                msgObj.put("content", JSONArray().put(JSONObject().apply {
-                    put("type", "text")
-                    put("text", contentText)
-                }))
+                msgObj.put("content", JSONArray().put(JSONObject().put("type", "text").put("text", contentText)))
             } else {
                 msgObj.put("content", contentText)
             }
             messagesArray.put(msgObj)
         }
-        messagesArray.put(JSONObject().apply {
-            put("role", "user")
-            put("content", JSONArray().put(JSONObject().apply {
-                put("type", "text")
-                put("text", prompt)
-            }))
-        })
-
+        messagesArray.put(
+            JSONObject().put("role", "user")
+                .put("content", JSONArray().put(JSONObject().put("type", "text").put("text", prompt)))
+        )
         val bodyJson = JSONObject().apply {
             put("model", model)
             put("messages", messagesArray)
@@ -309,14 +311,20 @@ class DuckAiClient(context: Context) {
         }
 
         var lastError = "پاسخی از Duck.ai دریافت نشد"
-        var lastCode: Int? = null
-        for (attempt in 0 until 2) {
-            try {
-                if (attempt > 0) rehandshake()
+        var lastStatus: Int? = null
+        var response: okhttp3.Response? = null
 
+        // ── تلاش‌ها: ۴۱۸ (امتیاز ضدربات) با چالش تازه معمولاً رفع می‌شود
+        for (attempt in 0 until retries) {
+            try {
+                if (attempt > 0 || feVersion.isEmpty() || jsaProof.isEmpty()) {
+                    emit(DuckStreamEvent.HandshakeLog("Handshake", "در حال حل چالش امنیتی Duck.ai…"))
+                    rehandshakeOrThrow()
+                }
                 val req = Request.Builder()
                     .url("$BASE_URL/duckchat/v1/chat")
                     .header("User-Agent", USER_AGENT)
+                    .header("Accept-Language", "en-US,en;q=0.9")
                     .header("Content-Type", "application/json")
                     .header("Accept", "text/event-stream")
                     .header("Origin", BASE_URL)
@@ -326,55 +334,58 @@ class DuckAiClient(context: Context) {
                     .header("X-Vqd-Hash-1", jsaProof)
                     .post(bodyJson.toString().toRequestBody("application/json".toMediaType()))
                     .build()
-
-                var receivedAny = false
-                okHttp.newCall(req).execute().use { resp ->
-                    val body = resp.body
-                    if (!resp.isSuccessful || body == null) {
-                        lastCode = resp.code
-                        lastError = "Duck.ai HTTP ${resp.code}"
-                        return@use
-                    }
-                    val reader = body.charStream().buffered()
-                    var line: String? = reader.readLine()
-                    while (line != null) {
-                        if (line.startsWith("data: ")) {
-                            val payload = line.substring(6).trim()
-                            if (payload.isNotEmpty() && !payload.startsWith("[")) {
-                                val ev = JSONObject(payload)
-                                if (ev.optString("action") == "error") {
-                                    throw RuntimeException("Server error: ${ev.optString("type")}")
-                                }
-                                val msg = ev.optString("message", "")
-                                if (msg.isNotEmpty()) {
-                                    receivedAny = true
-                                    emit(DuckStreamEvent.TextDelta(msg))
-                                }
-                                if (ev.optString("role") == "tool-invocation") {
-                                    emit(
-                                        DuckStreamEvent.ToolCall(
-                                            toolName = ev.optString("toolName", "WebSearch"),
-                                            state = ev.optString("state", "running")
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                        line = reader.readLine()
-                    }
+                val resp = okHttp.newCall(req).execute()
+                if (resp.code == 200 && resp.body != null) {
+                    response = resp
+                    break
                 }
-                if (receivedAny) return@flow
+                lastStatus = resp.code
+                lastError = "HTTP ${resp.code}: ${resp.body?.string().orEmpty().take(200)}"
+                resp.close()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 lastError = e.message ?: lastError
-                Log.w(TAG, "Chat attempt ${attempt + 1} failed: $lastError")
+            }
+            Log.w(TAG, "Chat attempt ${attempt + 1} failed: $lastError")
+            if (attempt < retries - 1) delay(2000L + attempt * 2000L)
+        }
+
+        val resp = response
+        if (resp == null) {
+            emit(DuckStreamEvent.Error("چت پس از $retries تلاش ناموفق بود: $lastError", lastStatus))
+            return@flow
+        }
+
+        resp.use {
+            val reader = it.body!!.charStream().buffered()
+            var line: String? = reader.readLine()
+            while (line != null) {
+                if (line.startsWith("data: ")) {
+                    val payload = line.substring(6)
+                    // [PING] / [DONE] / [CHAT_TITLE:...]
+                    if (payload.isNotEmpty() && !payload.startsWith("[")) {
+                        val ev = try { JSONObject(payload) } catch (_: Exception) { null }
+                        if (ev != null) {
+                            if (ev.optString("action") == "error") {
+                                emit(DuckStreamEvent.Error("خطای سرور (${ev.opt("status")}): ${ev.optString("type", "?")}"))
+                                return@flow
+                            }
+                            val msg = ev.opt("message")
+                            if (msg is String && msg.isNotEmpty()) {
+                                emit(DuckStreamEvent.TextDelta(msg))
+                            } else if (ev.optString("role") == "tool-invocation") {
+                                emit(DuckStreamEvent.ToolCall(ev.optString("toolName", "WebSearch"), ev.optString("state", "running")))
+                            }
+                        }
+                    }
+                }
+                line = reader.readLine()
             }
         }
-        emit(DuckStreamEvent.Error(lastError, lastCode))
     }.flowOn(Dispatchers.IO)
 
-    /** پاسخ کامل (غیر استریمی) برای مصرف در AiRepository تراز. */
+    /** پاسخ کامل (مطابق ask در duck_cli.py) */
     suspend fun complete(
         prompt: String,
         model: String = DEFAULT_MODEL,
@@ -390,46 +401,54 @@ class DuckAiClient(context: Context) {
             }
         }
         val text = builder.toString().trim()
-        return if (text.isNotEmpty()) Result.success(text)
-        else Result.failure(Exception(error ?: "پاسخ خالی از Duck.ai"))
+        return if (error == null && text.isNotEmpty()) Result.success(text)
+        else Result.failure(DuckAiException(error ?: "پاسخ خالی از Duck.ai"))
     }
 
-    // ─────────────────── ۳. دیکته صوتی (/duckchat/v1/dictation) ───────────────────
+    // ─────────────────── ۳. دیکته صوتی (مطابق transcribe_bytes در duck_voice.py) ───────────────────
 
-    suspend fun transcribeAudioBytes(audioBytes: ByteArray, model: String = DEFAULT_MODEL): Result<String> =
+    /** @param webmData فایل webm/opus خام (سرور فقط همین قالب را می‌پذیرد) */
+    suspend fun transcribeAudioBytes(webmData: ByteArray, model: String = DEFAULT_MODEL): Result<String> =
         withContext(Dispatchers.IO) {
+            var lastErr = ""
             try {
-                if (feVersion.isEmpty() || jsaProof.isEmpty()) rehandshake()
-                val req = Request.Builder()
-                    .url("$BASE_URL/duckchat/v1/dictation")
-                    .header("User-Agent", USER_AGENT)
-                    .header("Content-Type", "audio/webm")
-                    .header("x-duckai-chat-model", model)
-                    .header("x-fe-version", feVersion)
-                    .header("x-vqd-hash-1", jsaProof)
-                    .header("x-fe-signals", feSignals("dictation", 900))
-                    .header("Origin", BASE_URL)
-                    .header("Referer", "$BASE_URL/")
-                    .post(audioBytes.toRequestBody("audio/webm".toMediaType()))
-                    .build()
-
-                okHttp.newCall(req).execute().use { resp ->
-                    if (resp.isSuccessful) {
-                        val json = JSONObject(resp.body?.string().orEmpty())
-                        if (json.optString("action") == "success") {
-                            val text = json.optString("text", "")
-                            if (text.isNotBlank()) return@withContext Result.success(text)
+                if (feVersion.isEmpty() || jsaProof.isEmpty()) rehandshakeOrThrow()
+                for (attempt in 0 until 3) {
+                    val req = Request.Builder()
+                        .url("$BASE_URL/duckchat/v1/dictation")
+                        .header("User-Agent", USER_AGENT)
+                        .header("Content-Type", "audio/webm")
+                        .header("x-duckai-chat-model", model)
+                        .header("x-fe-version", feVersion)
+                        .header("x-vqd-hash-1", jsaProof)
+                        .header("x-fe-signals", b64Json(JSONObject().put("start", System.currentTimeMillis()).put("events", JSONArray()).put("end", 1500 + System.currentTimeMillis() % 5000)))
+                        .header("Origin", BASE_URL)
+                        .header("Referer", "$BASE_URL/")
+                        .post(webmData.toRequestBody("audio/webm".toMediaType()))
+                        .build()
+                    okHttp.newCall(req).execute().use { resp ->
+                        val bodyStr = resp.body?.string().orEmpty()
+                        if (resp.code == 200) {
+                            val json = JSONObject(bodyStr)
+                            if (json.optString("action") == "success") {
+                                return@withContext Result.success(json.optString("text", ""))
+                            }
+                            return@withContext Result.failure(DuckAiException("دیکته ناموفق: ${bodyStr.take(200)}"))
                         }
-                    } else {
-                        Log.w(TAG, "Dictation HTTP ${resp.code}")
+                        lastErr = "HTTP ${resp.code}: ${bodyStr.take(200)}"
+                        if (resp.code != 403 && resp.code != 418) {
+                            return@withContext Result.failure(DuckAiException("دیکته ناموفق: $lastErr", resp.code))
+                        }
                     }
+                    rehandshakeOrThrow()
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.w(TAG, "Dictation failed: ${e.message}")
+                lastErr = e.message ?: lastErr
             }
-            Result.failure(Exception("تبدیل صدا به متن ناموفق بود"))
+            Log.w(TAG, "Dictation failed: $lastErr")
+            Result.failure(DuckAiException("دیکته پس از تلاش ناموفق بود: $lastErr"))
         }
 
     // ─────────────────── ۴. ویس زنده WebRTC (مطابق LiveVoiceSession در duck_voice.py) ───────────────────

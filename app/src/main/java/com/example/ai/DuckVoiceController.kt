@@ -2,8 +2,6 @@ package com.example.ai
 
 import android.content.Context
 import android.content.Intent
-import android.media.AudioFormat
-import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Bundle
 import android.os.Handler
@@ -24,10 +22,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.io.ByteArrayOutputStream
 import java.util.Locale
 import kotlin.math.abs
-import kotlin.math.sqrt
 
 enum class LiveVoicePhase {
     IDLE,
@@ -112,7 +108,6 @@ class DuckVoiceController(
     private var speechRecognizer: SpeechRecognizer? = null
     private var audioRecordJob: Job? = null
     private var liveLoopJob: Job? = null
-    private val recordedPcmStream = ByteArrayOutputStream()
     @Volatile
     private var dictationUsesNative = false
 
@@ -205,7 +200,6 @@ class DuckVoiceController(
         onDictationResult = onResult
         onDictationError = onError
         _isDictating.value = true
-        synchronized(recordedPcmStream) { recordedPcmStream.reset() }
 
         mainHandler.post {
             val recognitionAvailable = try {
@@ -273,54 +267,44 @@ class DuckVoiceController(
         }
     }
 
+    // ── ضبط webm/opus مطابق record_to_webm در duck_voice.py (۴۸kHz، Opus، ۳۲kbps) ──
+    private var webmRecorder: MediaRecorder? = null
+    private var webmFile: java.io.File? = null
+
     private fun startRawMicCaptureForDictation() {
-        audioRecordJob?.cancel()
-        audioRecordJob = scope.launch(Dispatchers.IO) {
-            val sampleRate = 16000
-            val minBuf = AudioRecord.getMinBufferSize(
-                sampleRate,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
-            )
-            if (minBuf <= 0) return@launch
-            var recorder: AudioRecord? = null
-            try {
-                recorder = AudioRecord(
-                    MediaRecorder.AudioSource.MIC,
-                    sampleRate,
-                    AudioFormat.CHANNEL_IN_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT,
-                    minBuf * 2
-                )
-                if (recorder.state != AudioRecord.STATE_INITIALIZED) return@launch
-                recorder.startRecording()
-                val buf = ByteArray(1024)
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) {
+            _isDictating.value = false
+            onDictationError?.invoke("این گوشی سرویس تشخیص گفتار ندارد و ضبط webm/opus را هم پشتیبانی نمی‌کند.")
+            return
+        }
+        try {
+            val file = java.io.File(context.cacheDir, "dictation_${System.currentTimeMillis()}.webm")
+            @Suppress("DEPRECATION")
+            val rec = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) MediaRecorder(context) else MediaRecorder()
+            rec.setAudioSource(MediaRecorder.AudioSource.MIC)
+            rec.setOutputFormat(MediaRecorder.OutputFormat.WEBM)
+            rec.setAudioEncoder(MediaRecorder.AudioEncoder.OPUS)
+            rec.setAudioSamplingRate(48000)
+            rec.setAudioEncodingBitRate(32000)
+            rec.setAudioChannels(1)
+            rec.setOutputFile(file.absolutePath)
+            rec.prepare()
+            rec.start()
+            webmRecorder = rec
+            webmFile = file
+            audioRecordJob?.cancel()
+            audioRecordJob = scope.launch {
                 while (isActive && _isDictating.value) {
-                    val read = recorder.read(buf, 0, buf.size)
-                    if (read > 0) {
-                        synchronized(recordedPcmStream) {
-                            if (recordedPcmStream.size() < 320_000) recordedPcmStream.write(buf, 0, read)
-                        }
-                        var sum = 0.0
-                        var i = 0
-                        while (i + 1 < read) {
-                            val sample = ((buf[i + 1].toInt() shl 8) or (buf[i].toInt() and 0xFF)).toShort()
-                            sum += sample * sample
-                            i += 2
-                        }
-                        val rms = sqrt(sum / (read / 2.0))
-                        _dictationAmplitude.value = (rms / 4500.0).toFloat().coerceIn(0.08f, 1.0f)
-                    }
-                }
-            } catch (_: SecurityException) {
-            } catch (_: Exception) {
-            } finally {
-                try {
-                    recorder?.stop()
-                    recorder?.release()
-                } catch (_: Exception) {
+                    val amp = try { rec.maxAmplitude } catch (_: Exception) { 0 }
+                    _dictationAmplitude.value = (amp / 12000f).coerceIn(0.08f, 1.0f)
+                    delay(80)
                 }
             }
+        } catch (e: Exception) {
+            webmRecorder?.release()
+            webmRecorder = null
+            _isDictating.value = false
+            onDictationError?.invoke("دسترسی به میکروفون ناموفق بود.")
         }
     }
 
@@ -337,18 +321,28 @@ class DuckVoiceController(
             return
         }
         _isDictating.value = false
-        val captureJob = audioRecordJob
+        audioRecordJob?.cancel()
+        val rec = webmRecorder
+        val file = webmFile
+        webmRecorder = null
+        webmFile = null
         scope.launch {
-            captureJob?.join()
-            val rawAudio = synchronized(recordedPcmStream) { recordedPcmStream.toByteArray() }
-            if (rawAudio.isEmpty()) {
-                onDictationError?.invoke("صدایی از میکروفون دریافت نشد.")
+            try {
+                rec?.stop()
+            } catch (_: Exception) {
+                // stop() روی ضبط خیلی کوتاه استثنا می‌دهد (مثل «ضبط خیلی کوتاه بود» در duck_voice.py)
+            }
+            rec?.release()
+            val data = file?.takeIf { it.exists() }?.readBytes() ?: ByteArray(0)
+            file?.delete()
+            if (data.size < 2000) {
+                onDictationError?.invoke("ضبط خیلی کوتاه بود؛ کمی بیشتر صحبت کنید.")
                 return@launch
             }
-            val apiRes = duckClient.transcribeAudioBytes(rawAudio)
+            val apiRes = duckClient.transcribeAudioBytes(data)
             val text = apiRes.getOrNull()
             if (!text.isNullOrBlank()) onDictationResult?.invoke(text)
-            else onDictationError?.invoke("تبدیل صدا به متن ناموفق بود.")
+            else onDictationError?.invoke(apiRes.exceptionOrNull()?.message ?: "تبدیل صدا به متن ناموفق بود.")
         }
     }
 
@@ -770,7 +764,7 @@ class DuckVoiceController(
 
     companion object {
         private const val LIVE_UTTERANCE = "LIVE_ASSISTANT_SPEECH"
-        private const val MAX_RAW_DICTATION_MS = 10_000L
+        private const val MAX_RAW_DICTATION_MS = 30_000L
         private const val MAX_SILENT_RESTARTS = 2
 
         /** حذف علائم Markdown، جداول و تگ‌های سیستمی قبل از خواندن متن */

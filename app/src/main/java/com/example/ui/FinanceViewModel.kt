@@ -104,6 +104,11 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     /** WebView جلسه WebRTC گفت‌وگوی زنده (برای قرار گرفتن در صفحه) */
     val liveVoiceWebView: android.webkit.WebView?
         get() = voiceController.realtimeWebView
+    init {
+        // مثل AI Studio: هندشیک اولیه در پس‌زمینه تا اولین پیام منتظر حل چالش نماند
+        viewModelScope.launch { com.example.ai.DuckAiClient.get(application).rehandshake() }
+    }
+
     val liveVoiceState: StateFlow<com.example.ai.LiveVoiceState> = voiceController.liveState
     val isDictating: StateFlow<Boolean> = voiceController.isDictating
     val dictationAmplitude: StateFlow<Float> = voiceController.dictationAmplitude
@@ -1913,24 +1918,22 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             همیشه تمام اعداد را در پاسخ خود به زبان انگلیسی و با فرمت جداکننده هزارگان بنویسید (مانند 20,000,000 تومان). از نوشتن اعداد به فارسی خودداری کنید.
         """.trimIndent()
 
-        // Formulate a full conversational prompt with context from the history
+        // مثل ChatViewModel در AI Studio: تاریخچه به‌صورت پیام‌های جدای user/assistant (۱۰ پیام آخر)
+        // و پیام فعلی جداگانه. Duck.ai نقش system ندارد، پس دستورالعمل تراز همراه پیام فعلی می‌رود.
+        val historyPairs = _aiMemoryMessages.value.dropLast(1)
+            .filter { it.status == "success" && it.text.isNotBlank() && !it.text.startsWith("[اعلان غیرفعال]") }
+            .takeLast(10)
+            .map { (if (it.sender == "user") "user" else "assistant") to it.text }
         val fullPrompt = buildString {
             append(systemPrompt)
-            append("\n\n[تاریخچه گفتگوی قبلی با کاربر برای حفظ پیوستگی]:\n")
-            // Include up to the last 15 conversation exchanges for memory window (excluding current user message which is appended at bottom)
-            val memoryToInclude = _aiMemoryMessages.value.dropLast(1).takeLast(15)
-            for (msg in memoryToInclude) {
-                val senderName = if (msg.sender == "user") "کاربر" else "تراز (شما)"
-                append("$senderName: ${msg.text}\n")
-            }
-            append("\n[پیام جدید کاربر برای پاسخ صمیمی]:\n$text")
+            append("\n\n[پیام جدید کاربر برای پاسخ صمیمی]:\n$text")
         }
 
         viewModelScope.launch {
             try {
                 // Wrap the network request with a 90 seconds coroutine-level timeout
                 val result = kotlinx.coroutines.withTimeout(90000L) {
-                    aiRepository.chat(fullPrompt)
+                    aiRepository.chatWithHistory(fullPrompt, historyPairs)
                 }
 
                 result.fold(

@@ -40,17 +40,31 @@ class AiRepositoryImpl(private val context: Context) : AiRepository {
      * هوش مصنوعی متنی: ابتدا از Duck.ai (منتقل‌شده از پروژه AI Studio) استفاده می‌شود و
      * در صورت در دسترس نبودن آن، درخواست به سرور اختصاصی تراز ارسال می‌شود.
      */
-    override suspend fun chat(message: String): Result<String> {
+    override suspend fun chat(message: String): Result<String> = chatWithHistory(message, emptyList())
+
+    override suspend fun chatWithHistory(prompt: String, history: List<Pair<String, String>>): Result<String> {
+        val message = prompt
         val duckResult = try {
-            duckClient.complete(message)
+            duckClient.complete(prompt, historyMessages = history)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
         if (duckResult.isSuccess) return duckResult
-        Log.w("AiRepositoryImpl", "Duck.ai unavailable, falling back to backend: ${duckResult.exceptionOrNull()?.message}")
-        return backendChat(message)
+        val duckError = duckResult.exceptionOrNull()?.message ?: "نامشخص"
+        Log.w("AiRepositoryImpl", "Duck.ai unavailable, falling back to backend: $duckError")
+        // سرور تراز تاریخچه را جدا نمی‌گیرد؛ پس به متن پیوست می‌شود
+        val flattened = if (history.isEmpty()) message else buildString {
+            append("[تاریخچه گفتگو]:\n")
+            history.forEach { (role, text) -> append(if (role == "user") "کاربر: " else "تراز: ").append(text).append('\n') }
+            append("\n").append(message)
+        }
+        val backend = backendChat(flattened)
+        if (backend.isSuccess) return backend
+        return Result.failure(
+            Exception("Duck.ai: $duckError — سرور تراز: ${backend.exceptionOrNull()?.message ?: "نامشخص"}")
+        )
     }
 
     private suspend fun backendChat(message: String): Result<String> = withContext(Dispatchers.IO) {
