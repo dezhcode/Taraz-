@@ -29,6 +29,16 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Payment
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.ui.platform.LocalContext
+import com.example.ui.taraz.LiveVoiceScreen
+import com.example.ui.taraz.VoiceListener
+import com.example.ui.taraz.VoiceSpeaker
+import com.example.ui.taraz.hasMicPermission
+import com.example.ui.taraz.rememberMicPermissionRequest
+import com.example.ui.taraz.speechErrorText
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -85,6 +95,67 @@ fun AiAssistantScreen(
 
     var textInput by remember { mutableStateOf("") }
     var isFocused by remember { mutableStateOf(false) }
+
+    // Voice: dictation into the message box, a hands-free conversation, and reading answers aloud.
+    val context = LocalContext.current
+    val voiceListener = remember { VoiceListener(context) }
+    val voiceSpeaker = remember { VoiceSpeaker(context) }
+    DisposableEffect(Unit) {
+        onDispose {
+            voiceListener.cancel()
+            voiceSpeaker.shutdown()
+        }
+    }
+    var liveVoice by remember { mutableStateOf(false) }
+    var dictating by remember { mutableStateOf(false) }
+    var dictationBase by remember { mutableStateOf("") }
+    var voiceNote by remember { mutableStateOf<String?>(null) }
+
+    fun startDictation() {
+        voiceSpeaker.stop()
+        if (!voiceListener.available) {
+            voiceNote = "این گوشی سرویس تبدیل گفتار به متن ندارد. برنامهٔ Google را نصب یا فعال کنید."
+            return
+        }
+        dictationBase = textInput.trim().let { if (it.isEmpty()) "" else "$it " }
+        voiceNote = null
+        dictating = true
+        voiceListener.start(
+            onPartial = { textInput = dictationBase + it },
+            onFinal = { text ->
+                dictating = false
+                textInput = (dictationBase + text).trim()
+            },
+            onError = { code ->
+                dictating = false
+                voiceNote = speechErrorText(code)
+            }
+        )
+    }
+
+    val askMicForDictation = rememberMicPermissionRequest { granted ->
+        if (granted) startDictation() else voiceNote = "برای گفتن پیام با صدا، اجازهٔ میکروفون لازم است."
+    }
+    val askMicForLive = rememberMicPermissionRequest { granted ->
+        if (granted) liveVoice = true else voiceNote = "برای گفتگوی صوتی، اجازهٔ میکروفون لازم است."
+    }
+
+    fun toggleDictation() {
+        when {
+            dictating -> voiceListener.stop()
+            hasMicPermission(context) -> startDictation()
+            else -> askMicForDictation()
+        }
+    }
+
+    fun openLiveVoice() {
+        if (dictating) {
+            voiceListener.cancel()
+            dictating = false
+        }
+        voiceSpeaker.stop()
+        if (hasMicPermission(context)) liveVoice = true else askMicForLive()
+    }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
@@ -104,6 +175,7 @@ fun AiAssistantScreen(
         }
     }
 
+    Box(Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -127,7 +199,18 @@ fun AiAssistantScreen(
                     if (msg.status == "pending") {
                         AiTypingIndicator()
                     } else {
-                        ChatBubble(message = msg, onApprove = onApproveAction, onCancel = onCancelAction)
+                        ChatBubble(
+                            message = msg,
+                            onApprove = onApproveAction,
+                            onCancel = onCancelAction,
+                            speaking = voiceSpeaker.speakingId == msg.id,
+                            onSpeak = if (voiceSpeaker.persian) {
+                                {
+                                    if (voiceSpeaker.speakingId == msg.id) voiceSpeaker.stop()
+                                    else voiceSpeaker.speak(msg.id, msg.text)
+                                }
+                            } else null
+                        )
                     }
                 }
 
@@ -262,6 +345,24 @@ fun AiAssistantScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(com.example.ui.taraz.Tz.Cobalt)
+                            .clickable(enabled = !isLoading) { openLiveVoice() }
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                            .testTag("ai_live_voice_button"),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Mic, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "گفتگوی صوتی",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                        )
+                    }
+                }
                 items(presets) { presetText ->
                     Box(
                         modifier = Modifier
@@ -283,6 +384,26 @@ fun AiAssistantScreen(
                             )
                         )
                     }
+                }
+            }
+
+            voiceNote?.let { note ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(com.example.ui.taraz.Tz.RedTint)
+                        .clickable { voiceNote = null }
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = note,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodySmall.copy(color = com.example.ui.taraz.Tz.RedText, fontWeight = FontWeight.SemiBold)
+                    )
+                    Icon(Icons.Default.Close, contentDescription = "بستن", tint = com.example.ui.taraz.Tz.RedText, modifier = Modifier.size(16.dp))
                 }
             }
 
@@ -336,7 +457,11 @@ fun AiAssistantScreen(
                         enabled = !isLoading,
                         placeholder = { 
                             Text(
-                                if (isLoading) "در حال پردازش پاسخ توسط دستیار مالی..." else "سوال خود را از دستیار مالی بپرسید...", 
+                                when {
+                                    dictating -> "گوش می‌دهم… حرف بزنید"
+                                    isLoading -> "در حال پردازش پاسخ توسط دستیار مالی..."
+                                    else -> "بپرسید یا میکروفون را بزنید و بگویید..."
+                                },
                                 style = MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = if (isLoading) 0.35f else 0.5f))
                             ) 
                         },
@@ -359,9 +484,46 @@ fun AiAssistantScreen(
                             .onFocusChanged { isFocused = it.isFocused }
                             .testTag("ai_chat_text_input")
                     )
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    // Microphone on the left: tap to speak the message, tap again to finish.
+                    IconButton(
+                        onClick = { toggleDictation() },
+                        enabled = !isLoading || dictating,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (dictating) com.example.ui.taraz.Tz.Red.copy(alpha = 0.75f + voiceListener.level * 0.25f)
+                                else Color.White.copy(alpha = 0.1f)
+                            )
+                            .testTag("ai_chat_mic_button")
+                    ) {
+                        Icon(
+                            imageVector = if (dictating) Icons.Default.Stop else Icons.Default.Mic,
+                            contentDescription = if (dictating) "پایان گفتن" else "گفتن پیام با صدا",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }
+    }
+
+    if (liveVoice) {
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            LiveVoiceScreen(
+                messages = messages,
+                isLoading = isLoading,
+                listener = voiceListener,
+                speaker = voiceSpeaker,
+                onSend = onSendMessage,
+                onClose = { liveVoice = false }
+            )
+        }
+    }
     }
 }
 
@@ -369,7 +531,9 @@ fun AiAssistantScreen(
 fun ChatBubble(
     message: ChatMessage,
     onApprove: (String) -> Unit,
-    onCancel: (String) -> Unit
+    onCancel: (String) -> Unit,
+    speaking: Boolean = false,
+    onSpeak: (() -> Unit)? = null
 ) {
     val isUser = message.sender == "user"
     
@@ -405,7 +569,30 @@ fun ChatBubble(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 RichMarkdownContent(text = message.text, isUser = false)
-                
+
+                if (onSpeak != null && message.status == "success" && message.text.isNotBlank()) {
+                    Row(
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { onSpeak() }
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (speaking) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
+                            contentDescription = null,
+                            tint = com.example.ui.taraz.Tz.Cobalt,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = if (speaking) "توقف" else "خواندن با صدا",
+                            style = MaterialTheme.typography.bodySmall.copy(color = com.example.ui.taraz.Tz.CobaltText, fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
+
                 message.actionProposed?.let { action ->
                     ProposedActionCard(
                         messageId = message.id,
