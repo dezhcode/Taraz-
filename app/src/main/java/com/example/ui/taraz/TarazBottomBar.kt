@@ -121,8 +121,11 @@ private fun NavItem(icon: ImageVector, label: String, selected: Boolean, onClick
     }
 }
 
-/** Space screens leave at the bottom so the floating bar never hides content. */
-val BottomBarClearance = 104.dp
+/**
+ * Space screens leave at the bottom so the floating bar never hides content,
+ * including the system navigation bar on phones with three-button navigation.
+ */
+val BottomBarClearance = 140.dp
 
 fun Tab.toNav(): TarazNav = when (this) {
     Tab.HOME, Tab.REPORTS -> TarazNav.HOME
