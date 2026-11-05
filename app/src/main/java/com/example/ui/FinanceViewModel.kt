@@ -2039,7 +2039,10 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         sendChatMessage(preset)
     }
 
-    fun payInstallment(loan: Loan) {
+    fun payInstallment(loan: Loan) = payInstallmentFrom(loan, loan.bankName)
+
+    /** پرداخت قسط با ثبت هزینه روی حسابی که کاربر انتخاب کرده */
+    fun payInstallmentFrom(loan: Loan, fromBank: String) {
         viewModelScope.launch {
             val updatedPaid = (loan.paidAmount + loan.installmentAmount).coerceAtMost(loan.totalAmount)
             repository.insertLoan(loan.copy(paidAmount = updatedPaid))
@@ -2051,7 +2054,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     amount = loan.installmentAmount,
                     category = "قسط",
                     isExpense = true,
-                    bankName = loan.bankName
+                    bankName = fromBank
                 )
             )
 
