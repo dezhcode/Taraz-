@@ -94,6 +94,7 @@ fun TarazAddSheet(
     cards: List<BankCard>,
     categories: List<Category>,
     history: List<Transaction>,
+    startAsTransfer: Boolean = false,
     onDismiss: () -> Unit,
     onSaveEntry: (title: String, amount: Long, category: String, isExpense: Boolean, bankName: String) -> Unit,
     onTransfer: (fromCardName: String, toCardName: String, amount: Long) -> Unit,
@@ -101,7 +102,7 @@ fun TarazAddSheet(
     onCreateAccount: (name: String, cardNumber: String, balance: Long, accountType: String) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var kind by remember { mutableStateOf(Kind.EXPENSE) }
+    var kind by remember { mutableStateOf(if (startAsTransfer) Kind.TRANSFER else Kind.EXPENSE) }
     var amountText by remember { mutableStateOf("") }
     var title by remember { mutableStateOf("") }
     var categoryName by remember { mutableStateOf<String?>(null) }
@@ -396,7 +397,7 @@ private fun CategoryBubble(label: String, iconKey: String?, selected: Boolean, o
 }
 
 @Composable
-private fun AccountPicker(
+internal fun AccountPicker(
     cards: List<BankCard>,
     selected: String?,
     prefix: String,

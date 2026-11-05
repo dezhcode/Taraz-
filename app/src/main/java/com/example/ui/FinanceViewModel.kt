@@ -2010,6 +2010,27 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         sendChatMessage(preset)
     }
 
+    /**
+     * Pay one instalment from an account the user picked. The expense lands on
+     * [accountName], so that account's balance goes down — unlike
+     * [payInstallment], which books it against the lender's name.
+     */
+    fun payInstallmentFrom(loan: Loan, accountName: String) {
+        viewModelScope.launch {
+            val updatedPaid = (loan.paidAmount + loan.installmentAmount).coerceAtMost(loan.totalAmount)
+            repository.insertLoan(loan.copy(paidAmount = updatedPaid))
+            repository.insertTransaction(
+                Transaction(
+                    title = "پرداخت قسط ${loan.loanName}",
+                    amount = loan.installmentAmount,
+                    category = "قسط",
+                    isExpense = true,
+                    bankName = accountName
+                )
+            )
+        }
+    }
+
     fun payInstallment(loan: Loan) {
         viewModelScope.launch {
             val updatedPaid = (loan.paidAmount + loan.installmentAmount).coerceAtMost(loan.totalAmount)
