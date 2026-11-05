@@ -33,9 +33,13 @@ enum class LiveVoicePhase {
     IDLE,
     CONNECTING,
     LISTENING_USER,
+    USER_SPEAKING,
     PROCESSING,
     SPEAKING_ASSISTANT
 }
+
+/** REALTIME: جلسه WebRTC واقعی Duck.ai — FALLBACK: تشخیص گفتار گوشی + TTS */
+enum class LiveVoiceMode { REALTIME, FALLBACK }
 
 data class LiveTranscriptTurn(
     val role: String, // "user" | "assistant"
@@ -50,6 +54,8 @@ data class LiveVoiceState(
     val isMuted: Boolean = false,
     val audioLevel: Float = 0.08f, // 0f..1f برای گوی موج صوتی
     val currentPartialUserText: String = "",
+    val currentAssistantText: String = "",
+    val mode: LiveVoiceMode = LiveVoiceMode.REALTIME,
     val statusBanner: String = "آماده شروع گفت‌وگوی صوتی با دستیار تراز",
     val turns: List<LiveTranscriptTurn> = emptyList()
 )
@@ -353,27 +359,68 @@ class DuckVoiceController(
     }
 
     // ─────────────────── ۲. گفت‌وگوی زنده صوتی ───────────────────
+    //
+    // حالت اصلی (REALTIME): جلسه WebRTC واقعی Duck.ai مطابق duck_voice.py — VAD سمت سرور،
+    //   صدای Opus دوطرفه و زیرنویس زنده از datachannel. هیچ SpeechRecognizer / بوقی در کار نیست.
+    // حالت جایگزین (FALLBACK): فقط اگر اتصال WebRTC ممکن نبود؛ تشخیص گفتار گوشی + دستیار تراز + TTS.
+
+    /** متن دستورالعمل (اطلاعات مالی کاربر) برای ارسال در session.update جلسه WebRTC */
+    var liveContextProvider: (() -> String)? = null
+
+    /** هر نوبت کامل گفت‌وگوی WebRTC (کاربر + دستیار) برای ذخیره در تاریخچه چت */
+    var onLiveTurnCompleted: ((userText: String, assistantText: String) -> Unit)? = null
+
+    /** پیام‌های قابل نمایش به کاربر (قطع اتصال، خطا) */
+    var onLiveMessage: ((String) -> Unit)? = null
+
+    private var realtimeSession: DuckRealtimeVoiceSession? = null
+    private var pendingUserTranscript = ""
+    private var fallbackSilentRestarts = 0
+
+    /** آیا سرور session.update را قبول می‌کند؛ اگر بعد از ارسالش جلسه بسته شد، دیگر ارسال نمی‌شود */
+    @Volatile
+    private var contextUpdateSupported = true
+    private var sentContextThisSession = false
+
+    /** WebView جلسه WebRTC برای قرار گرفتن (۱dp) در صفحه گفت‌وگو */
+    val realtimeWebView: android.webkit.WebView?
+        get() = realtimeSession?.webView
 
     fun setVoicePreset(voiceId: String) {
-        _liveState.update { it.copy(selectedVoiceId = voiceId) }
+        val s = _liveState.value
+        _liveState.update {
+            it.copy(
+                selectedVoiceId = voiceId,
+                statusBanner = if (s.isActive && s.mode == LiveVoiceMode.REALTIME)
+                    "صدای جدید از گفت‌وگوی بعدی اعمال می‌شود." else it.statusBanner
+            )
+        }
     }
 
     fun toggleLiveMute() {
-        val nowMuted = !_liveState.value.isMuted
+        val s = _liveState.value
+        val nowMuted = !s.isMuted
         _liveState.update {
             it.copy(
                 isMuted = nowMuted,
                 statusBanner = if (nowMuted) "🔇 میکروفون توسط شما بسته شد" else "🎙️ میکروفون فعال است — صحبت کنید…"
             )
         }
+        if (s.mode == LiveVoiceMode.REALTIME) {
+            realtimeSession?.setMuted(nowMuted)
+            return
+        }
+        fallbackSilentRestarts = 0
         mainHandler.post {
             if (nowMuted) {
                 try {
                     speechRecognizer?.cancel()
                 } catch (_: Exception) {
                 }
-            } else if (_liveState.value.phase == LiveVoicePhase.LISTENING_USER) {
-                beginLiveSpeechRecognitionTurn()
+            } else if (_liveState.value.phase != LiveVoicePhase.SPEAKING_ASSISTANT &&
+                _liveState.value.phase != LiveVoicePhase.PROCESSING
+            ) {
+                resumeListeningInLiveSession()
             }
         }
     }
@@ -381,45 +428,176 @@ class DuckVoiceController(
     fun startLiveSession() {
         if (_liveState.value.isActive) return
         stopSpeaking()
+        pendingUserTranscript = ""
         _liveState.value = LiveVoiceState(
             isActive = true,
             phase = LiveVoicePhase.CONNECTING,
             selectedVoiceId = _liveState.value.selectedVoiceId,
-            statusBanner = "در حال آماده‌سازی کانال صوتی…"
+            statusBanner = "در حال اتصال به کانال صوتی زنده…"
         )
 
         liveLoopJob?.cancel()
         liveLoopJob = scope.launch {
-            val (_, bannerMsg) = duckClient.initiateLiveVoiceSession(_liveState.value.selectedVoiceId)
+            launchOrbAnimation()
+            val connected = connectRealtime(sendContext = contextUpdateSupported)
             if (!_liveState.value.isActive) return@launch
-            _liveState.update {
-                it.copy(phase = LiveVoicePhase.LISTENING_USER, statusBanner = "✔ $bannerMsg — صحبت کنید")
-            }
-
-            // انیمیشن موج صوتی در حین جلسه
-            launch {
-                var tick = 0f
-                while (isActive && _liveState.value.isActive) {
-                    tick += 0.25f
-                    val s = _liveState.value
-                    val target = when (s.phase) {
-                        LiveVoicePhase.LISTENING_USER -> if (s.isMuted) 0.05f else 0.25f + abs(kotlin.math.sin(tick)) * 0.45f
-                        LiveVoicePhase.SPEAKING_ASSISTANT -> 0.4f + abs(kotlin.math.cos(tick * 1.4f)) * 0.55f
-                        LiveVoicePhase.PROCESSING -> 0.2f
-                        else -> 0.1f
-                    }
-                    _liveState.update { it.copy(audioLevel = target) }
-                    delay(60)
-                }
-            }
-
-            mainHandler.post { beginLiveSpeechRecognitionTurn() }
+            if (!connected) startFallbackMode()
         }
+    }
+
+    private fun CoroutineScope.launchOrbAnimation() = launch {
+        var tick = 0f
+        while (isActive && _liveState.value.isActive) {
+            tick += 0.25f
+            val s = _liveState.value
+            val target = when (s.phase) {
+                LiveVoicePhase.LISTENING_USER -> if (s.isMuted) 0.05f else 0.2f + abs(kotlin.math.sin(tick)) * 0.25f
+                LiveVoicePhase.USER_SPEAKING -> 0.45f + abs(kotlin.math.sin(tick * 1.6f)) * 0.5f
+                LiveVoicePhase.SPEAKING_ASSISTANT -> 0.4f + abs(kotlin.math.cos(tick * 1.4f)) * 0.55f
+                LiveVoicePhase.PROCESSING -> 0.2f
+                else -> 0.1f
+            }
+            _liveState.update { it.copy(audioLevel = target) }
+            delay(60)
+        }
+    }
+
+    /** @return true اگر جلسه WebRTC برقرار شد */
+    private suspend fun connectRealtime(sendContext: Boolean): Boolean {
+        val session = DuckRealtimeVoiceSession(context, duckClient, realtimeListener)
+        realtimeSession = session
+        sentContextThisSession = sendContext
+        return try {
+            session.connect(
+                voice = _liveState.value.selectedVoiceId,
+                contextInstructions = if (sendContext) liveContextProvider?.invoke() else null
+            )
+            if (_liveState.value.isMuted) session.setMuted(true)
+            true
+        } catch (e: CancellationException) {
+            session.stop()
+            if (realtimeSession === session) realtimeSession = null
+            if (_liveState.value.isActive) false else throw e
+        } catch (e: Exception) {
+            android.util.Log.w("DuckVoiceController", "Realtime voice failed: ${e.message}")
+            session.stop()
+            if (realtimeSession === session) realtimeSession = null
+            false
+        }
+    }
+
+    private val realtimeListener = object : DuckRealtimeVoiceSession.Listener {
+        override fun onConnected() {
+            _liveState.update {
+                it.copy(
+                    mode = LiveVoiceMode.REALTIME,
+                    phase = LiveVoicePhase.LISTENING_USER,
+                    statusBanner = "✔ متصل شد — صحبت کنید (برای کیفیت بهتر هندزفری بزنید)"
+                )
+            }
+        }
+
+        override fun onUserSpeechStart() {
+            _liveState.update {
+                it.copy(phase = LiveVoicePhase.USER_SPEAKING, statusBanner = "🎙️ در حال شنیدن…")
+            }
+        }
+
+        override fun onUserSpeechStop() {
+            _liveState.update {
+                it.copy(phase = LiveVoicePhase.PROCESSING, statusBanner = "⏳ در حال آماده کردن پاسخ…")
+            }
+        }
+
+        override fun onUserTranscriptDelta(delta: String) {
+            _liveState.update { it.copy(currentPartialUserText = it.currentPartialUserText + delta) }
+        }
+
+        override fun onUserTranscript(text: String) {
+            if (text.isBlank()) return
+            pendingUserTranscript = text
+            _liveState.update {
+                it.copy(currentPartialUserText = "", turns = it.turns + LiveTranscriptTurn("user", text))
+            }
+        }
+
+        override fun onAssistantDelta(delta: String) {
+            _liveState.update { it.copy(currentAssistantText = it.currentAssistantText + delta) }
+        }
+
+        override fun onAssistantDone(text: String) {
+            _liveState.update {
+                it.copy(currentAssistantText = "", turns = it.turns + LiveTranscriptTurn("assistant", text))
+            }
+            onLiveTurnCompleted?.invoke(pendingUserTranscript, text)
+            pendingUserTranscript = ""
+        }
+
+        override fun onAssistantAudioStart() {
+            _liveState.update {
+                it.copy(
+                    phase = LiveVoicePhase.SPEAKING_ASSISTANT,
+                    statusBanner = "🔊 دستیار در حال صحبت… (میکروفون موقتاً بی‌صدا شد)"
+                )
+            }
+        }
+
+        override fun onAssistantAudioEnd() {
+            _liveState.update {
+                it.copy(
+                    phase = LiveVoicePhase.LISTENING_USER,
+                    statusBanner = if (it.isMuted) "🔇 میکروفون بسته است" else "🎙️ نوبت شماست — صحبت کنید"
+                )
+            }
+        }
+
+        override fun onToolCall(name: String) {
+            if (name == "WebSearch") {
+                _liveState.update { it.copy(statusBanner = "🔍 در حال جستجو…") }
+            }
+        }
+
+        override fun onDisconnected(reason: String) {
+            val session = realtimeSession
+            // اگر بلافاصله بعد از ارسال session.update بسته شد، یعنی سرور آن را نمی‌پذیرد:
+            // یک بار بدون آن دوباره وصل می‌شویم و دیگر ارسالش نمی‌کنیم.
+            if (sentContextThisSession && session != null && session.millisSinceConnected() < 8_000) {
+                contextUpdateSupported = false
+                session.stop()
+                realtimeSession = null
+                _liveState.update {
+                    it.copy(phase = LiveVoicePhase.CONNECTING, statusBanner = "در حال اتصال دوباره…")
+                }
+                liveLoopJob = scope.launch {
+                    launchOrbAnimation()
+                    val ok = connectRealtime(sendContext = false)
+                    if (!_liveState.value.isActive) return@launch
+                    if (!ok) startFallbackMode()
+                }
+                return
+            }
+            onLiveMessage?.invoke(reason)
+            endLiveSession(banner = reason)
+        }
+    }
+
+    // ─── حالت جایگزین (بدون WebRTC) ───
+
+    private fun startFallbackMode() {
+        fallbackSilentRestarts = 0
+        _liveState.update {
+            it.copy(
+                mode = LiveVoiceMode.FALLBACK,
+                phase = LiveVoicePhase.LISTENING_USER,
+                statusBanner = "اتصال صوتی مستقیم برقرار نشد؛ حالت ساده فعال شد — صحبت کنید یا بنویسید"
+            )
+        }
+        mainHandler.post { beginLiveSpeechRecognitionTurn() }
     }
 
     private fun beginLiveSpeechRecognitionTurn() {
         val s = _liveState.value
-        if (!s.isActive || s.isMuted) return
+        if (!s.isActive || s.isMuted || s.mode != LiveVoiceMode.FALLBACK) return
         try {
             if (!SpeechRecognizer.isRecognitionAvailable(context)) {
                 _liveState.update {
@@ -427,67 +605,76 @@ class DuckVoiceController(
                 }
                 return
             }
-            speechRecognizer?.destroy()
-            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
-                setRecognitionListener(object : RecognitionListener {
-                    override fun onReadyForSpeech(params: Bundle?) {
-                        _liveState.update {
-                            it.copy(phase = LiveVoicePhase.LISTENING_USER, statusBanner = "🎙️ در حال شنیدن صدای شما…")
-                        }
-                    }
-                    override fun onBeginningOfSpeech() {}
-                    override fun onRmsChanged(rmsdB: Float) {
-                        _liveState.update { it.copy(audioLevel = ((rmsdB + 2f) / 12f).coerceIn(0.1f, 1f)) }
-                    }
-                    override fun onBufferReceived(buffer: ByteArray?) {}
-                    override fun onEndOfSpeech() {
-                        _liveState.update {
-                            it.copy(phase = LiveVoicePhase.PROCESSING, statusBanner = "⏳ پایان گفتار تشخیص داده شد…")
-                        }
-                    }
-                    override fun onError(error: Int) {
-                        // سکوت یا عدم تشخیص: دوباره گوش بده تا جلسه زنده قطع نشود
-                        val st = _liveState.value
-                        if (st.isActive && !st.isMuted && st.phase != LiveVoicePhase.SPEAKING_ASSISTANT &&
-                            (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT)
-                        ) {
-                            mainHandler.postDelayed({ resumeListeningInLiveSession() }, 300)
-                        } else if (st.isActive && st.phase != LiveVoicePhase.SPEAKING_ASSISTANT) {
-                            _liveState.update {
-                                it.copy(
-                                    phase = LiveVoicePhase.LISTENING_USER,
-                                    statusBanner = "تشخیص گفتار متوقف شد؛ برای ادامه میکروفون را دوباره روشن کنید یا تایپ کنید."
-                                )
-                            }
-                        }
-                    }
-                    override fun onResults(results: Bundle?) {
-                        val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                            ?.firstOrNull()?.trim()
-                        if (!text.isNullOrBlank()) {
-                            sendUserVoiceTurnInLiveSession(text)
-                        } else {
-                            mainHandler.postDelayed({ resumeListeningInLiveSession() }, 300)
-                        }
-                    }
-                    override fun onPartialResults(partialResults: Bundle?) {
-                        val partial = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                            ?.firstOrNull()?.trim().orEmpty()
-                        if (partial.isNotEmpty()) _liveState.update { it.copy(currentPartialUserText = partial) }
-                    }
-                    override fun onEvent(eventType: Int, params: Bundle?) {}
-                })
+            // یک نمونه ثابت؛ ساختن و نابود کردن مکرر باعث قطع و وصل و بوق تکراری می‌شد
+            val recognizer = speechRecognizer ?: SpeechRecognizer.createSpeechRecognizer(context).also {
+                speechRecognizer = it
             }
-            speechRecognizer?.startListening(recognizerIntent())
+            recognizer.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {
+                    _liveState.update {
+                        it.copy(phase = LiveVoicePhase.LISTENING_USER, statusBanner = "🎙️ در حال شنیدن صدای شما…")
+                    }
+                }
+                override fun onBeginningOfSpeech() {
+                    fallbackSilentRestarts = 0
+                    _liveState.update { it.copy(phase = LiveVoicePhase.USER_SPEAKING) }
+                }
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() {
+                    _liveState.update {
+                        it.copy(phase = LiveVoicePhase.PROCESSING, statusBanner = "⏳ پایان گفتار تشخیص داده شد…")
+                    }
+                }
+                override fun onError(error: Int) {
+                    val st = _liveState.value
+                    if (!st.isActive || st.mode != LiveVoiceMode.FALLBACK ||
+                        st.phase == LiveVoicePhase.SPEAKING_ASSISTANT
+                    ) return
+                    val silent = error == SpeechRecognizer.ERROR_NO_MATCH ||
+                        error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+                    if (silent && fallbackSilentRestarts < MAX_SILENT_RESTARTS && !st.isMuted) {
+                        fallbackSilentRestarts++
+                        mainHandler.postDelayed({ resumeListeningInLiveSession() }, 600)
+                    } else {
+                        // به‌جای تکرار بی‌پایان (بوق و قطع/وصل مداوم)، میکروفون خاموش می‌شود
+                        _liveState.update {
+                            it.copy(
+                                isMuted = true,
+                                phase = LiveVoicePhase.LISTENING_USER,
+                                statusBanner = "میکروفون بعد از سکوت خاموش شد؛ برای ادامه روشنش کن یا بنویس."
+                            )
+                        }
+                    }
+                }
+                override fun onResults(results: Bundle?) {
+                    val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        ?.firstOrNull()?.trim()
+                    if (!text.isNullOrBlank()) {
+                        fallbackSilentRestarts = 0
+                        sendUserVoiceTurnInLiveSession(text)
+                    } else {
+                        onError(SpeechRecognizer.ERROR_NO_MATCH)
+                    }
+                }
+                override fun onPartialResults(partialResults: Bundle?) {
+                    val partial = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        ?.firstOrNull()?.trim().orEmpty()
+                    if (partial.isNotEmpty()) _liveState.update { it.copy(currentPartialUserText = partial) }
+                }
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+            recognizer.startListening(recognizerIntent())
         } catch (_: Exception) {
         }
     }
 
     /**
-     * ارسال گفتار کاربر در جلسه زنده (از میکروفون یا کادر متنی) و پخش صوتی پاسخ دستیار.
+     * ارسال یک جمله در حالت جایگزین (از تشخیص گفتار یا کادر متنی) و پخش صوتی پاسخ دستیار تراز.
      */
     fun sendUserVoiceTurnInLiveSession(userSpokenText: String) {
-        if (!_liveState.value.isActive || userSpokenText.isBlank()) return
+        val s = _liveState.value
+        if (!s.isActive || userSpokenText.isBlank() || s.mode != LiveVoiceMode.FALLBACK) return
         stopSpeaking()
         mainHandler.post {
             try {
@@ -518,7 +705,7 @@ class DuckVoiceController(
             if (!_liveState.value.isActive) return@launch
             _liveState.update { it.copy(turns = it.turns + LiveTranscriptTurn("assistant", reply)) }
 
-            if (isTtsReady && reply.isNotBlank() && !_liveState.value.isMuted) {
+            if (isTtsReady && reply.isNotBlank()) {
                 applyPreset(_liveState.value.selectedVoiceId)
                 _liveState.update {
                     it.copy(phase = LiveVoicePhase.SPEAKING_ASSISTANT, statusBanner = "🔊 دستیار در حال صحبت…")
@@ -532,15 +719,21 @@ class DuckVoiceController(
     }
 
     private fun resumeListeningInLiveSession() {
-        if (!_liveState.value.isActive) return
+        val s = _liveState.value
+        if (!s.isActive || s.mode != LiveVoiceMode.FALLBACK) return
         _liveState.update {
-            it.copy(phase = LiveVoicePhase.LISTENING_USER, statusBanner = "🎙️ نوبت شماست — صحبت کنید")
+            it.copy(
+                phase = LiveVoicePhase.LISTENING_USER,
+                statusBanner = if (it.isMuted) "🔇 میکروفون بسته است" else "🎙️ نوبت شماست — صحبت کنید"
+            )
         }
         beginLiveSpeechRecognitionTurn()
     }
 
-    fun endLiveSession() {
+    fun endLiveSession(banner: String = "گفت‌وگوی صوتی پایان یافت.") {
         liveLoopJob?.cancel()
+        realtimeSession?.stop()
+        realtimeSession = null
         tts?.stop()
         mainHandler.post {
             try {
@@ -553,7 +746,8 @@ class DuckVoiceController(
                 isActive = false,
                 phase = LiveVoicePhase.IDLE,
                 currentPartialUserText = "",
-                statusBanner = "گفت‌وگوی صوتی پایان یافت."
+                currentAssistantText = "",
+                statusBanner = banner
             )
         }
     }
@@ -561,6 +755,8 @@ class DuckVoiceController(
     fun release() {
         audioRecordJob?.cancel()
         liveLoopJob?.cancel()
+        realtimeSession?.stop()
+        realtimeSession = null
         mainHandler.post {
             try {
                 speechRecognizer?.destroy()
@@ -575,6 +771,7 @@ class DuckVoiceController(
     companion object {
         private const val LIVE_UTTERANCE = "LIVE_ASSISTANT_SPEECH"
         private const val MAX_RAW_DICTATION_MS = 10_000L
+        private const val MAX_SILENT_RESTARTS = 2
 
         /** حذف علائم Markdown، جداول و تگ‌های سیستمی قبل از خواندن متن */
         fun cleanForSpeech(text: String): String = text

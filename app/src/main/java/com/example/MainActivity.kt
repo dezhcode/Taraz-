@@ -342,6 +342,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                          if (liveVoiceState.isActive) {
                                              LiveVoiceOverlayScreen(
                                                  liveState = liveVoiceState,
+                                                 realtimeWebView = viewModel.liveVoiceWebView,
                                                  onSelectVoice = { viewModel.selectLiveVoicePreset(it) },
                                                  onToggleMute = { viewModel.toggleLiveVoiceMute() },
                                                  onSendSpokenPrompt = { viewModel.sendLiveVoiceText(it) },

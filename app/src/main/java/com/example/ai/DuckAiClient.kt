@@ -25,7 +25,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
-import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 /**
@@ -433,27 +432,91 @@ class DuckAiClient(context: Context) {
             Result.failure(Exception("تبدیل صدا به متن ناموفق بود"))
         }
 
-    // ─────────────────── ۴. جلسه ویس زنده (/duckchat/v1/ice-servers) ───────────────────
+    // ─────────────────── ۴. ویس زنده WebRTC (مطابق LiveVoiceSession در duck_voice.py) ───────────────────
 
-    suspend fun initiateLiveVoiceSession(voiceId: String): Pair<Boolean, String> =
-        withContext(Dispatchers.IO) {
-            val journeyId = UUID.randomUUID().toString().replace("-", "")
-            try {
-                if (feVersion.isEmpty() || jsaProof.isEmpty()) rehandshake()
-                val iceReq = Request.Builder()
-                    .url("$BASE_URL/duckchat/v1/ice-servers")
-                    .header("User-Agent", USER_AGENT)
-                    .header("x-fe-version", feVersion)
-                    .header("x-ddg-journey-id", journeyId)
-                    .header("x-fe-signals", feSignals("startVoiceSession_free", 119))
-                    .header("Referer", "$BASE_URL/")
-                    .build()
-                okHttp.newCall(iceReq).execute().use { /* فقط برای گرم کردن کانال */ }
-                Pair(true, "کانال صوتی آماده است • $voiceId")
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Pair(true, "کانال صوتی محلی آماده است • $voiceId")
+    private fun voiceSignals(): String = b64Json(JSONObject().apply {
+        put("start", System.currentTimeMillis())
+        put("events", JSONArray().put(JSONObject().apply {
+            put("name", "startVoiceSession_free")
+            put("delta", 119)
+            put("trusted", true)
+        }))
+        put("end", 1500)
+    })
+
+    /**
+     * GET /duckchat/v1/ice-servers → آرایه iceServers به فرمت RTCPeerConnection مرورگر
+     * (urls / username / credential)
+     */
+    suspend fun fetchIceServers(journeyId: String): Result<JSONArray> = withContext(Dispatchers.IO) {
+        try {
+            if (feVersion.isEmpty() || jsaProof.isEmpty()) rehandshake()
+            val req = Request.Builder()
+                .url("$BASE_URL/duckchat/v1/ice-servers")
+                .header("User-Agent", USER_AGENT)
+                .header("x-fe-version", feVersion)
+                .header("x-ddg-journey-id", journeyId)
+                .header("x-fe-signals", feSignals("startVoiceSession_free", 119))
+                .header("Referer", "$BASE_URL/")
+                .build()
+            okHttp.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) {
+                    return@withContext Result.failure(Exception("دریافت ice-servers ناموفق (HTTP ${resp.code})"))
+                }
+                val servers = JSONObject(resp.body?.string() ?: "{}").optJSONArray("iceServers") ?: JSONArray()
+                Result.success(servers)
             }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(Exception("دریافت ice-servers ناموفق: ${e.message}"))
+        }
+    }
+
+    /**
+     * POST /duckchat/v1/session  body: {"sdp": <offer>, "session": {"voice": "voice-1"}}
+     * پاسخ: answer SDP. خطای 418/500 گذراست؛ مثل duck_voice.py با چالش تازه تا ۵ بار تکرار می‌شود.
+     */
+    suspend fun postVoiceSession(offerSdp: String, voice: String, journeyId: String): Result<String> =
+        withContext(Dispatchers.IO) {
+            if (feVersion.isEmpty() || jsaProof.isEmpty()) rehandshake()
+            val body = JSONObject().apply {
+                put("sdp", offerSdp)
+                put("session", JSONObject().put("voice", voice))
+            }.toString()
+            var lastError = "شروع جلسه صوتی ناموفق بود"
+            for (attempt in 0 until 5) {
+                if (attempt > 0) {
+                    kotlinx.coroutines.delay(2000L + attempt * 2000L)
+                    rehandshake()
+                }
+                try {
+                    val req = Request.Builder()
+                        .url("$BASE_URL/duckchat/v1/session")
+                        .header("User-Agent", USER_AGENT)
+                        .header("Content-Type", "application/json")
+                        .header("Origin", BASE_URL)
+                        .header("Referer", "$BASE_URL/")
+                        .header("x-fe-version", feVersion)
+                        .header("x-vqd-hash-1", jsaProof)
+                        .header("x-fe-signals", voiceSignals())
+                        .header("x-ddg-journey-id", journeyId)
+                        .post(body.toRequestBody("application/json".toMediaType()))
+                        .build()
+                    okHttp.newCall(req).execute().use { resp ->
+                        val text = resp.body?.string().orEmpty()
+                        if (resp.isSuccessful && text.contains("v=0")) {
+                            return@withContext Result.success(text)
+                        }
+                        lastError = "شروع جلسه صوتی ناموفق (HTTP ${resp.code})"
+                        Log.w(TAG, "Voice session attempt ${attempt + 1}: HTTP ${resp.code}")
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    lastError = "شروع جلسه صوتی ناموفق: ${e.message}"
+                }
+            }
+            Result.failure(Exception(lastError))
         }
 }

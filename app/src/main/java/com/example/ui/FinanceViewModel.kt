@@ -97,7 +97,13 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope
     ).also { controller ->
         controller.liveResponder = { spokenText -> awaitChatReply(spokenText) }
+        controller.liveContextProvider = { buildLiveVoiceInstructions() }
+        controller.onLiveTurnCompleted = { userText, assistantText -> appendLiveVoiceTurn(userText, assistantText) }
+        controller.onLiveMessage = { message -> _chatErrorToast.value = message }
     }
+    /** WebView جلسه WebRTC گفت‌وگوی زنده (برای قرار گرفتن در صفحه) */
+    val liveVoiceWebView: android.webkit.WebView?
+        get() = voiceController.realtimeWebView
     val liveVoiceState: StateFlow<com.example.ai.LiveVoiceState> = voiceController.liveState
     val isDictating: StateFlow<Boolean> = voiceController.isDictating
     val dictationAmplitude: StateFlow<Float> = voiceController.dictationAmplitude
@@ -2112,6 +2118,44 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         val accepted = sendChatMessage(text) { reply -> deferred.complete(reply) }
         if (!accepted) return "یک لحظه صبر کن، هنوز دارم جواب قبلی رو آماده می‌کنم."
         return deferred.await()
+    }
+
+    /**
+     * دستورالعمل گفت‌وگوی زنده WebRTC: شخصیت تراز + خلاصه اطلاعات مالی کاربر.
+     * در حالت صوتی تگ‌های عملیاتی پشتیبانی نمی‌شوند، پس فقط پاسخ گفتاری خواسته می‌شود.
+     */
+    private fun buildLiveVoiceInstructions(): String {
+        val cardsCtx = cards.value.joinToString("؛ ") { "${it.bankName}: ${it.balance} تومان" }
+        val loansCtx = loans.value.joinToString("؛ ") {
+            "${it.loanName} (${it.bankName}) قسط ${it.installmentAmount} تومان، روز ${it.dueDay} هر ماه، " +
+                "باقی‌مانده ${it.totalAmount - it.paidAmount} تومان"
+        }
+        val txCtx = transactions.value.take(10).joinToString("؛ ") {
+            "${it.title} ${it.amount} تومان (${if (it.isExpense) "هزینه" else "درآمد"}، ${it.category})"
+        }
+        return """
+            تو «تراز» هستی، دستیار مالی شخصی و صمیمی داخل اپلیکیشن مدیریت مالی تراز.
+            همیشه فارسی، کوتاه، خودمونی و گفتاری جواب بده؛ از Markdown، جدول، فهرست و علامت‌ها استفاده نکن چون پاسخ تو با صدا پخش می‌شود.
+            در گفت‌وگوی صوتی نمی‌توانی تراکنش یا وام را ثبت، ویرایش یا حذف کنی؛ اگر کاربر خواست، بگو از چت متنی تراز استفاده کند.
+            اطلاعات مالی واقعی کاربر:
+            کارت‌ها: ${cardsCtx.ifBlank { "ثبت نشده" }}
+            وام‌ها: ${loansCtx.ifBlank { "ثبت نشده" }}
+            ۱۰ تراکنش اخیر: ${txCtx.ifBlank { "ثبت نشده" }}
+            هزینه امروز: ${todayExpense.value} تومان
+        """.trimIndent()
+    }
+
+    /** ذخیره نوبت‌های گفت‌وگوی زنده در تاریخچه چت تراز */
+    private fun appendLiveVoiceTurn(userText: String, assistantText: String) {
+        val newMessages = buildList {
+            if (userText.isNotBlank()) add(ChatMessage(sender = "user", text = "🎙️ $userText", status = "success"))
+            if (assistantText.isNotBlank()) add(ChatMessage(sender = "ai", text = assistantText, status = "success"))
+        }
+        if (newMessages.isEmpty()) return
+        _chatMessages.update { it + newMessages }
+        val updatedMemory = _aiMemoryMessages.value + newMessages
+        _aiMemoryMessages.value = updatedMemory
+        saveChatHistory(updatedMemory)
     }
 
     override fun onCleared() {

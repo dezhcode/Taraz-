@@ -73,6 +73,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.draw.alpha
+import com.example.ai.LiveVoiceMode
 import com.example.ai.LiveVoicePhase
 import com.example.ai.LiveVoiceState
 import com.example.ai.TARAZ_VOICE_PRESETS
@@ -98,6 +101,7 @@ private val LiveMuted = Color(0xFF94A3B8)
 @Composable
 fun LiveVoiceOverlayScreen(
     liveState: LiveVoiceState,
+    realtimeWebView: android.webkit.WebView? = null,
     onSelectVoice: (String) -> Unit,
     onToggleMute: () -> Unit,
     onSendSpokenPrompt: (String) -> Unit,
@@ -108,9 +112,11 @@ fun LiveVoiceOverlayScreen(
     var customVoicePrompt by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    LaunchedEffect(liveState.turns.size) {
-        if (liveState.turns.isNotEmpty()) listState.animateScrollToItem(liveState.turns.size - 1)
+    LaunchedEffect(liveState.turns.size, liveState.currentAssistantText.isNotEmpty()) {
+        val count = liveState.turns.size + if (liveState.currentAssistantText.isNotEmpty()) 1 else 0
+        if (count > 0) listState.animateScrollToItem(count - 1)
     }
+    val isRealtime = liveState.mode == LiveVoiceMode.REALTIME
 
     val infiniteTransition = rememberInfiniteTransition(label = "orb_pulse")
     val pulseScale by infiniteTransition.animateFloat(
@@ -130,6 +136,7 @@ fun LiveVoiceOverlayScreen(
         targetValue = when (liveState.phase) {
             LiveVoicePhase.CONNECTING, LiveVoicePhase.PROCESSING -> LiveAmber
             LiveVoicePhase.LISTENING_USER -> if (liveState.isMuted) Color(0xFF64748B) else HorizonGreenGlow
+            LiveVoicePhase.USER_SPEAKING -> HorizonGreenGlow
             LiveVoicePhase.SPEAKING_ASSISTANT -> LiveSky
             LiveVoicePhase.IDLE -> HorizonGreenGlow
         },
@@ -262,6 +269,7 @@ fun LiveVoiceOverlayScreen(
                             text = when (liveState.phase) {
                                 LiveVoicePhase.CONNECTING -> "در حال اتصال..."
                                 LiveVoicePhase.LISTENING_USER -> if (liveState.isMuted) "بی‌صدا" else "گوش می‌کنم..."
+                                LiveVoicePhase.USER_SPEAKING -> "در حال شنیدن..."
                                 LiveVoicePhase.PROCESSING -> "در حال بررسی..."
                                 LiveVoicePhase.SPEAKING_ASSISTANT -> "در حال پاسخ..."
                                 LiveVoicePhase.IDLE -> "آماده"
@@ -308,7 +316,8 @@ fun LiveVoiceOverlayScreen(
                         if (liveState.turns.isEmpty()) {
                             item {
                                 Text(
-                                    text = "با میکروفون صحبت کن یا یکی از سوال‌های پایین رو انتخاب کن.",
+                                    text = if (isRealtime) "راحت صحبت کن؛ هر وقت ساکت بشی دستیار جواب میده."
+                                    else "با میکروفون صحبت کن یا یکی از سوال‌های پایین رو انتخاب کن.",
                                     color = LiveMuted,
                                     fontSize = 12.sp,
                                     textAlign = TextAlign.Center,
@@ -349,11 +358,39 @@ fun LiveVoiceOverlayScreen(
                                 }
                             }
                         }
+                        if (liveState.currentAssistantText.isNotEmpty()) {
+                            item {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                    Surface(
+                                        color = LiveCard,
+                                        shape = RoundedCornerShape(14.dp),
+                                        border = BorderStroke(1.dp, LiveSky)
+                                    ) {
+                                        Column(modifier = Modifier.padding(10.dp)) {
+                                            Text(
+                                                text = "🔊 تراز در حال صحبت…",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = LiveSky
+                                            )
+                                            Spacer(modifier = Modifier.height(3.dp))
+                                            Text(
+                                                text = liveState.currentAssistantText,
+                                                fontSize = 13.sp,
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
+                // ۵. در حالت جایگزین (بدون WebRTC): سوال‌های سریع و ورودی متنی
+                if (!isRealtime) {
                 // ۵. سوال‌های سریع مالی
                 val quickVoicePrompts = listOf(
                     "امروز چقدر خرج کردم؟",
@@ -433,6 +470,9 @@ fun LiveVoiceOverlayScreen(
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
 
                 // ۶. کنترل‌ها
                 Row(
@@ -472,6 +512,20 @@ fun LiveVoiceOverlayScreen(
                         Text(text = "پایان گفت‌وگو", fontWeight = FontWeight.Bold)
                     }
                 }
+            }
+
+            // میزبان WebView جلسه WebRTC (۱dp و نامرئی) تا پخش صدا و تایمرهای مرورگر فعال بمانند
+            if (realtimeWebView != null) {
+                AndroidView(
+                    factory = { _ ->
+                        (realtimeWebView.parent as? android.view.ViewGroup)?.removeView(realtimeWebView)
+                        realtimeWebView
+                    },
+                    modifier = Modifier
+                        .size(1.dp)
+                        .alpha(0f)
+                        .align(Alignment.BottomStart)
+                )
             }
         }
     }
