@@ -84,155 +84,66 @@ fun BiometricLockScreen(
         triggerBiometricAuthentication()
     }
 
+    // The Taraz lock: one clear action, and a plain explanation when it fails.
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFF0F172A), Color(0xFF020617))))
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .background(com.example.ui.taraz.Tz.Ground)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 28.dp, vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // App icon and security label
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.AutoAwesome,
-                contentDescription = null,
-                tint = Color(0xFFFCD34D),
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "حفاظت امنیتی تراز",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White.copy(alpha = 0.8f)
-                )
-            )
-        }
-
-        Spacer(modifier = Modifier.height(48.dp))
-
-        // Large animated Fingerprint Scanning Button
+        Spacer(modifier = Modifier.height(64.dp))
         Box(
             modifier = Modifier
-                .size(160.dp)
-                .clip(CircleShape)
-                .clickable { triggerBiometricAuthentication() }
-                .testTag("biometric_fingerprint_scanner_button"),
+                .size(56.dp)
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
+                .background(com.example.ui.taraz.Tz.Cobalt),
             contentAlignment = Alignment.Center
         ) {
-            // Ripple Canvas
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                drawCircle(
-                    brush = Brush.radialGradient(listOf(Color(0xFF2D7D5F).copy(alpha = 0.12f * pulseScale), Color.Transparent)),
-                    radius = (size.minDimension / 2) * pulseScale
-                )
-                drawCircle(
-                    color = Color(0xFF2D7D5F).copy(alpha = 0.2f),
-                    radius = size.minDimension / 2 - 10.dp.toPx(),
-                    style = Stroke(width = 2.dp.toPx())
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .size(100.dp)
-                    .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(Color(0xFF2D7D5F), Color(0xFF225E47)))),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Fingerprint,
-                    contentDescription = "اثر انگشت",
-                    tint = Color.White,
-                    modifier = Modifier.size(54.dp)
-                )
-            }
+            Text("تراز", style = com.example.ui.taraz.tzText(17.sp, FontWeight.Bold, Color.White))
         }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
+        Spacer(modifier = Modifier.height(18.dp))
+        Text("تراز قفل است", style = com.example.ui.taraz.tzText(24.sp, FontWeight.Bold))
+        Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = "تایید اثر انگشت برای ورود",
-            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
+            "برای دیدن حساب‌ها، هویتتان را تأیید کنید.",
+            style = com.example.ui.taraz.tzText(14.sp, color = com.example.ui.taraz.Tz.Muted, align = androidx.compose.ui.text.style.TextAlign.Center)
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-            text = "برنامه تراز توسط لایه امنیتی اندروید محافظت می‌شود. لطفاً سنسور اثر انگشت دستگاه را لمس نمایید تا قفل باز شود.",
-            style = MaterialTheme.typography.bodyLarge.copy(color = Color(0xFF94A3B8), lineHeight = 24.sp),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        if (authError != null) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp)
-                    .testTag(if (isUnavailableOnDevice) "biometric_unavailable_message" else "biometric_error_card"),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF7F1D1D).copy(alpha = 0.2f)),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = null,
-                        tint = Color(0xFFFCA5A5),
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = authError!!,
-                        style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFFFCA5A5), fontWeight = FontWeight.Bold),
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
+        Spacer(modifier = Modifier.weight(1f))
+        Box(
+            modifier = Modifier
+                .size((120 * pulseScale.coerceIn(1f, 1.12f)).dp)
+                .clip(CircleShape)
+                .background(com.example.ui.taraz.Tz.CobaltTint2)
+                .clickable { triggerBiometricAuthentication() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.Fingerprint, contentDescription = "باز کردن با اثر انگشت", tint = com.example.ui.taraz.Tz.Cobalt, modifier = Modifier.size(60.dp))
         }
-
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(14.dp))
+        Text(
+            authError ?: "انگشتتان را روی حسگر بگذارید",
+            style = com.example.ui.taraz.tzText(
+                14.sp, FontWeight.SemiBold,
+                if (authError != null) com.example.ui.taraz.Tz.Amber else com.example.ui.taraz.Tz.CobaltText,
+                align = androidx.compose.ui.text.style.TextAlign.Center,
+                lineHeight = 24.sp
+            )
+        )
+        Spacer(modifier = Modifier.weight(1f))
 
         if (isUnavailableOnDevice) {
-            Button(
-                onClick = { onLockUnavailable() },
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D7D5F)),
-                modifier = Modifier
-                    .width(220.dp)
-                    .height(48.dp)
-                    .testTag("biometric_unavailable_ack_button")
-            ) {
-                Text(
-                    text = "متوجه شدم، ادامه",
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = Color.White)
-                )
-            }
+            com.example.ui.taraz.PrimaryButton("ادامه بدون قفل", onClick = { onLockUnavailable() })
         } else {
-            // Retry button to trigger BiometricPrompt again
-            Button(
-                onClick = { triggerBiometricAuthentication() },
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D7D5F)),
-                modifier = Modifier
-                    .width(220.dp)
-                    .height(48.dp)
-                    .testTag("biometric_retry_button")
-            ) {
-                Text(
-                    text = "تلاش مجدد",
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = Color.White)
-                )
-            }
+            com.example.ui.taraz.SecondaryButton("استفاده از رمز گوشی", onClick = { triggerBiometricAuthentication() }, height = 50.dp)
         }
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            "این قفل را از «تنظیمات › امنیت» خاموش یا روشن کنید.",
+            style = com.example.ui.taraz.tzText(12.sp, color = com.example.ui.taraz.Tz.Muted, align = androidx.compose.ui.text.style.TextAlign.Center)
+        )
     }
 }

@@ -31,7 +31,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.ui.platform.LocalContext
 import com.example.ui.*
 import com.example.ui.theme.MyApplicationTheme
-import com.example.ui.components.AiFloatingButton
+import com.example.ui.taraz.toNav
 import com.example.ui.components.CardDetailBottomSheet
 
 class MainActivity : androidx.fragment.app.FragmentActivity() {
@@ -50,7 +50,11 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // The app is light-only: keep system bar icons dark even when the phone is in dark mode.
+        enableEdgeToEdge(
+            statusBarStyle = androidx.activity.SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = androidx.activity.SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
+        )
 
         com.example.utils.NotificationHelper.createNotificationChannel(this)
         requestNotificationPermissionIfNeeded()
@@ -101,6 +105,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 var selectedCardForDetail by remember { mutableStateOf<com.example.data.BankCard?>(null) }
                 var isAddCardOpen by remember { mutableStateOf(false) }
                 var isTransferOpen by remember { mutableStateOf(false) }
+                var addAsTransfer by remember { mutableStateOf(false) }
+                var loanToPay by remember { mutableStateOf<com.example.data.Loan?>(null) }
 
                 // System Back Button Handling
                 val context = LocalContext.current
@@ -109,7 +115,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 val exitToastMessage = "برای خروج از برنامه دوبار برگشت بزنید پشت سر هم"
 
                 BackHandler(enabled = screenState == Screen.MAIN) {
-                    if (showSmsAssistantSheet) {
+                    if (loanToPay != null) {
+                        loanToPay = null
+                    } else if (showSmsAssistantSheet) {
                         viewModel.setSmsAssistantSheetOpen(false)
                     } else if (isAiSheetOpen) {
                         isAiSheetOpen = false
@@ -147,46 +155,42 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             onLockUnavailable = { viewModel.disableLockUnavailableOnDevice() }
                         )
                     } else if (screenState == Screen.AUTH || screenState == Screen.ONBOARDING || screenState == Screen.SPLASH) {
-                        AuthScreen(viewModel = viewModel)
+                        com.example.ui.taraz.TarazAuthScreen(vm = viewModel)
                     } else {
                         if (screenState == Screen.MAIN) {
                             // Sub-screens override main tab navigation
                             when (activeSubScreen) {
                                 "banks" -> {
-                                    BanksSubScreen(
-                                        cards = cards,
+                                    com.example.ui.taraz.TarazAccountsScreen(
+                                        vm = viewModel,
                                         onBack = { activeSubScreen = null },
-                                        onAddCard = { bankName, cardNumber, balance, cardHolderName ->
-                                            viewModel.addCard(bankName, cardNumber, balance, cardHolderName)
+                                        onAccountClick = { selectedCardForDetail = it },
+                                        onAddAccount = { isAddCardOpen = true },
+                                        onTransfer = {
+                                            addAsTransfer = true
+                                            isAddTransactionOpen = true
                                         }
                                     )
                                 }
 
                                 "loans" -> {
-                                    LoansSubScreen(
-                                        loans = loans,
-                                        cards = cards,
+                                    com.example.ui.taraz.TarazLoansScreen(
+                                        vm = viewModel,
+                                        onPay = { loanToPay = it }
+                                    )
+                                }
+
+                                "reports" -> {
+                                    com.example.ui.taraz.TarazReportsScreen(
+                                        vm = viewModel,
                                         onBack = { activeSubScreen = null },
-                                        onPayInstallment = { loan ->
-                                            viewModel.payInstallment(loan)
-                                        },
-                                        onAddLoan = { bankName, loanName, totalAmount, paidAmount, installmentAmount, dueDay ->
-                                            viewModel.addLoan(bankName, loanName, totalAmount, paidAmount, installmentAmount, dueDay)
-                                        }
+                                        onAskAssistant = { isAiSheetOpen = true }
                                     )
                                 }
 
                                 "settings" -> {
-                                    SettingsScreen(
-                                        viewModel = viewModel,
-                                        userProfile = userProfile,
-                                        biometricEnabled = biometricEnabled,
-                                        alertsEnabled = alertsEnabled,
-                                        onBiometricChange = { viewModel.setBiometricEnabled(it) },
-                                        onAlertsChange = { viewModel.setAlertsEnabled(it) },
-                                        onResetAll = { viewModel.resetAllData() },
-                                        onLogout = { viewModel.logout() },
-                                        onScheduleReminder = { title, delay -> viewModel.scheduleReminder(title, delay) },
+                                    com.example.ui.taraz.TarazSettingsScreen(
+                                        vm = viewModel,
                                         onBack = { activeSubScreen = null }
                                     )
                                 }
@@ -205,7 +209,6 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxSize()
-                                                    .padding(top = scaffoldPadding.calculateTopPadding())
                                             ) {
                                             AnimatedContent(
                                                 targetState = tabState,
@@ -218,66 +221,40 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                             ) { targetTab ->
                                                 when (targetTab) {
                                                     Tab.HOME -> {
-                                                        HorizonHomeScreen(
-                                                            userProfile = userProfile,
-                                                            totalBalance = totalBalance,
-                                                            monthlyIncome = monthlyIncome,
-                                                            monthlyExpense = monthlyExpense,
-                                                            todayExpense = todayExpense,
-                                                            dailyBudget = dailyBudget,
-                                                            onSetDailyBudget = { viewModel.setDailyBudget(it) },
-                                                            transactions = transactions,
-                                                            cards = cards,
-                                                            loans = loans,
-                                                            activeGoal = activeGoal,
-                                                            onSaveGoal = { title, target, saved ->
-                                                                viewModel.insertGoal(title, target, saved)
-                                                            },
-                                                            onDeleteGoal = { goalId -> viewModel.deleteGoal(goalId) },
-                                                            onCardClick = { card -> selectedCardForDetail = card },
-                                                            onNavigateToCards = { activeSubScreen = "banks" },
-                                                            onNavigateToLoans = { activeSubScreen = "loans" },
-                                                            onNavigateToSettings = { activeSubScreen = "settings" },
+                                                        com.example.ui.taraz.TarazHomeScreen(
+                                                            vm = viewModel,
+                                                            onOpenAccounts = { activeSubScreen = "banks" },
+                                                            onOpenReports = { activeSubScreen = "reports" },
+                                                            onOpenSettings = { activeSubScreen = "settings" },
                                                             onSeeAllTransactions = { viewModel.setTab(Tab.TRANSACTIONS) },
+                                                            onPayLoan = { loanToPay = it },
+                                                            onReviewPending = { pending ->
+                                                                viewModel.selectPendingTx(pending)
+                                                                viewModel.setSmsAssistantSheetOpen(true)
+                                                            },
                                                             onTransactionClick = { tx -> selectedTransactionForEdit = tx }
                                                         )
                                                     }
 
                                                     Tab.TRANSACTIONS -> {
-                                                        TransactionsScreen(
-                                                            transactions = transactions,
-                                                            onDeleteTransaction = { tx ->
-                                                                viewModel.deleteTransaction(tx)
-                                                            },
-                                                            onAddTransactionClick = {
-                                                                initialIsExpenseForDialog = true
-                                                                isAddTransactionOpen = true
-                                                            },
-                                                            onTransactionClick = { tx ->
-                                                                selectedTransactionForEdit = tx
-                                                            }
+                                                        com.example.ui.taraz.TarazTransactionsScreen(
+                                                            vm = viewModel,
+                                                            onTransactionClick = { tx -> selectedTransactionForEdit = tx }
                                                         )
                                                     }
 
                                                     Tab.LOANS -> {
-                                                        LoansSubScreen(
-                                                            loans = loans,
-                                                            cards = cards,
-                                                            onBack = { viewModel.setTab(Tab.HOME) },
-                                                            onPayInstallment = { loan ->
-                                                                viewModel.payInstallment(loan)
-                                                            },
-                                                            onAddLoan = { bankName, loanName, totalAmount, paidAmount, installmentAmount, dueDay ->
-                                                                viewModel.addLoan(bankName, loanName, totalAmount, paidAmount, installmentAmount, dueDay)
-                                                            }
+                                                        com.example.ui.taraz.TarazLoansScreen(
+                                                            vm = viewModel,
+                                                            onPay = { loanToPay = it }
                                                         )
                                                     }
 
                                                     Tab.REPORTS -> {
-                                                        ReportsScreen(
-                                                            transactions = transactions,
-                                                            monthlyIncome = monthlyIncome,
-                                                            monthlyExpense = monthlyExpense
+                                                        com.example.ui.taraz.TarazReportsScreen(
+                                                            vm = viewModel,
+                                                            onBack = { viewModel.setTab(Tab.HOME) },
+                                                            onAskAssistant = { isAiSheetOpen = true }
                                                         )
                                                     }
                                                 }
@@ -285,39 +262,26 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 
                                             } // Close the inner content Box
                                             
-                                            // HorizonBottomBar floating on top
+                                            // The "لایه" floating bar with its separate "+" button.
                                             if (!isKeyboardVisible) {
-                                                HorizonBottomBar(
-                                                    currentTab = tabState,
-                                                    onTabSelected = { viewModel.setTab(it) },
-                                                    onAddClick = {
-                                                        initialIsExpenseForDialog = true
+                                                com.example.ui.taraz.TarazBottomBar(
+                                                    current = if (isAiSheetOpen) com.example.ui.taraz.TarazNav.ASSISTANT
+                                                              else tabState.toNav(),
+                                                    onSelect = { nav ->
+                                                        when (nav) {
+                                                            com.example.ui.taraz.TarazNav.HOME -> viewModel.setTab(Tab.HOME)
+                                                            com.example.ui.taraz.TarazNav.TRANSACTIONS -> viewModel.setTab(Tab.TRANSACTIONS)
+                                                            com.example.ui.taraz.TarazNav.LOANS -> viewModel.setTab(Tab.LOANS)
+                                                            com.example.ui.taraz.TarazNav.ASSISTANT -> isAiSheetOpen = true
+                                                        }
+                                                    },
+                                                    onAdd = {
+                                                        addAsTransfer = false
                                                         isAddTransactionOpen = true
                                                     },
                                                     modifier = Modifier.align(Alignment.BottomCenter)
                                                 )
                                             }
-
-                                             // AI Assistant Floating Action Button (with contextual advice bubble)
-                                             if (!isKeyboardVisible) {
-                                                 AiFloatingButton(
-                                                     currentTab = tabState,
-                                                     transactions = transactions,
-                                                     loans = loans,
-                                                     totalBalance = totalBalance,
-                                                     monthlyIncome = monthlyIncome,
-                                                     monthlyExpense = monthlyExpense,
-                                                     onClick = { prefilledPrompt ->
-                                                         if (prefilledPrompt != null) {
-                                                             viewModel.sendChatMessage(prefilledPrompt)
-                                                         }
-                                                         isAiSheetOpen = true
-                                                     },
-                                                     modifier = Modifier
-                                                         .align(Alignment.BottomEnd)
-                                                         .padding(bottom = 100.dp, end = 16.dp)
-                                                 )
-                                             }
                                         }
                                     }
                                 }
@@ -367,11 +331,15 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             // Adding uses the new sheet; editing an existing row keeps the
                             // old one, which already knows how to delete and pre-fill.
                             if (isAddTransactionOpen) {
-                                AddEntrySheet(
+                                com.example.ui.taraz.TarazAddSheet(
                                     cards = cards,
                                     categories = categories,
-                                    startAsExpense = initialIsExpenseForDialog,
-                                    onDismiss = { isAddTransactionOpen = false },
+                                    history = transactions,
+                                    startAsTransfer = addAsTransfer,
+                                    onDismiss = {
+                                        isAddTransactionOpen = false
+                                        addAsTransfer = false
+                                    },
                                     onSaveEntry = { title, amount, category, isExpense, bankName ->
                                         viewModel.addTransaction(title, amount, category, isExpense, bankName)
                                     },
@@ -392,30 +360,27 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 )
                             }
 
-                            if (selectedTransactionForEdit != null) {
-                                PremiumTransactionSheet(
+                            loanToPay?.let { loan ->
+                                com.example.ui.taraz.PayInstallmentSheet(
+                                    loan = loan,
                                     cards = cards,
-                                    existingTransaction = selectedTransactionForEdit,
-                                    onDismiss = {
-                                        isAddTransactionOpen = false
-                                        selectedTransactionForEdit = null
-                                    },
-                                    onConfirm = { title, amount, category, isExpense, bankName ->
-                                        val oldTx = selectedTransactionForEdit!!
-                                        val updatedTx = oldTx.copy(
-                                            title = title,
-                                            amount = amount,
-                                            category = category,
-                                            isExpense = isExpense,
-                                            bankName = bankName
-                                        )
-                                        viewModel.updateTransaction(oldTx, updatedTx)
-                                        isAddTransactionOpen = false
+                                    onDismiss = { loanToPay = null },
+                                    onConfirm = { account -> viewModel.payInstallmentFrom(loan, account) }
+                                )
+                            }
+
+                            selectedTransactionForEdit?.let { oldTx ->
+                                com.example.ui.taraz.TarazTxSheet(
+                                    tx = oldTx,
+                                    cards = cards,
+                                    categories = categories,
+                                    onDismiss = { selectedTransactionForEdit = null },
+                                    onSave = { updated ->
+                                        viewModel.updateTransaction(oldTx, updated)
                                         selectedTransactionForEdit = null
                                     },
                                     onDelete = { tx ->
                                         viewModel.deleteTransaction(tx)
-                                        isAddTransactionOpen = false
                                         selectedTransactionForEdit = null
                                     }
                                 )
