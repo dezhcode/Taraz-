@@ -41,6 +41,17 @@ jobs:
               -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
+      # Same secrets handling as build-apk.yml on main: use the real key when
+      # the repository has one, otherwise the placeholders in .env.example.
+      - name: Prepare .env
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          cp .env.example .env
+          if [ -n "$GEMINI_API_KEY" ]; then
+            echo "GEMINI_API_KEY=$GEMINI_API_KEY" >> .env
+          fi
+
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
 
