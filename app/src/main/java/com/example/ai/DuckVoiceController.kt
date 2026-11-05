@@ -124,7 +124,7 @@ class DuckVoiceController(
         tts = TextToSpeech(context.applicationContext) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 isTtsReady = true
-                val faResult = tts?.setLanguage(Locale("fa", "IR"))
+                val faResult = tts?.setLanguage(Locale.forLanguageTag("fa-IR"))
                 if (faResult == TextToSpeech.LANG_MISSING_DATA || faResult == TextToSpeech.LANG_NOT_SUPPORTED) {
                     tts?.setLanguage(Locale.US)
                 }
