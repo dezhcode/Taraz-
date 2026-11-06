@@ -274,13 +274,13 @@ private fun OnboardingPager(onFinish: () -> Unit, onLogin: () -> Unit) {
     var page by remember { mutableIntStateOf(0) }
     val titles = listOf(
         "همهٔ حساب‌هایتان، یک نگاه",
-        "پیامک بانک، خودش ثبت می‌شود",
-        "از دستیار تراز بپرسید"
+        "قسط، چک و قبض سر موعد",
+        "پول کجا رفت؟ گزارش ماه"
     )
     val bodies = listOf(
         "کارت‌ها، پول نقد و اقساط کنار هم؛ با روزشماری که نشان می‌دهد امروز چقدر جا دارید.",
-        "هر پیامک برداشت یا واریز اول برای تأیید شما می‌آید. تراز قالب پیامک هر بانک را یاد می‌گیرد.",
-        "«این ماه کجا خرج کردم؟» را بپرسید؛ جواب را با عدد و نمودار می‌گیرید. هر تغییری فقط با تأیید شما."
+        "پیش از هر سررسید یادآوری می‌گیرید و پرداخت را با یک لمس ثبت می‌کنید.",
+        "هزینه‌ها به تفکیک دسته، مقایسه با ماه قبل و پیشرفت هدف پس‌انداز؛ همه با عدد کامل."
     )
     val last = page == 2
 
@@ -319,28 +319,33 @@ private fun OnboardingPager(onFinish: () -> Unit, onLogin: () -> Unit) {
                             }
                         }
                         1 -> {
-                            Column(Modifier.fillMaxWidth().cardSurface(18.dp).padding(horizontal = 14.dp, vertical = 12.dp)) {
-                                Text("بانک ملت", style = lt(12.sp, FontWeight.Bold))
-                                Text("برداشت: ۲۵۳,۴۰۰\nداروخانه دکتر شفا", style = lt(12.sp, color = L.Muted, lineHeight = 22.sp))
-                            }
-                            Text("↓", style = lt(22.sp, FontWeight.Bold, L.Primary), modifier = Modifier.align(Alignment.CenterHorizontally))
-                            Row(Modifier.fillMaxWidth().cardSurface(18.dp).padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text("داروخانه", style = lt(14.sp, FontWeight.SemiBold))
-                                    Text("سلامت · ملت", style = lt(12.sp, FontWeight.SemiBold, L.AmberText))
+                            listOf(
+                                Triple("قسط وام", "۳ روز دیگر", "۴٬۲۰۰٬۰۰۰"),
+                                Triple("قبض برق", "فردا", "۳۸۵٬۰۰۰"),
+                                Triple("چک به علی", "۱۵ آذر", "۲۰٬۰۰۰٬۰۰۰")
+                            ).forEachIndexed { i, (t, d, a) ->
+                                Row(
+                                    Modifier.fillMaxWidth().cardSurface(18.dp).padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(t, style = lt(14.sp, FontWeight.SemiBold))
+                                        Text(d, style = lt(12.sp, FontWeight.SemiBold, if (i == 1) L.AmberText else L.Muted))
+                                    }
+                                    Text(a, style = lt(14.sp, FontWeight.SemiBold))
                                 }
-                                Text("−۲۵۳٬۴۰۰", style = lt(14.sp, FontWeight.SemiBold))
                             }
                         }
                         else -> {
-                            Box(
-                                Modifier.align(Alignment.Start).fillMaxWidth(0.8f).clip(RoundedCornerShape(16.dp, 16.dp, 16.dp, 6.dp)).background(L.Surface).padding(horizontal = 12.dp, vertical = 10.dp)
-                            ) { Text("این ماه کجا بیشتر خرج کردم؟", style = lt(13.sp, lineHeight = 23.sp)) }
-                            Box(
-                                Modifier.align(Alignment.End).fillMaxWidth(0.88f).clip(RoundedCornerShape(16.dp, 16.dp, 6.dp, 16.dp)).background(L.PrimarySoft).padding(horizontal = 12.dp, vertical = 10.dp)
-                            ) { Text("بیشترش خوراک بوده: ۹٫۴ میلیون. شام بیرون نسبت به ماه قبل ۳۰٪ بیشتر شده.", style = lt(13.sp, color = L.Info, lineHeight = 23.sp)) }
-                            Box(Modifier.align(Alignment.End).height(32.dp).clip(CircleShape).background(L.Primary).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
-                                Text("گزارش کامل", style = lt(12.sp, FontWeight.Bold, Color.White))
+                            Column(Modifier.fillMaxWidth().cardSurface(18.dp).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                listOf("خوراک" to 0.9f, "رفت‌وآمد" to 0.55f, "قبوض" to 0.35f, "تفریح" to 0.2f).forEach { (n, f) ->
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text(n, style = lt(12.sp, FontWeight.SemiBold))
+                                        Box(Modifier.fillMaxWidth().height(8.dp).clip(CircleShape).background(L.Line)) {
+                                            Box(Modifier.fillMaxWidth(f).height(8.dp).clip(CircleShape).background(L.Primary))
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

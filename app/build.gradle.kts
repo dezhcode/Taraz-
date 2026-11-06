@@ -14,12 +14,12 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "ir.taraz.finance"
+    applicationId = "taraz.dezhcode.app"
     minSdk = 24
     targetSdk = 36
-    // هر ساخت CI شمارهٔ تازه می‌گیرد تا گوشی‌ها (مثلاً کش آیکن MIUI) نسخهٔ جدید را بشناسند
-    versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()?.plus(100) ?: 1
-    versionName = "1.0"
+    // نسخهٔ انتشار مایکت. برای نسخهٔ بعد هر دو را بالا ببرید (مثلاً 24.0.2 → 240002)
+    versionCode = 240001
+    versionName = "24.0.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -29,7 +29,7 @@ android {
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
       storeFile = file(keystorePath)
       storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
+      keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
       keyPassword = System.getenv("KEY_PASSWORD")
     }
     create("debugConfig") {
@@ -46,7 +46,9 @@ android {
       isMinifyEnabled = true
       isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
+      // بدون کلید انتشار، نسخهٔ امضانشده ساخته می‌شود (فقط برای بررسی R8)
+      val releaseKey = signingConfigs.getByName("release")
+      signingConfig = if (releaseKey.storeFile?.exists() == true) releaseKey else null
     }
     debug {
       signingConfig = signingConfigs.getByName("debugConfig")

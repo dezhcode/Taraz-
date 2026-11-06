@@ -19,9 +19,9 @@ import kotlinx.coroutines.launch
 
 /** Actions from the app-icon shortcuts and the widget's buttons. */
 object QuickAction {
-    const val ADD_EXPENSE = "ir.taraz.finance.ADD_EXPENSE"
-    const val ADD_INCOME = "ir.taraz.finance.ADD_INCOME"
-    const val VOICE = "ir.taraz.finance.VOICE_ENTRY"
+    const val ADD_EXPENSE = "taraz.dezhcode.app.ADD_EXPENSE"
+    const val ADD_INCOME = "taraz.dezhcode.app.ADD_INCOME"
+    const val VOICE = "taraz.dezhcode.app.VOICE_ENTRY"
 }
 
 /**
@@ -97,7 +97,7 @@ class TodayWidget : AppWidgetProvider() {
                 R.id.widget_add_expense to QuickAction.ADD_EXPENSE,
                 R.id.widget_add_income to QuickAction.ADD_INCOME,
                 R.id.widget_voice to QuickAction.VOICE
-            ).forEachIndexed { i, (viewId, action) ->
+            ).filter { it.second != QuickAction.VOICE || com.example.Features.VOICE }.forEachIndexed { i, (viewId, action) ->
                 val pi = PendingIntent.getActivity(
                     context, 10 + i,
                     Intent(context, MainActivity::class.java).setAction(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
@@ -105,6 +105,8 @@ class TodayWidget : AppWidgetProvider() {
                 )
                 views.setOnClickPendingIntent(viewId, pi)
             }
+            // ثبت با صدا فعلاً خاموش است
+            if (!com.example.Features.VOICE) views.setViewVisibility(R.id.widget_voice, android.view.View.GONE)
             ids.forEach { manager.updateAppWidget(it, views) }
         }
 

@@ -34,22 +34,10 @@ jobs:
           gradle-version: 'current'
 
       - name: Prepare .env and local.properties for secrets-gradle-plugin
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        # کلید Gemini دیگر داخل APK گذاشته نمی‌شود (برنامه از آن استفاده نمی‌کند و هر کس APK را باز کند می‌بیندش)
         run: |
-          if [ ! -f .env ]; then
-            if [ -f .env.example ]; then
-              cp .env.example .env
-            else
-              echo "GEMINI_API_KEY=DUMMY_API_KEY" > .env
-            fi
-          fi
-          if [ -n "$GEMINI_API_KEY" ]; then
-            echo "GEMINI_API_KEY=$GEMINI_API_KEY" > .env
-            echo "GEMINI_API_KEY=$GEMINI_API_KEY" >> local.properties
-          else
-            cat .env >> local.properties
-          fi
+          echo "GEMINI_API_KEY=DUMMY_API_KEY" > .env
+          cat .env >> local.properties
 
       - name: Restore fixed debug keystore
         env:
@@ -91,6 +79,32 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
+      - name: Build Release APK (Myket)
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+        run: |
+          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            export KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+            echo "Signing release with the key from secrets"
+          else
+            export KEYSTORE_PATH="$RUNNER_TEMP/missing.jks"
+            echo "::warning::RELEASE_KEYSTORE_BASE64 not set; building an UNSIGNED release APK (not uploadable to Myket)"
+          fi
+          if [ -f ./gradlew ]; then chmod +x ./gradlew; ./gradlew assembleRelease --stacktrace; else gradle assembleRelease --stacktrace; fi
+          mkdir -p out
+          for f in app/build/outputs/apk/release/*.apk; do
+            case "$f" in
+              *unsigned*) cp "$f" out/Taraz-24.0.1-release-unsigned.apk ;;
+              *) cp "$f" out/Taraz-24.0.1-myket.apk ;;
+            esac
+          done
+          ls -la out
+          rm -f "$RUNNER_TEMP/release.jks"
+
       - name: Publish APK to GitHub Release
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
@@ -99,4 +113,6 @@ jobs:
           name: Taraz build ${{ github.run_number }} (${{ github.ref_name }})
           target_commitish: ${{ github.sha }}
           prerelease: true
-          files: app/build/outputs/apk/debug/*.apk
+          files: |
+            app/build/outputs/apk/debug/*.apk
+            out/*.apk

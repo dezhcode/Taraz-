@@ -53,7 +53,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        quickAction.value = intent.action?.takeIf { it.startsWith("ir.taraz.finance.") }
+        quickAction.value = intent.action?.takeIf { it.startsWith("taraz.dezhcode.app.") }
     }
 
     /** When the app last went to the background; 0 while it is in front. */
@@ -80,7 +80,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        if (savedInstanceState == null) quickAction.value = intent?.action?.takeIf { it.startsWith("ir.taraz.finance.") }
+        if (savedInstanceState == null) quickAction.value = intent?.action?.takeIf { it.startsWith("taraz.dezhcode.app.") }
         enableEdgeToEdge()
 
         com.example.utils.NotificationHelper.createNotificationChannel(this)
@@ -166,7 +166,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                         com.example.reminders.WeeklySummaryWorker.ACTION_OPEN -> { viewModel.setTab(Tab.REPORTS); weeklyOpen = true }
                         com.example.widget.QuickAction.ADD_EXPENSE -> { initialIsExpenseForDialog = true; addWithVoice = false; isAddTransactionOpen = true }
                         com.example.widget.QuickAction.ADD_INCOME -> { initialIsExpenseForDialog = false; addWithVoice = false; isAddTransactionOpen = true }
-                        com.example.widget.QuickAction.VOICE -> { initialIsExpenseForDialog = true; addWithVoice = true; isAddTransactionOpen = true }
+                        com.example.widget.QuickAction.VOICE -> { initialIsExpenseForDialog = true; addWithVoice = com.example.Features.VOICE; isAddTransactionOpen = true }
                     }
                     if (pendingQuick != null) quickAction.value = null
                 }
@@ -227,9 +227,11 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                     when (id) {
                         "expense" -> { initialIsExpenseForDialog = true; addWithVoice = false; isAddTransactionOpen = true }
                         "income" -> { initialIsExpenseForDialog = false; addWithVoice = false; isAddTransactionOpen = true }
-                        "voice" -> { initialIsExpenseForDialog = true; addWithVoice = true; isAddTransactionOpen = true }
+                        "voice" -> if (com.example.Features.VOICE) { initialIsExpenseForDialog = true; addWithVoice = true; isAddTransactionOpen = true }
+                            else showToast("ثبت با صدا به زودی فعال می‌شود")
                         "transfer" -> isTransferOpen = true
-                        "sms" -> viewModel.setSmsAssistantSheetOpen(true)
+                        "sms" -> if (com.example.Features.SMS) viewModel.setSmsAssistantSheetOpen(true)
+                            else showToast("ثبت خودکار از پیامک بانک به زودی فعال می‌شود")
                         "recurring" -> openSub("recurring")
                         "pay_loan" -> {
                             val active = loans.filter { !it.isSettled }
@@ -937,7 +939,18 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                      containerColor = com.example.ui.layer.L.Bg
                                  ) {
                                      Box(modifier = Modifier.fillMaxHeight(0.88f)) {
-                                         run {
+                                         if (!com.example.Features.AI) {
+                                             com.example.ui.layer.ComingSoonPanel(
+                                                 title = "دستیار هوشمند تراز",
+                                                 body = "به‌زودی می‌توانید دربارهٔ خرج‌ها و حساب‌هایتان به زبان خودمانی بپرسید و با یک جمله تراکنش ثبت کنید.",
+                                                 points = listOf(
+                                                     "«این ماه کجا بیشتر خرج کردم؟»",
+                                                     "«۸۰ تومن ناهار دادم» و ثبت خودکار",
+                                                     "گفتن به‌جای نوشتن (صدا به متن)"
+                                                 ),
+                                                 onClose = { isAiSheetOpen = false }
+                                             )
+                                         } else run {
                                              AiAssistantScreen(
                                                  messages = chatMessages, toastMessage = chatErrorToast, onDismissToast = { viewModel.clearChatErrorToast() },
                                                  isLoading = isAiLoading,

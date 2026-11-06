@@ -33,3 +33,16 @@
     @android.webkit.JavascriptInterface <methods>;
 }
 -keepattributes JavascriptInterface
+
+# کتابخانه‌هایی که به کلاس‌های اختیاری اشاره می‌کنند (R8 بدون این‌ها خطای Missing class می‌دهد)
+-dontwarn com.google.errorprone.annotations.**
+-dontwarn javax.annotation.**
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**
+-dontwarn com.google.j2objc.annotations.**
+-dontwarn org.checkerframework.**
+
+# Room/WorkManager با نام کلاس کار می‌کنند
+-keep class * extends androidx.work.ListenableWorker { <init>(...); }
+-keep class com.example.data.** { *; }

@@ -458,7 +458,7 @@ private fun RecentSection(
     val recent = remember(transactions) { transactions.sortedByDescending { it.date }.take(4) }
     Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (recent.isEmpty()) {
-            Text("هنوز تراکنشی ثبت نشده. با دکمهٔ + یا از پیامک بانک ثبت کنید.", style = lt(13.sp, color = L.Muted, lineHeight = 22.sp))
+            Text(if (com.example.Features.SMS) "هنوز تراکنشی ثبت نشده. با دکمهٔ + یا از پیامک بانک ثبت کنید." else "هنوز تراکنشی ثبت نشده. با دکمهٔ + ثبت کنید.", style = lt(13.sp, color = L.Muted, lineHeight = 22.sp))
         }
         recent.forEach { tx -> TransactionCard(tx, cards, categories) { onTransactionClick(tx) } }
     }

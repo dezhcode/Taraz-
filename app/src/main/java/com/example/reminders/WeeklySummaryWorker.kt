@@ -46,6 +46,6 @@ class WeeklySummaryWorker(context: Context, params: WorkerParameters) : Coroutin
 
     companion object {
         const val KEY_ENABLED = "weekly_summary_enabled"
-        const val ACTION_OPEN = "ir.taraz.finance.WEEKLY_SUMMARY"
+        const val ACTION_OPEN = "taraz.dezhcode.app.WEEKLY_SUMMARY"
     }
 }

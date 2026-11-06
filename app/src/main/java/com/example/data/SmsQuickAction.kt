@@ -40,8 +40,8 @@ class SmsQuickAction : BroadcastReceiver() {
     }
 
     companion object {
-        const val ACTION_APPROVE = "ir.taraz.finance.SMS_APPROVE"
-        const val ACTION_DISMISS = "ir.taraz.finance.SMS_DISMISS"
+        const val ACTION_APPROVE = "taraz.dezhcode.app.SMS_APPROVE"
+        const val ACTION_DISMISS = "taraz.dezhcode.app.SMS_DISMISS"
         private const val EXTRA_ID = "pending_id"
 
         fun notificationId(pendingId: Int) = 30_000 + pendingId

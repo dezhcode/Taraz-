@@ -50,9 +50,9 @@ object HomeTools {
     val all = listOf(
         HomeTool("expense", "ثبت هزینه", "با دسته، برچسب و عکس فاکتور", Icons.Default.RemoveCircleOutline, G_RECORD),
         HomeTool("income", "ثبت درآمد", "حقوق، فروش، هدیه", Icons.Default.AddCircleOutline, G_RECORD),
-        HomeTool("voice", "با صدا", "«دیروز ۲۰۰ تومن به علی قرض دادم»", Icons.Default.Mic, G_RECORD),
+        HomeTool("voice", "با صدا", if (com.example.Features.VOICE) "«دیروز ۲۰۰ تومن به علی قرض دادم»" else com.example.Features.SOON, Icons.Default.Mic, G_RECORD),
         HomeTool("transfer", "انتقال", "بین حساب‌ها؛ در جمع هزینه نیست", Icons.AutoMirrored.Filled.CompareArrows, G_RECORD),
-        HomeTool("sms", "پیامک بانک", "تأیید برداشت و واریزها", Icons.Default.Sms, G_RECORD),
+        HomeTool("sms", "پیامک بانک", if (com.example.Features.SMS) "تأیید برداشت و واریزها" else com.example.Features.SOON, Icons.Default.Sms, G_RECORD),
         HomeTool("recurring", "تکراری‌ها", "اجاره، حقوق، اشتراک‌ها", Icons.Default.Autorenew, G_RECORD),
 
         HomeTool("pay_loan", "پرداخت قسط", "وام‌ها و خریدهای قسطی", Icons.Default.EventAvailable, G_PAY),
@@ -77,7 +77,7 @@ object HomeTools {
         HomeTool("weekly", "خلاصهٔ هفته", "هر جمعه ساعت ۸ شب", Icons.Default.Schedule, G_REPORT),
         HomeTool("year", "سال من", "مرور یک سال", Icons.Default.CalendarMonth, G_REPORT),
         HomeTool("share", "فرستادن گزارش", "عکس یا PDF، با پنهان کردن مبلغ", Icons.Default.Share, G_REPORT),
-        HomeTool("assistant", "دستیار", "پرسیدن به زبان خودمانی", Icons.Default.AutoAwesome, G_REPORT),
+        HomeTool("assistant", "دستیار", if (com.example.Features.AI) "پرسیدن به زبان خودمانی" else com.example.Features.SOON, Icons.Default.AutoAwesome, G_REPORT),
 
         HomeTool("search", "جستجو و فیلتر", "نوع، تاریخ، مبلغ، برچسب", Icons.Default.Search, G_KEEP),
         HomeTool("tags", "برچسب‌ها", "#سفر، #خانه؛ در گزارش‌ها", Icons.AutoMirrored.Filled.Label, G_KEEP),
@@ -89,12 +89,12 @@ object HomeTools {
     fun find(id: String): HomeTool? = byId[id]
 
     const val MAX_PINNED = 12
-    val defaultTools = listOf("voice", "transfer", "bills", "person_entry", "cheque", "assets", "report")
+    val defaultTools = listOf(if (com.example.Features.VOICE) "voice" else "income", "transfer", "bills", "person_entry", "cheque", "assets", "report")
 
     val sections = listOf(
         HomeSection("glance", "یک نگاه", "خرج ماه، بدهکارم، طلبکارم"),
         HomeSection("upcoming", "پیش رو", "قسط، قبض، چک و طلبِ ۷ روز آینده"),
-        HomeSection("sms", "پیامک‌های منتظر تأیید", "فقط وقتی پیامکی هست"),
+        HomeSection("sms", "پیامک‌های منتظر تأیید", if (com.example.Features.SMS) "فقط وقتی پیامکی هست" else com.example.Features.SOON),
         HomeSection("today", "خرج امروز", "نوار هفته و سقف روزانه"),
         HomeSection("tools", "ابزارهای من", "دکمه‌هایی که خودتان انتخاب کرده‌اید"),
         HomeSection("plan", "هدف و بودجه", "پیشرفت هدف و دستهٔ نزدیک سقف"),

@@ -131,7 +131,7 @@ fun LayerAddSheet(
     ) { granted -> if (granted) onVoice { applyDraft(it) } else helperMsg = "برای ثبت صوتی، دسترسی میکروفون لازم است." }
     // از میان‌بر «بگو و ثبت کن»: همان اول گوش بدهد
     LaunchedEffect(startWithVoice) {
-        if (startWithVoice) {
+        if (startWithVoice && com.example.Features.VOICE) {
             val ok = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED
             if (ok) { helperMsg = "بگویید، مثلاً «۸۰ تومن ناهار»"; onVoice { applyDraft(it) } }
@@ -222,6 +222,10 @@ fun LayerAddSheet(
                         Row(
                             Modifier.height(38.dp).clip(PillShape).background(if (isListening) L.Primary else L.Chip)
                                 .clickable {
+                                    if (!com.example.Features.VOICE) {
+                                        helperMsg = "ثبت با صدا به زودی فعال می‌شود."
+                                        return@clickable
+                                    }
                                     val ok = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
                                         android.content.pm.PackageManager.PERMISSION_GRANTED
                                     if (ok) { helperMsg = if (isListening) null else "بگویید، مثلاً «۸۰ تومن ناهار»"; onVoice { applyDraft(it) } }
@@ -232,6 +236,7 @@ fun LayerAddSheet(
                         ) {
                             Icon(Icons.Default.Mic, null, tint = if (isListening) Color.White else L.Ink, modifier = Modifier.size(18.dp))
                             Text(if (isListening) "گوش می‌دهم…" else "بگویید", style = lt(13.sp, FontWeight.SemiBold, if (isListening) Color.White else L.Ink))
+                            if (!com.example.Features.VOICE) SoonBadge()
                         }
                     }
                     helperMsg?.let {

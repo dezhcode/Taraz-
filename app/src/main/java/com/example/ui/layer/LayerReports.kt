@@ -342,8 +342,8 @@ fun LayerReportsScreen(
             }
         }
 
-        // پیوند به دستیار
-        Row(
+        // پیوند به دستیار (وقتی دستیار روشن است)
+        if (com.example.Features.AI) Row(
             Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(48.dp)
                 .clip(RoundedCornerShape(14.dp)).background(L.PrimarySoft).clickable {
                     // خلاصهٔ واقعی همین ماه برای دستیار؛ پاسخ در چت ذخیره می‌شود

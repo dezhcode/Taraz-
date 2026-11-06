@@ -186,7 +186,7 @@ fun LayerAccountsScreen(
                             if (card.cardNumber.length >= 4) Text("•••• ${fa(card.cardNumber.takeLast(4))}", style = lt(12.sp, color = L.Muted))
                         }
                         if (card.isCredit) Text(creditUsage(card), style = lt(11.sp, color = L.Muted), maxLines = 1)
-                        else if (hasAutoSms(card, senders)) StatusPill("پیامک خودکار روشن", L.GreenSoft, L.GreenText)
+                        else if (com.example.Features.SMS && hasAutoSms(card, senders)) StatusPill("پیامک خودکار روشن", L.GreenSoft, L.GreenText)
                         else StatusPill("ثبت دستی", L.Chip, L.Muted)
                     }
                     Text(if (hideAmounts) "••••" else money(card.balance), style = lt(15.sp, FontWeight.SemiBold))
@@ -254,8 +254,8 @@ fun LayerAccountDetailScreen(
             ActionTile("تراکنش‌ها", Icons.Default.List, Modifier.weight(1f), onOpenTransactions)
         }
 
-        // پیامک
-        if (!card.isCash) {
+        // پیامک (در نسخهٔ فعلی خاموش است)
+        if (!card.isCash && com.example.Features.SMS) {
             LayerCard(radius = 20.dp, padding = 14.dp) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("ثبت خودکار از پیامک بانک", style = lt(14.sp, FontWeight.SemiBold), modifier = Modifier.weight(1f))

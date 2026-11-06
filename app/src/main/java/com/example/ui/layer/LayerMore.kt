@@ -399,13 +399,14 @@ fun LayerSettingsScreen(
             NavRow("امتحان صفحهٔ قفل", null, divider = false, onClick = onTestLock)
         }
         SettingsGroup("اعلان‌ها") {
-            SwitchRow("اعلان‌ها و یادآور اقساط", "سه روز و یک روز قبل از سررسید، و پیامک‌های تازهٔ بانک", alertsEnabled, onAlertsChange, divider = false)
+            SwitchRow("اعلان‌ها و یادآور اقساط", if (com.example.Features.SMS) "سه روز و یک روز قبل از سررسید، و پیامک‌های تازهٔ بانک" else "سه روز و یک روز قبل از سررسید اقساط، چک‌ها و قبض‌ها", alertsEnabled, onAlertsChange, divider = false)
         }
         SettingsGroup("داده‌ها") {
-            NavRow("پیامک‌های بانکی", if (smsBankCount > 0) "${fa(smsBankCount)} بانک روشن" else "خاموش", onClick = onOpenSms)
+            if (com.example.Features.SMS) NavRow("پیامک‌های بانکی", if (smsBankCount > 0) "${fa(smsBankCount)} بانک روشن" else "خاموش", onClick = onOpenSms)
+            else NavRow("پیامک‌های بانکی", com.example.Features.SOON, onClick = {})
             NavRow("پشتیبان و خروجی اکسل", null, divider = false, onClick = onOpenBackup)
         }
-        SettingsGroup("دستیار") {
+        if (com.example.Features.AI) SettingsGroup("دستیار") {
             NavRow(
                 "بررسی اتصال دستیار",
                 when {

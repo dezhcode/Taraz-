@@ -6,8 +6,8 @@
         android:icon="@drawable/ic_sc_minus"
         android:shortcutShortLabel="@string/sc_expense">
         <intent
-            android:action="ir.taraz.finance.ADD_EXPENSE"
-            android:targetPackage="ir.taraz.finance"
+            android:action="taraz.dezhcode.app.ADD_EXPENSE"
+            android:targetPackage="taraz.dezhcode.app"
             android:targetClass="com.example.MainActivity" />
     </shortcut>
     <shortcut
@@ -16,18 +16,8 @@
         android:icon="@drawable/ic_sc_plus"
         android:shortcutShortLabel="@string/sc_income">
         <intent
-            android:action="ir.taraz.finance.ADD_INCOME"
-            android:targetPackage="ir.taraz.finance"
-            android:targetClass="com.example.MainActivity" />
-    </shortcut>
-    <shortcut
-        android:shortcutId="voice_entry"
-        android:enabled="true"
-        android:icon="@drawable/ic_sc_mic"
-        android:shortcutShortLabel="@string/sc_voice">
-        <intent
-            android:action="ir.taraz.finance.VOICE_ENTRY"
-            android:targetPackage="ir.taraz.finance"
+            android:action="taraz.dezhcode.app.ADD_INCOME"
+            android:targetPackage="taraz.dezhcode.app"
             android:targetClass="com.example.MainActivity" />
     </shortcut>
 </shortcuts>
