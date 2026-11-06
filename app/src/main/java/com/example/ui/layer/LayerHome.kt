@@ -184,7 +184,10 @@ fun LayerHomeScreen(
             totalBalance = totalBalance,
             monthlyIncome = monthlyIncome,
             monthlyExpense = monthlyExpense,
+            owed = glance.owed,
+            owe = glance.owe,
             onOpenAccounts = onOpenAccounts,
+            onOpenObligations = onOpenObligations,
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp)
         )
 
@@ -252,9 +255,9 @@ private fun GlanceCard(g: HomeGlance, onOpenReports: () -> Unit, onOpenObligatio
             g.spent, L.RedText, onOpenReports
         )
         Box(Modifier.padding(horizontal = 12.dp).fillMaxWidth().height(1.dp).background(L.Line))
-        GlanceRow("بدهکارم", g.oweNote.ifBlank { "بدهی‌ای ندارید" }, g.owe, if (g.owe > 0) L.Ink else L.Muted, onOpenObligations)
+        GlanceRow("بدهکار", g.oweNote.ifBlank { "بدهی‌ای ندارید" }, g.owe, if (g.owe > 0) L.Ink else L.Muted, onOpenObligations)
         Box(Modifier.padding(horizontal = 12.dp).fillMaxWidth().height(1.dp).background(L.Line))
-        GlanceRow("طلبکارم", g.owedNote.ifBlank { "طلبی ندارید" }, g.owed, if (g.owed > 0) L.Green else L.Muted, onOpenObligations)
+        GlanceRow("بستانکار", g.owedNote.ifBlank { "طلبی ندارید" }, g.owed, if (g.owed > 0) L.Green else L.Muted, onOpenObligations)
         val net = g.balance + g.owed - g.owe
         Row(
             Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp))
@@ -472,7 +475,10 @@ private fun WalletStack(
     totalBalance: Long,
     monthlyIncome: Long,
     monthlyExpense: Long,
+    owed: Long,
+    owe: Long,
     onOpenAccounts: () -> Unit,
+    onOpenObligations: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val month = JalaliDate.today().monthName
@@ -509,6 +515,23 @@ private fun WalletStack(
                 )
                 Spacer(Modifier.width(6.dp))
                 Text("تومان", style = lt(14.sp, color = Color.White), modifier = Modifier.padding(bottom = 7.dp))
+            }
+            // بستانکار و بدهکار جدا، و جمع کل؛ موجودی اصلی بالا دست‌نخورده می‌ماند
+            Row(Modifier.padding(top = 12.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                WalletBox("بستانکار", "\u200E+" + money(owed), Modifier.weight(1f), onOpenObligations)
+                WalletBox("بدهکار", "\u200E−" + money(owe), Modifier.weight(1f), onOpenObligations)
+            }
+            val net = totalBalance + owed - owe
+            Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("جمع کل", style = lt(13.sp, FontWeight.SemiBold, Color.White))
+                    Text("موجودی + بستانکار − بدهکار", style = lt(11.sp, color = L.OnPrimarySoft))
+                }
+                Spacer(Modifier.width(8.dp))
+                FitText(
+                    (if (net < 0) "\u200E−" else "") + money(kotlin.math.abs(net)) + " تومان",
+                    lt(16.sp, FontWeight.Bold, if (net < 0) Color(0xFFFFC56B) else Color.White)
+                )
             }
             Box(Modifier.padding(vertical = 12.dp).fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.22f)))
             val pct = if (monthlyIncome > 0) ((monthlyExpense * 100) / monthlyIncome).toInt() else null
@@ -547,6 +570,18 @@ private fun WalletStack(
                 FitText(money(monthlyExpense), lt(12.sp, FontWeight.Bold, Color.White), minSize = 9.sp)
             }
         }
+    }
+}
+
+@Composable
+private fun WalletBox(label: String, value: String, modifier: Modifier, onClick: () -> Unit) {
+    Column(
+        modifier.clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.14f)).clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(label, style = lt(11.sp, color = L.OnPrimarySoft))
+        FitText(value, lt(15.sp, FontWeight.Bold, Color.White), minSize = 10.sp)
     }
 }
 

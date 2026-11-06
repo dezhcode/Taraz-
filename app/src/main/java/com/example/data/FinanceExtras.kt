@@ -95,12 +95,8 @@ data class Debt(
     /** Effect on the balance with the person: positive means they owe me. */
     val signedAmount: Long get() = if (settled) 0L else if (owedToMe) amount else -amount
 
-    val kindLabel: String get() = when {
-        !isRepayment && owedToMe -> "قرض دادم"
-        !isRepayment -> "قرض گرفتم"
-        owedToMe -> "پس دادم"
-        else -> "پس گرفتم"
-    }
+    /** برچسب رسمی: پول به شخص داده شد ← بستانکار؛ از شخص گرفته شد ← بدهکار */
+    val kindLabel: String get() = if (owedToMe) "بستانکار" else "بدهکار"
 }
 
 @Dao

@@ -359,10 +359,10 @@ fun LayerAddSheet(
                             val out = type == EntryType.EXPENSE
                             Text(
                                 when {
-                                    out && bal < 0 -> "از بدهی شما به ${chosen.name} کم می‌شود (پس دادن)."
-                                    out -> "به طلب شما از ${chosen.name} اضافه می‌شود (قرض دادن)."
-                                    bal > 0 -> "از طلب شما از ${chosen.name} کم می‌شود (پس گرفتن)."
-                                    else -> "به بدهی شما به ${chosen.name} اضافه می‌شود (قرض گرفتن)."
+                                    out && bal < 0 -> "بستانکار: از بدهی شما به ${chosen.name} کم می‌شود."
+                                    out -> "بستانکار: ${chosen.name} به همین مبلغ به شما بدهکار می‌شود."
+                                    bal > 0 -> "بدهکار: از طلب شما از ${chosen.name} کم می‌شود."
+                                    else -> "بدهکار: شما به همین مبلغ به ${chosen.name} بدهکار می‌شوید."
                                 } + " در هزینه و درآمد ماه حساب نمی‌شود.",
                                 style = lt(12.sp, color = L.PrimaryText, lineHeight = 20.sp), modifier = Modifier.padding(top = 6.dp)
                             )

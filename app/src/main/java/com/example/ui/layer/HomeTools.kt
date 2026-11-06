@@ -64,7 +64,7 @@ object HomeTools {
         HomeTool("add_account", "حساب تازه", "کارت بانکی، اعتباری یا نقد", Icons.Default.AddCard, G_PAY),
 
         HomeTool("add_person", "شخص جدید", "حساب جدا برای هر نفر", Icons.Default.PersonAdd, G_PEOPLE),
-        HomeTool("person_entry", "قرض دادم / گرفتم", "و پس دادن، با موعد", Icons.Default.Groups, G_PEOPLE),
+        HomeTool("person_entry", "بستانکار / بدهکار", "حساب با اشخاص، با موعد", Icons.Default.Groups, G_PEOPLE),
         HomeTool("split", "تقسیم خرج", "سهم من هزینه، سهم بقیه طلب", Icons.AutoMirrored.Filled.CallSplit, G_PEOPLE),
         HomeTool("people", "حساب اشخاص", "چه کسی به چه کسی بدهکار است", Icons.Default.NotificationsActive, G_PEOPLE),
 
@@ -92,7 +92,7 @@ object HomeTools {
     val defaultTools = listOf(if (com.example.Features.VOICE) "voice" else "income", "transfer", "bills", "person_entry", "cheque", "assets", "report")
 
     val sections = listOf(
-        HomeSection("glance", "یک نگاه", "خرج ماه، بدهکارم، طلبکارم"),
+        HomeSection("glance", "یک نگاه", "خرج ماه، بدهکار، بستانکار"),
         HomeSection("upcoming", "پیش رو", "قسط، قبض، چک و طلبِ ۷ روز آینده"),
         HomeSection("sms", "پیامک‌های منتظر تأیید", if (com.example.Features.SMS) "فقط وقتی پیامکی هست" else com.example.Features.SOON),
         HomeSection("today", "خرج امروز", "نوار هفته و سقف روزانه"),

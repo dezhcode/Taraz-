@@ -214,7 +214,9 @@ fun LField(
     visualTransformation: VisualTransformation = VisualTransformation.None,
     suffix: String? = null,
     singleLine: Boolean = true,
-    hint: String? = null
+    hint: String? = null,
+    /** برای شمارهٔ کارت و مانند آن: ارقام از چپ به راست نوشته شوند */
+    ltr: Boolean = false
 ) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, style = lt(13.sp, FontWeight.SemiBold))
@@ -228,20 +230,25 @@ fun LField(
                 .padding(horizontal = 14.dp),
             verticalAlignment = if (singleLine) Alignment.CenterVertically else Alignment.Top
         ) {
-            Box(Modifier.weight(1f).then(if (singleLine) Modifier else Modifier.padding(top = 14.dp))) {
-                if (value.isEmpty() && placeholder.isNotEmpty()) {
-                    Text(placeholder, style = lt(14.sp, color = L.Placeholder))
+            val dir = if (ltr) androidx.compose.ui.unit.LayoutDirection.Ltr else androidx.compose.ui.platform.LocalLayoutDirection.current
+            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides dir) {
+                Box(Modifier.weight(1f).then(if (singleLine) Modifier else Modifier.padding(top = 14.dp))) {
+                    if (value.isEmpty() && placeholder.isNotEmpty()) {
+                        Text(placeholder, style = lt(14.sp, color = L.Placeholder).let { if (ltr) it.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr) else it })
+                    }
+                    BasicTextField(
+                        value = value,
+                        onValueChange = onChange,
+                        singleLine = singleLine,
+                        textStyle = lt(15.sp).let {
+                            if (ltr) it.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr, letterSpacing = 1.sp) else it
+                        },
+                        cursorBrush = SolidColor(L.Primary),
+                        keyboardOptions = keyboardOptions,
+                        visualTransformation = visualTransformation,
+                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = label }
+                    )
                 }
-                BasicTextField(
-                    value = value,
-                    onValueChange = onChange,
-                    singleLine = singleLine,
-                    textStyle = lt(15.sp),
-                    cursorBrush = SolidColor(L.Primary),
-                    keyboardOptions = keyboardOptions,
-                    visualTransformation = visualTransformation,
-                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = label }
-                )
             }
             if (suffix != null) Text(suffix, style = lt(13.sp, color = L.Muted))
         }

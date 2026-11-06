@@ -388,7 +388,8 @@ fun LayerAddAccountSheet(
                 label = "شمارهٔ کارت (اختیاری)",
                 placeholder = "۶۱۰۴ ۳۳۷۴ …",
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                visualTransformation = CardNumberTransformation
+                visualTransformation = CardNumberTransformation,
+                ltr = true
             )
             if (detected != null) DetectedBankPill(detected, detectedLogo)
         }
@@ -516,7 +517,8 @@ fun LayerEditAccountSheet(
         if (!card.isCash) {
             LField(
                 value = number, onChange = { number = it.filter { c -> c.isDigit() }.take(16) }, label = "شمارهٔ کارت (اختیاری)",
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), visualTransformation = CardNumberTransformation
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), visualTransformation = CardNumberTransformation,
+                ltr = true
             )
             val detected = remember(number) { BankBin.bankFor(number) }
             if (detected != null) DetectedBankPill(detected, remember(number) { BankLogos.assetForCard(number) })

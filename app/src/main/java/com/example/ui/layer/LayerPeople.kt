@@ -102,7 +102,7 @@ fun LayerObligationsScreen(
 
         Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f).cardSurface(18.dp).padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("باید بپردازم", style = lt(12.sp, color = L.Muted))
+                Text("بدهکار", style = lt(12.sp, color = L.Muted))
                 FitText(money(loanLeft + iOwePeople + chequesOut + creditUsed), lt(20.sp, FontWeight.Bold, L.RedText))
                 Text("تومان", style = lt(11.sp, color = L.Muted))
                 Text(
@@ -116,7 +116,7 @@ fun LayerObligationsScreen(
                 )
             }
             Column(Modifier.weight(1f).cardSurface(18.dp).padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("طلب دارم", style = lt(12.sp, color = L.Muted))
+                Text("بستانکار", style = lt(12.sp, color = L.Muted))
                 FitText(money(owedToMe), lt(20.sp, FontWeight.Bold, L.Green))
                 Text("تومان", style = lt(11.sp, color = L.Muted))
                 Text(
@@ -152,7 +152,7 @@ private fun ColumnScope.PeopleSection(
         Row(
             Modifier.weight(1f).height(44.dp).clip(ButtonShape).background(L.Primary).clickable(enabled = persons.isNotEmpty(), onClick = onAddEntry),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
-        ) { Text("ثبت قرض یا پس‌دادن", style = lt(14.sp, FontWeight.Bold, if (persons.isNotEmpty()) Color.White else Color(0xB3FFFFFF))) }
+        ) { Text("ثبت بستانکار / بدهکار", style = lt(14.sp, FontWeight.Bold, if (persons.isNotEmpty()) Color.White else Color(0xB3FFFFFF))) }
         Row(
             Modifier.height(44.dp).clip(ButtonShape).background(L.PrimarySoft).clickable(onClick = onAddPerson).padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -268,7 +268,7 @@ fun LayerPersonDetailScreen(
             ) { Icon(Icons.Default.Edit, null, tint = L.Ink, modifier = Modifier.size(20.dp)) }
         },
         bottomBar = {
-            BigButton("ثبت قرض یا پس‌دادن", onClick = onAddEntry)
+            BigButton("ثبت بستانکار / بدهکار", onClick = onAddEntry)
             if (balance != 0L) SoftBigButton("تسویهٔ کامل") { settling = true }
         }
     ) {
@@ -349,7 +349,7 @@ fun LayerPersonDetailScreen(
             }
         }
         Text(
-            "+ یعنی طلب شما بیشتر شد (قرض دادید یا پس دادید)، − یعنی کمتر شد (قرض گرفتید یا پس گرفتید).",
+            "بستانکار (+) یعنی پولی به این شخص دادید، بدهکار (−) یعنی پولی از او گرفتید.",
             style = lt(11.sp, color = L.Muted, lineHeight = 19.sp), modifier = Modifier.padding(horizontal = 24.dp)
         )
 
@@ -459,11 +459,13 @@ fun PersonSheet(person: Person?, existingNames: List<String>, onDismiss: () -> U
 
 // ───────────────────────── ثبت قرض یا پس‌دادن ─────────────────────────
 
-private enum class EntryKind(val label: String, val owedToMe: Boolean, val isRepayment: Boolean, val hint: String) {
-    LENT("قرض دادم", true, false, "پول به او دادید؛ طلب شما بیشتر می‌شود."),
-    BORROWED("قرض گرفتم", false, false, "از او پول گرفتید؛ بدهی شما بیشتر می‌شود."),
-    GOT_BACK("پس گرفتم", false, true, "پولی را که طلب داشتید پس داد."),
-    PAID_BACK("پس دادم", true, true, "بدهی‌تان را (همه یا بخشی) پس دادید.")
+/**
+ * فقط دو حالت رسمی: «بستانکار» (پولی به شخص دادید) و «بدهکار» (پولی از شخص گرفتید).
+ * اینکه قرض تازه است یا پس دادن، از مانده‌حساب فعلی با همان شخص معلوم می‌شود.
+ */
+private enum class EntryKind(val label: String, val owedToMe: Boolean) {
+    CREDITOR("بستانکار", true),
+    DEBTOR("بدهکار", false)
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -482,8 +484,10 @@ fun PersonEntrySheet(
     // شخصی که همین الان از داخل این شیت ساخته شد، انتخاب شود
     androidx.compose.runtime.LaunchedEffect(preselectedId) { if (preselectedId != null) personId = preselectedId }
     val bal = personId?.let { balances[it] } ?: 0L
-    // پیش‌فرض منطقی: اگر طلب دارم احتمالاً دارد پس می‌دهد، اگر بدهکارم احتمالاً دارم پس می‌دهم
-    var kind by remember(personId) { mutableStateOf(when { bal > 0 -> EntryKind.GOT_BACK; bal < 0 -> EntryKind.PAID_BACK; else -> EntryKind.LENT }) }
+    // پیش‌فرض منطقی: اگر طلب دارم احتمالاً دارد پس می‌دهد (بدهکار)، وگرنه بستانکار
+    var kind by remember(personId) { mutableStateOf(if (bal > 0) EntryKind.DEBTOR else EntryKind.CREDITOR) }
+    // پس دادن یعنی حرکت خلاف مانده‌حساب فعلی (فقط برای برچسب و یادآور موعد)
+    val isRepayment = if (kind.owedToMe) bal < 0 else bal > 0
     var amountText by remember { mutableStateOf("") }
     var account by remember { mutableStateOf<String?>(cards.firstOrNull()?.bankName) }
     var note by remember { mutableStateOf("") }
@@ -491,14 +495,14 @@ fun PersonEntrySheet(
     val person = persons.firstOrNull { it.id == personId }
 
     LayerSheet(
-        title = "ثبت قرض یا پس‌دادن",
+        title = "ثبت بستانکار / بدهکار",
         onDismiss = onDismiss,
         topGap = 50.dp,
         bottomBar = {
             BigButton("ثبت", enabled = person != null && amount > 0) {
                 onSave(
-                    person!!.id, amount, kind.owedToMe, kind.isRepayment, account, note,
-                    dueDays?.takeIf { !kind.isRepayment }?.let { startOfDay(System.currentTimeMillis()) + it * DAY_MS }
+                    person!!.id, amount, kind.owedToMe, isRepayment, account, note,
+                    dueDays?.takeIf { !isRepayment }?.let { startOfDay(System.currentTimeMillis()) + it * DAY_MS }
                 )
                 onDismiss()
             }
@@ -511,16 +515,20 @@ fun PersonEntrySheet(
         }
         if (person != null && bal != 0L) {
             Text(
-                if (bal > 0) "الان ${money(bal)} تومان از ${person.name} طلب دارید." else "الان ${money(-bal)} تومان به ${person.name} بدهکارید.",
+                if (bal > 0) "مانده: ${money(bal)} تومان بستانکار هستید (${person.name} به شما بدهکار است)."
+                else "مانده: ${money(-bal)} تومان به ${person.name} بدهکار هستید.",
                 style = lt(12.sp, color = if (bal > 0) L.GreenText else L.RedText)
             )
         }
 
-        Text("چه شد؟", style = lt(13.sp, FontWeight.SemiBold))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            EntryKind.entries.forEach { k -> LChip(k.label, kind == k) { kind = k } }
-        }
-        Text(kind.hint, style = lt(12.sp, color = L.Muted))
+        Text("نوع", style = lt(13.sp, FontWeight.SemiBold))
+        LSegmented(EntryKind.entries.map { it.label }, kind.ordinal, { kind = EntryKind.entries[it] })
+        val who = person?.name ?: "این شخص"
+        Text(
+            if (kind.owedToMe) "پولی به $who دادید؛ $who به همین مبلغ به شما بدهکار می‌شود (یا از بدهی شما کم می‌شود)."
+            else "پولی از $who گرفتید؛ شما به همین مبلغ به $who بدهکار می‌شوید (یا از طلب شما کم می‌شود).",
+            style = lt(12.sp, color = L.Muted, lineHeight = 20.sp)
+        )
 
         LField(
             value = amountText, onChange = { amountText = groupedInput(it) }, label = "مبلغ (تومان)", placeholder = "۰",
@@ -532,7 +540,7 @@ fun PersonEntrySheet(
             "اگر حساب انتخاب کنید موجودی آن هم تغییر می‌کند، ولی در هزینه و درآمد ماه حساب نمی‌شود.",
             style = lt(11.sp, color = L.Muted, lineHeight = 19.sp)
         )
-        if (!kind.isRepayment) {
+        if (!isRepayment) {
             Text(if (kind.owedToMe) "کی پس می‌دهد؟" else "کی باید پس بدهید؟", style = lt(13.sp, FontWeight.SemiBold))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(null to "بدون موعد", 7 to "یک هفته", 14 to "دو هفته", 30 to "یک ماه", 90 to "سه ماه").forEach { (d, label) ->
