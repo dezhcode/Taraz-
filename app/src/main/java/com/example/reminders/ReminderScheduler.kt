@@ -32,6 +32,23 @@ object ReminderScheduler {
         )
     }
 
+    /** Every Friday at 20:00 (drift of a few minutes is fine for a summary). */
+    fun scheduleWeeklySummary(context: Context) {
+        val now = Calendar.getInstance()
+        val next = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_WEEK, Calendar.FRIDAY)
+            set(Calendar.HOUR_OF_DAY, 20)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+            if (!after(now)) add(Calendar.WEEK_OF_YEAR, 1)
+        }
+        val request = PeriodicWorkRequestBuilder<WeeklySummaryWorker>(7, TimeUnit.DAYS)
+            .setInitialDelay(next.timeInMillis - now.timeInMillis, TimeUnit.MILLISECONDS)
+            .build()
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork("taraz_weekly_summary", ExistingPeriodicWorkPolicy.KEEP, request)
+    }
+
     fun cancelDailyLoanCheck(context: Context) {
         WorkManager.getInstance(context).cancelUniqueWork(DAILY_LOAN_CHECK)
     }

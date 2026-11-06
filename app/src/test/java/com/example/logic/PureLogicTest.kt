@@ -107,4 +107,24 @@ class PureLogicTest {
             fail("a random file must be refused")
         } catch (e: Backup.NotABackupException) { /* expected */ }
     }
+
+    @Test
+    fun weeklyDigestComparesWithTheWeekBeforeAndSkipsTransfers() {
+        val now = 1_800_000_000_000L
+        val day = 86_400_000L
+        fun tx(amount: Long, daysAgo: Int, type: String = com.example.data.TransactionType.EXPENSE, cat: String = "خوراک") =
+            com.example.data.Transaction(title = "t", amount = amount, category = cat, date = now - daysAgo * day,
+                isExpense = type != com.example.data.TransactionType.INCOME, bankName = "ملت", type = type)
+        val d = com.example.data.WeeklyDigest.build(
+            listOf(
+                tx(300_000, 1), tx(200_000, 2, cat = "حمل‌ونقل"), tx(5_000_000, 3, com.example.data.TransactionType.TRANSFER),
+                tx(250_000, 9)
+            ),
+            emptyList(), emptyList(), emptyList(), now
+        )
+        org.junit.Assert.assertEquals(500_000L, d.spent)
+        org.junit.Assert.assertEquals(250_000L, d.prevSpent)
+        org.junit.Assert.assertEquals(100, d.changePercent)
+        org.junit.Assert.assertEquals("خوراک", d.topCategory)
+    }
 }

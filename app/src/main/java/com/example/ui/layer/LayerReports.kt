@@ -73,7 +73,9 @@ fun LayerReportsScreen(
     onOpenGoals: () -> Unit,
     onAskAssistant: (prompt: String) -> Unit,
     modifier: Modifier = Modifier,
-    onOpenYear: () -> Unit = {}
+    onOpenYear: () -> Unit = {},
+    onShare: (monthTs: Long) -> Unit = {},
+    onOpenWeekly: () -> Unit = {}
 ) {
     var offset by remember { mutableIntStateOf(0) } // ۰ = ماه جاری، منفی = ماه‌های قبل
     val now = System.currentTimeMillis()
@@ -197,6 +199,20 @@ fun LayerReportsScreen(
                     }
                 }
             }
+        }
+
+        // خلاصهٔ هفته و فرستادن گزارش
+        Row(Modifier.padding(horizontal = 20.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(14.dp)).background(L.Surface)
+                    .clickable(onClick = onOpenWeekly).padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
+            ) { Text("خلاصهٔ هفته", style = lt(14.sp, FontWeight.Bold)) }
+            Row(
+                Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(14.dp)).background(L.Surface)
+                    .clickable { onShare(monthTs) }.padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
+            ) { Text("فرستادن گزارش ماه", style = lt(14.sp, FontWeight.Bold, L.PrimaryText)) }
         }
 
         // سال من

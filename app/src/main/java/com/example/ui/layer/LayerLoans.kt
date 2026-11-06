@@ -56,7 +56,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.BankCard
 import com.example.data.Loan
-import com.example.data.isPurchase
 import com.example.utils.JalaliDate
 
 internal fun remainingInstallments(loan: Loan): Int {

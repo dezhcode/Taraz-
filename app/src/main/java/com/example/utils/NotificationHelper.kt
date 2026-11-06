@@ -43,13 +43,15 @@ object NotificationHelper {
         context: Context,
         title: String,
         message: String,
-        notificationId: Int? = null
+        notificationId: Int? = null,
+        action: String? = null
     ) {
         // Ensure channel is created
         createNotificationChannel(context)
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            if (action != null) this.action = action
         }
         val pendingIntent: PendingIntent = PendingIntent.getActivity(
             context,

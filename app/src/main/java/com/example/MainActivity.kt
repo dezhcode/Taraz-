@@ -86,6 +86,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         com.example.utils.NotificationHelper.createNotificationChannel(this)
         requestNotificationPermissionIfNeeded()
         com.example.reminders.ReminderScheduler.scheduleDailyLoanCheck(this)
+        com.example.reminders.ReminderScheduler.scheduleWeeklySummary(this)
 
         // انتخاب روشن/تیرهٔ کاربر قبل از اولین رسم اعمال می‌شود تا صفحه چشمک نزند
         com.example.ui.layer.ThemePrefs.load(this)?.let { com.example.ui.layer.LayerTheme.dark = it }
@@ -159,8 +160,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 var addWithVoice by remember { mutableStateOf(false) }
                 var initialIsExpenseForDialog by remember { mutableStateOf(true) }
                 val pendingQuick = quickAction.value
+                var weeklyOpen by remember { mutableStateOf(false) }
                 LaunchedEffect(pendingQuick) {
                     when (pendingQuick) {
+                        com.example.reminders.WeeklySummaryWorker.ACTION_OPEN -> { viewModel.setTab(Tab.REPORTS); weeklyOpen = true }
                         com.example.widget.QuickAction.ADD_EXPENSE -> { initialIsExpenseForDialog = true; addWithVoice = false; isAddTransactionOpen = true }
                         com.example.widget.QuickAction.ADD_INCOME -> { initialIsExpenseForDialog = false; addWithVoice = false; isAddTransactionOpen = true }
                         com.example.widget.QuickAction.VOICE -> { initialIsExpenseForDialog = true; addWithVoice = true; isAddTransactionOpen = true }
@@ -188,6 +191,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 var isEntrySheetOpen by remember { mutableStateOf(false) }
                 var isSplitOpen by remember { mutableStateOf(false) }
                 var chequeSheetOpen by remember { mutableStateOf(false) }
+                var shareMonthTs by remember { mutableStateOf<Long?>(null) }
                 var chequeEditing by remember { mutableStateOf<com.example.data.Cheque?>(null) }
                 fun openSub(name: String) { subStack.add(name) }
                 fun closeSub() { if (subStack.isNotEmpty()) subStack.removeAt(subStack.lastIndex) }
@@ -745,6 +749,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             goal = activeGoal,
                                                             onOpenGoals = { openSub("goals") },
                                                             onOpenYear = { openSub("year") },
+                                                            onShare = { shareMonthTs = it },
+                                                            onOpenWeekly = { weeklyOpen = true },
                                                             onAskAssistant = { prompt ->
                                                                 viewModel.prepareChatForOpening(prompt)
                                                                 isAiSheetOpen = true
@@ -945,6 +951,24 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     onSave = { viewModel.saveAsset(it) },
                                     onDelete = { viewModel.deleteAsset(it.id) }
                                 )
+                            }
+
+                            if (weeklyOpen) {
+                                val digest = remember(transactions, loans, cheques, bills) {
+                                    com.example.data.WeeklyDigest.build(transactions, loans, cheques, bills)
+                                }
+                                com.example.ui.layer.WeeklySummarySheet(
+                                    digest = digest,
+                                    onDismiss = { weeklyOpen = false },
+                                    onAskAssistant = { prompt ->
+                                        weeklyOpen = false
+                                        viewModel.prepareChatForOpening(prompt)
+                                        isAiSheetOpen = true
+                                    }
+                                )
+                            }
+                            shareMonthTs?.let { ts ->
+                                com.example.ui.layer.ShareReportSheet(transactions, ts, onDismiss = { shareMonthTs = null })
                             }
 
                             if (chequeSheetOpen) {
