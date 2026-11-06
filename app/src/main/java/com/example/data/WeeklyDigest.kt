@@ -44,13 +44,13 @@ object WeeklyDigest {
                         else -> "؛ هم‌اندازهٔ هفتهٔ قبل."
                     }
                 )
-                if (earned > 0) add("${amount(earned)} تومان درآمد داشتید.")
+                if (earned > 0) add("درآمد این هفته ${amount(earned)} تومان بود.")
                 topCategory?.let { add("بیشترین هزینه: $it با ${amount(topCategoryAmount)} تومان.") }
-                biggest?.let { add("بزرگ‌ترین خرید: ${it.title} (${amount(it.amount)} تومان).") }
+                biggest?.let { add("بزرگ‌ترین هزینه: ${it.title} (${amount(it.amount)} تومان).") }
             }
             if (upcoming.isNotEmpty()) {
                 add(
-                    "هفتهٔ آینده: " + upcoming.take(4).joinToString("، ") { "${it.title} ${amount(it.amount)}" } +
+                    "سررسیدهای هفتهٔ آینده: " + upcoming.take(4).joinToString("، ") { "${it.title} ${amount(it.amount)}" } +
                         if (upcoming.size > 4) " و ${fa(upcoming.size - 4)} مورد دیگر" else ""
                 )
             }

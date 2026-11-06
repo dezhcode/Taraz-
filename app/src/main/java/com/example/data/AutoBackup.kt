@@ -49,7 +49,7 @@ object AutoBackup {
 
     /** «Download/Taraz» from a tree uri like …/tree/primary%3ADownload%2FTaraz */
     private fun folderLabel(uri: Uri): String = try {
-        DocumentsContract.getTreeDocumentId(uri).substringAfter(':').ifBlank { "حافظهٔ گوشی" }
+        DocumentsContract.getTreeDocumentId(uri).substringAfter(':').ifBlank { "حافظهٔ دستگاه" }
     } catch (e: Exception) { uri.lastPathSegment ?: "پوشهٔ انتخابی" }
 
     fun setEnabled(c: Context, on: Boolean) = prefs(c).edit().putBoolean("auto_backup_enabled", on).apply()

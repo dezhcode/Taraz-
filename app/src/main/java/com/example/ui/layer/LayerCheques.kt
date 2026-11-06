@@ -55,8 +55,8 @@ internal fun dueLabel(ts: Long): String {
 }
 
 private fun statusLabel(c: Cheque): String = when (c.status) {
-    ChequeStatus.CLEARED -> "پاس شد"
-    ChequeStatus.BOUNCED -> "برگشت خورد"
+    ChequeStatus.CLEARED -> "وصول شد"
+    ChequeStatus.BOUNCED -> "برگشتی"
     else -> dueLabel(c.dueDate)
 }
 
@@ -82,7 +82,7 @@ internal fun ColumnScope.ChequesSection(cheques: List<Cheque>, onAdd: () -> Unit
             Modifier.fillMaxWidth().padding(start = 28.dp, end = 28.dp, top = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("هنوز چکی ثبت نکرده‌اید", style = lt(15.sp, FontWeight.Bold))
+            Text("هنوز چکی ثبت نشده است", style = lt(15.sp, FontWeight.Bold))
             Text(
                 "چک‌های پرداختی و دریافتی را با تاریخ سررسید ثبت کنید؛ تراز سه روز و یک روز پیش از سررسید یادآوری می‌کند و پس از وصول، مبلغ را در حساب ثبت می‌کند.",
                 style = lt(13.sp, color = L.Muted, lineHeight = 23.sp)
@@ -184,14 +184,14 @@ fun ChequeSheet(
                             Modifier.weight(1f).height(44.dp).clip(ButtonShape).background(L.GreenSoft)
                                 .clickable(enabled = canSave) { onStatus(built, ChequeStatus.CLEARED, account); onDismiss() },
                             contentAlignment = Alignment.Center
-                        ) { Text("پاس شد", style = lt(14.sp, FontWeight.Bold, L.GreenText)) }
+                        ) { Text("وصول شد", style = lt(14.sp, FontWeight.Bold, L.GreenText)) }
                     }
                     if (cheque.status != ChequeStatus.BOUNCED) {
                         Box(
                             Modifier.weight(1f).height(44.dp).clip(ButtonShape).background(L.RedSoft)
                                 .clickable { onStatus(built, ChequeStatus.BOUNCED, account); onDismiss() },
                             contentAlignment = Alignment.Center
-                        ) { Text("برگشت خورد", style = lt(14.sp, FontWeight.Bold, L.RedText)) }
+                        ) { Text("برگشتی", style = lt(14.sp, FontWeight.Bold, L.RedText)) }
                     }
                     if (cheque.status != ChequeStatus.PENDING) {
                         Box(
@@ -221,7 +221,7 @@ fun ChequeSheet(
         }
     ) {
         if (cheque != null && cheque.status == ChequeStatus.CLEARED) {
-            Callout("این چک وصول شده است", "${money(cheque.amount)} تومان روی حساب ${cheque.bankName} ثبت شده است. «در انتظار» آن تراکنش را برمی‌دارد.", L.GreenSoft, L.GreenText)
+            Callout("این چک وصول شده است", "${money(cheque.amount)} تومان روی حساب ${cheque.bankName} ثبت شده است. تغییر وضعیت به «در انتظار»، آن تراکنش را حذف می‌کند.", L.GreenSoft, L.GreenText)
         }
         LSegmented(listOf("پرداخت چک", "دریافت چک"), if (issued) 0 else 1, {
             issued = it == 0
@@ -242,7 +242,7 @@ fun ChequeSheet(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             cards.forEach { c -> LChip(c.bankName, c.bankName == account) { account = c.bankName } }
         }
-        Text("دسته (برای وقتی پاس شد)", style = lt(13.sp, FontWeight.Bold))
+        Text("دسته (هنگام وصول)", style = lt(13.sp, FontWeight.Bold))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             categories.filter { it.isIncome == !issued }.sortedBy { it.sortOrder }.forEach { c -> LChip(c.name, c.name == category) { category = c.name } }
         }

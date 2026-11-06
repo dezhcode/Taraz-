@@ -216,7 +216,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                         com.example.utils.BiometricHelper.showBiometricPrompt(
                             activity = act,
                             title = "پشتیبان تراز",
-                            subtitle = "برای دیدن پشتیبان و رمز آن، هویت‌تان را تأیید کنید",
+                            subtitle = "برای مشاهدهٔ پشتیبان و رمز آن، هویت خود را تأیید کنید",
                             onSuccess = { openSub("backup") },
                             onError = { msg -> showToast(msg.toString()) }
                         )
@@ -603,7 +603,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                     type = "text/plain"
                                                     putExtra(android.content.Intent.EXTRA_TEXT, text)
                                                 }
-                                                context.startActivity(android.content.Intent.createChooser(send, "فرستادن یادآوری"))
+                                                context.startActivity(android.content.Intent.createChooser(send, "ارسال یادآوری"))
                                             }
                                         )
                                     }
@@ -762,12 +762,12 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                                     )
                                                                 }
                                                                 bills.filter { it.enabled && J.daysUntil(it.dueDate, now) <= 7 }.forEach { b ->
-                                                                    add(com.example.ui.layer.UpcomingItem("قبض", b.title.ifBlank { b.kind }, b.amount, b.dueDate, "پرداخت کردم", 1) { billToPay = b })
+                                                                    add(com.example.ui.layer.UpcomingItem("قبض", b.title.ifBlank { b.kind }, b.amount, b.dueDate, "ثبت پرداخت", 1) { billToPay = b })
                                                                 }
                                                                 cheques.filter { it.status == com.example.data.ChequeStatus.PENDING && J.daysUntil(it.dueDate, now) in -30..7 }.forEach { c ->
                                                                     add(com.example.ui.layer.UpcomingItem(
                                                                         if (c.issued) "پرداخت چک" else "دریافت چک", (if (c.issued) "به " else "از ") + c.person,
-                                                                        c.amount, c.dueDate, "پاس شد؟", if (c.issued) 2 else 3
+                                                                        c.amount, c.dueDate, "وصول شد؟", if (c.issued) 2 else 3
                                                                     ) { chequeEditing = c; chequeSheetOpen = true })
                                                                 }
                                                                 debts.filter { d -> d.dueDate != null && !d.settled && !d.isRepayment && d.personId != null }.forEach { d ->
@@ -1253,7 +1253,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 com.example.ui.layer.LayerSheet(
                                     title = "موجودی ${m.account} با پیامک بانک فرق دارد",
                                     onDismiss = { viewModel.dismissBalanceMismatch() },
-                                    closeLabel = "فعلاً نه",
+                                    closeLabel = "بعداً",
                                     bottomBar = {
                                         com.example.ui.layer.BigButton("موجودی را ${com.example.ui.layer.money(m.inSms)} کن") { viewModel.acceptSmsBalance() }
                                     }

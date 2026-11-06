@@ -275,7 +275,7 @@ fun LayerAccountDetailScreen(
         SectionTitle("آخرین تراکنش‌های این حساب")
         LayerCard(radius = 20.dp, padding = 0.dp) {
             if (mine.isEmpty()) {
-                Text("هنوز تراکنشی روی این حساب ثبت نشده.", style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(16.dp))
+                Text("هنوز تراکنشی روی این حساب ثبت نشده است.", style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(16.dp))
             } else {
                 mine.take(4).forEachIndexed { i, tx ->
                     Row(
@@ -299,7 +299,7 @@ fun LayerAccountDetailScreen(
             if (askDelete) {
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(L.RedSoft).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        "این حساب از تراز حذف می‌شود، ولی تراکنش‌هایی که با آن ثبت کرده‌اید باقی می‌مانند.",
+                        "این حساب از تراز حذف می‌شود، اما تراکنش‌های ثبت‌شده با آن باقی می‌مانند.",
                         style = lt(13.sp, color = L.RedInk, lineHeight = 23.sp)
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -344,7 +344,7 @@ fun LayerAddAccountSheet(
     onDismiss: () -> Unit,
     onConfirm: (name: String, cardNumber: String, balance: Long, accountType: String, creditLimit: Long, dueDay: Int) -> Unit
 ) {
-    val types = listOf(AccountType.BANK to "کارت بانکی", AccountType.CREDIT to "اعتباری", AccountType.CASH to "نقد", AccountType.OTHER to "دیگر")
+    val types = listOf(AccountType.BANK to "کارت بانکی", AccountType.CREDIT to "اعتباری", AccountType.CASH to "وجه نقد", AccountType.OTHER to "سایر")
     var limitText by remember { mutableStateOf("") }
     var dueDay by remember { mutableStateOf(1) }
     var typeIdx by remember { mutableStateOf(0) }
@@ -399,10 +399,10 @@ fun LayerAddAccountSheet(
             onChange = { name = it; nameTouched = true },
             label = "نام حساب",
             placeholder = when (type) {
-                AccountType.CASH -> "مثلاً کیف پول"; AccountType.OTHER -> "مثلاً صندوق پس‌انداز"
+                AccountType.CASH -> "مثلاً صندوق نقدی"; AccountType.OTHER -> "مثلاً صندوق پس‌انداز"
                 AccountType.CREDIT -> "مثلاً اعتباری ملت"; else -> "مثلاً بانک ملت"
             },
-            hint = if (duplicate) "حسابی با این نام دارید؛ نام دیگری بنویسید." else "در فهرست حساب‌ها با همین نام دیده می‌شود."
+            hint = if (duplicate) "حسابی با این نام وجود دارد؛ نام دیگری وارد کنید." else "با همین نام در فهرست حساب‌ها نمایش داده می‌شود."
         )
         if (credit) {
             LField(
@@ -413,10 +413,10 @@ fun LayerAddAccountSheet(
         LField(
             value = balanceText,
             onChange = { balanceText = groupedInput(it) },
-            label = if (credit) "تا امروز استفاده‌شده (تومان)" else "موجودی فعلی (تومان)",
+            label = if (credit) "مبلغ استفاده‌شده تاکنون (تومان)" else "موجودی فعلی (تومان)",
             placeholder = "۰",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            hint = if (credit) "خریدها از این کارت به بدهی‌اش اضافه می‌شود؛ بازپرداخت را با دکمهٔ «بازپرداخت» در صفحهٔ همین کارت ثبت کنید."
+            hint = if (credit) "خریدهای این کارت به بدهی آن افزوده می‌شود؛ بازپرداخت را با دکمهٔ «بازپرداخت» در صفحهٔ همین کارت ثبت کنید."
             else "تا موجودی کل از ابتدا صحیح باشد."
         )
         if (credit) CreditDueDay(dueDay) { dueDay = it }
@@ -500,7 +500,7 @@ fun LayerEditAccountSheet(
     ) {
         LField(
             value = name, onChange = { name = it }, label = "نام حساب",
-            hint = if (nameTaken) "حساب دیگری با این نام دارید." else "تراکنش‌های این حساب نیز با نام جدید نمایش داده می‌شوند."
+            hint = if (nameTaken) "حساب دیگری با این نام وجود دارد." else "تراکنش‌های این حساب نیز با نام جدید نمایش داده می‌شوند."
         )
         LField(
             value = balanceText, onChange = { balanceText = groupedInput(it) }, label = if (credit) "استفاده‌شده (تومان)" else "موجودی (تومان)",
@@ -557,6 +557,6 @@ fun RepayCreditSheet(card: BankCard, cards: List<BankCard>, onDismiss: () -> Uni
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             sources.forEach { c -> LChip(c.bankName, c.bankName == from) { from = c.bankName } }
         }
-        Text("در جمع هزینه‌ها نمی‌آید؛ خریدهای کارت قبلاً هزینه حساب شده‌اند.", style = lt(12.sp, color = L.Muted, lineHeight = 20.sp))
+        Text("در هزینه‌ها منظور نمی‌شود؛ خریدهای کارت پیش‌تر به‌عنوان هزینه ثبت شده‌اند.", style = lt(12.sp, color = L.Muted, lineHeight = 20.sp))
     }
 }

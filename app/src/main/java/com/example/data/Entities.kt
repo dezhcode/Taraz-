@@ -162,7 +162,7 @@ data class FinancialCoachInsight(
     val id: String = "empty_001",
     val type: String = "empty", // success, warning, danger, suggestion, empty
     val priority: Int = 0,
-    val message: String = "برای تحلیل بهتر، تراکنش‌های بیشتری ثبت کن.",
+    val message: String = "برای تحلیل دقیق‌تر، تراکنش‌های بیشتری ثبت کنید.",
     val action: String? = null
 )
 

@@ -141,11 +141,11 @@ fun LayerRecurringScreen(
         bottomBar = { BigButton("افزودن تراکنش تکراری", enabled = cards.isNotEmpty()) { adding = true } }
     ) {
         if (cards.isEmpty()) {
-            Callout("اول یک حساب بسازید", "تراکنش تکراری روی یکی از حساب‌ها ثبت می‌شود.", L.AmberSoft, L.AmberInk, Modifier.padding(horizontal = 20.dp))
+            Callout("ابتدا یک حساب ایجاد کنید", "تراکنش تکراری روی یکی از حساب‌ها ثبت می‌شود.", L.AmberSoft, L.AmberInk, Modifier.padding(horizontal = 20.dp))
         }
         val candidates = remember(transactions, items) { detectRecurringCandidates(transactions, items) }
         if (candidates.isNotEmpty()) {
-            SectionTitle("پیدا شد: این‌ها هر ماه تکرار شده‌اند")
+            SectionTitle("موارد تکرارشونده در ماه‌های اخیر")
             LayerCard(radius = 20.dp, padding = 0.dp) {
                 candidates.take(6).forEachIndexed { i, c ->
                     Row(
@@ -166,7 +166,7 @@ fun LayerRecurringScreen(
                 }
             }
             Text(
-                "اگر اشتراکی را دیگر لازم ندارید، لغوش کنید؛ ${money(candidates.sumOf { it.amount })} تومان در ماه از این‌ها می‌رود.",
+                "اشتراک‌های غیرضروری را لغو کنید؛ مجموع این موارد ماهانه ${money(candidates.sumOf { it.amount })} تومان است.",
                 style = lt(12.sp, color = L.Muted, lineHeight = 21.sp), modifier = Modifier.padding(horizontal = 24.dp)
             )
         }
@@ -264,7 +264,7 @@ fun LayerBackupScreen(
     onAutoNow: () -> Unit = {}
 ) {
     var mode by remember { mutableStateOf<String?>(null) } // "create" | "restore" | "auto"
-    LayerScreen(title = "پشتیبان و خروجی", subtitle = "داده‌هایتان را بیرون از گوشی هم نگه دارید", onBack = onBack) {
+    LayerScreen(title = "پشتیبان و خروجی", subtitle = "نگهداری نسخهٔ پشتیبان خارج از دستگاه", onBack = onBack) {
         message?.let { (ok, text) ->
             Callout(text, null, if (ok) L.GreenSoft else L.RedSoft, if (ok) L.GreenText else L.RedText, Modifier.padding(horizontal = 20.dp))
         }
@@ -273,7 +273,7 @@ fun LayerBackupScreen(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text("پشتیبان خودکار", style = lt(15.sp, FontWeight.Bold))
-                        Text("بی‌آنکه کاری کنید، خودش فایل رمزدار می‌سازد", style = lt(12.sp, color = L.Muted))
+                        Text("تهیهٔ خودکار فایل پشتیبان رمزگذاری‌شده", style = lt(12.sp, color = L.Muted))
                     }
                     LSwitch(auto.enabled, "پشتیبان خودکار") { on ->
                         when {
@@ -298,9 +298,9 @@ fun LayerBackupScreen(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text("رمز فایل‌ها", style = lt(12.sp, color = L.Muted))
-                        Text(if (auto.hasPassword) "گذاشته شده" else "گذاشته نشده", style = lt(14.sp, FontWeight.SemiBold))
+                        Text(if (auto.hasPassword) "تعیین شده" else "تعیین نشده", style = lt(14.sp, FontWeight.SemiBold))
                     }
-                    SoftButton(if (auto.hasPassword) "تغییر" else "گذاشتن", height = 36.dp) { mode = "auto" }
+                    SoftButton(if (auto.hasPassword) "تغییر" else "تعیین", height = 36.dp) { mode = "auto" }
                 }
                 Spacer(Modifier.height(10.dp))
                 when {
@@ -316,7 +316,7 @@ fun LayerBackupScreen(
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "رمز یک بار پرسیده و رمزگذاری‌شده روی گوشی نگه داشته می‌شود. ۵ نسخهٔ آخر می‌ماند و قدیمی‌ترها پاک می‌شوند. پوشه را می‌توانید با گوگل‌درایو هم‌گام کنید.",
+                    "رمز یک بار دریافت و به‌صورت رمزگذاری‌شده روی دستگاه نگهداری می‌شود. پنج نسخهٔ آخر حفظ و نسخه‌های قدیمی‌تر حذف می‌شوند. امکان همگام‌سازی پوشه با گوگل‌درایو وجود دارد.",
                     style = lt(11.sp, color = L.Muted, lineHeight = 19.sp)
                 )
             }
@@ -334,7 +334,7 @@ fun LayerBackupScreen(
             }
         }
         Text(
-            "فایل پشتیبان رمزگذاری می‌شود و بدون رمز باز نمی‌شود؛ رمز را جایی یادداشت کنید، تراز آن را نگه نمی‌دارد. " +
+            "فایل پشتیبان رمزگذاری می‌شود و بدون رمز باز نمی‌شود؛ رمز را در جای امنی یادداشت کنید؛ تراز آن را ذخیره نمی‌کند. " +
                 "فایل را در درایو، تلگرام یا هر جای امن دیگری نگه دارید تا در صورت مفقود شدن گوشی، اطلاعات از دست نرود.",
             style = lt(12.sp, color = L.Muted, lineHeight = 21.sp), modifier = Modifier.padding(horizontal = 24.dp)
         )
@@ -347,7 +347,7 @@ fun LayerBackupScreen(
         val creating = m == "create" || m == "auto"
         val ok = if (creating) pass.length >= 6 && pass == pass2 else pass.isNotEmpty()
         LayerSheet(
-            title = if (creating) "رمز فایل پشتیبان" else "رمز فایل پشتیبان را بنویسید",
+            title = if (creating) "رمز فایل پشتیبان" else "رمز فایل پشتیبان را وارد کنید",
             onDismiss = { mode = null },
             topGap = 200.dp,
             bottomBar = {
@@ -375,7 +375,7 @@ fun LayerBackupScreen(
                     value = pass2, onChange = { pass2 = it }, label = "تکرار رمز",
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     visualTransformation = PasswordVisualTransformation(),
-                    hint = if (pass2.isNotEmpty() && pass != pass2) "با رمز بالا یکی نیست." else null
+                    hint = if (pass2.isNotEmpty() && pass != pass2) "با رمز واردشده مطابقت ندارد." else null
                 )
             } else {
                 Text("بعد از انتخاب فایل، همهٔ داده‌های فعلی تراز با محتوای فایل جایگزین می‌شود.", style = lt(12.sp, color = L.RedInk, lineHeight = 21.sp))

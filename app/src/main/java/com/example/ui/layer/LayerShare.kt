@@ -99,7 +99,7 @@ object ReportRenderer {
 
         cv.drawText("تراز", right, M + 40, paint(40f, 0xFF2F5BEA.toInt(), bold))
         cv.drawText("گزارش ${r.monthTitle}", right, M + 140, paint(64f, ink, bold))
-        cv.drawText(if (hide) "مبلغ‌ها پنهان است؛ فقط نسبت‌ها" else "به تومان", right, M + 200, paint(32f, muted, regular))
+        cv.drawText(if (hide) "مبالغ پنهان است؛ فقط نسبت‌ها" else "به تومان", right, M + 200, paint(32f, muted, regular))
 
         // سه کادر: درآمد، هزینه، پس‌انداز
         val boxW = (W - 2 * M - 2 * 24f) / 3
@@ -187,7 +187,7 @@ fun ShareReportSheet(transactions: List<Transaction>, monthTs: Long, onDismiss: 
     val report = remember(transactions, monthTs) { MonthReport.of(transactions, monthTs) }
     val bmp = remember(report, hide) { ReportRenderer.render(context, report, hide) }
     LayerSheet(
-        title = "فرستادن گزارش ${report.monthTitle}",
+        title = "ارسال گزارش ${report.monthTitle}",
         onDismiss = onDismiss,
         topGap = 40.dp,
         bottomBar = {
@@ -203,7 +203,7 @@ fun ShareReportSheet(transactions: List<Transaction>, monthTs: Long, onDismiss: 
         ) {
             Column(Modifier.weight(1f)) {
                 Text("پنهان کردن مبلغ‌ها", style = lt(14.sp, FontWeight.SemiBold))
-                Text("فقط درصدها دیده می‌شود", style = lt(12.sp, color = L.Muted))
+                Text("فقط درصدها نمایش داده می‌شود", style = lt(12.sp, color = L.Muted))
             }
             LSwitch(hide, "پنهان کردن مبلغ‌ها") { hide = it }
         }
@@ -238,7 +238,7 @@ fun WeeklySummarySheet(digest: WeeklyDigest.Digest, onDismiss: () -> Unit, onAsk
                 Text(money(digest.spent), style = lt(19.sp, FontWeight.Bold, L.RedText))
             }
             Column(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(L.Bg).padding(12.dp)) {
-                Text("هفتهٔ قبلش", style = lt(12.sp, color = L.Muted))
+                Text("هفتهٔ پیش از آن", style = lt(12.sp, color = L.Muted))
                 Text(money(digest.prevSpent), style = lt(19.sp, FontWeight.Bold))
             }
         }
@@ -249,7 +249,7 @@ fun WeeklySummarySheet(digest: WeeklyDigest.Digest, onDismiss: () -> Unit, onAsk
             }
         }
         if (digest.upcoming.isNotEmpty()) {
-            Text("موعدهای هفت روز آینده", style = lt(13.sp, FontWeight.Bold))
+            Text("سررسیدهای هفت روز آینده", style = lt(13.sp, FontWeight.Bold))
             digest.upcoming.forEach { u ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(u.title, style = lt(13.sp), modifier = Modifier.weight(1f), maxLines = 1)
@@ -257,7 +257,7 @@ fun WeeklySummarySheet(digest: WeeklyDigest.Digest, onDismiss: () -> Unit, onAsk
                 }
             }
         }
-        Text("هر جمعه ساعت ۸ شب این خلاصه با اعلان هم می‌آید.", style = lt(12.sp, color = L.Muted))
+        Text("این خلاصه هر جمعه ساعت ۲۰ از طریق اعلان نیز ارسال می‌شود.", style = lt(12.sp, color = L.Muted))
         Spacer(Modifier.height(4.dp))
     }
 }

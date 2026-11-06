@@ -251,7 +251,7 @@ private fun GlanceCard(g: HomeGlance, onOpenReports: () -> Unit, onOpenObligatio
             .padding(horizontal = 6.dp, vertical = 6.dp)
     ) {
         GlanceRow(
-            "هزینهٔ ${JalaliDate.today().monthName}", if (g.income > 0) "درآمد این ماه ${toman(g.income)}" else "درآمدی ثبت نشده",
+            "هزینه‌های ${JalaliDate.today().monthName}", if (g.income > 0) "درآمد این ماه ${toman(g.income)}" else "درآمدی ثبت نشده",
             g.spent, L.RedText, onOpenReports
         )
         Box(Modifier.padding(horizontal = 12.dp).fillMaxWidth().height(1.dp).background(L.Line))
@@ -265,7 +265,7 @@ private fun GlanceCard(g: HomeGlance, onOpenReports: () -> Unit, onOpenObligatio
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Text("اگر همه صاف شود", style = lt(13.sp, FontWeight.SemiBold))
+                Text("خالص پس از تسویه", style = lt(13.sp, FontWeight.SemiBold))
                 Text("موجودی + بستانکار − بدهکار", style = lt(11.sp, color = L.Muted))
             }
             Spacer(Modifier.width(8.dp))
@@ -296,7 +296,7 @@ private fun GlanceRow(label: String, note: String, amount: Long, color: Color, o
 @Composable
 private fun UpcomingSection(items: List<UpcomingItem>, now: Long) {
     SectionTitle(
-        "پیش رو",
+        "سررسیدهای پیش رو",
         note = if (items.isEmpty()) null else "۷ روز آینده · ${fa(items.size)} مورد · ${toman(items.sumOf { it.amount })}"
     )
     if (items.isEmpty()) {
@@ -441,7 +441,7 @@ private fun PlanSection(
                 val withBudget = categories.count { it.monthlyBudget > 0 }
                 Text("بودجه", style = lt(13.sp, FontWeight.Bold))
                 Text(
-                    if (withBudget > 0) "همهٔ ${fa(withBudget)} دسته زیر سقف هستند." else "برای دسته‌ها سقف ماهانه بگذارید.",
+                    if (withBudget > 0) "همهٔ ${fa(withBudget)} دسته زیر سقف هستند." else "برای دسته‌ها سقف ماهانه تعیین کنید.",
                     style = lt(12.sp, color = L.Muted, lineHeight = 20.sp)
                 )
             }
@@ -461,7 +461,7 @@ private fun RecentSection(
     val recent = remember(transactions) { transactions.sortedByDescending { it.date }.take(4) }
     Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (recent.isEmpty()) {
-            Text(if (com.example.Features.SMS) "هنوز تراکنشی ثبت نشده. با دکمهٔ + یا از پیامک بانک ثبت کنید." else "هنوز تراکنشی ثبت نشده. با دکمهٔ + ثبت کنید.", style = lt(13.sp, color = L.Muted, lineHeight = 22.sp))
+            Text(if (com.example.Features.SMS) "هنوز تراکنشی ثبت نشده. با دکمهٔ + یا از پیامک بانک ثبت کنید." else "هنوز تراکنشی ثبت نشده است. برای ثبت، دکمهٔ + را بزنید.", style = lt(13.sp, color = L.Muted, lineHeight = 22.sp))
         }
         recent.forEach { tx -> TransactionCard(tx, cards, categories) { onTransactionClick(tx) } }
     }
@@ -539,8 +539,8 @@ private fun WalletStack(
                 Text(month, style = lt(12.sp, color = L.OnPrimarySoft), modifier = Modifier.weight(1f))
                 Text(
                     when {
-                        pct == null && monthlyExpense > 0 -> "دریافتی‌ای ثبت نشده"
-                        pct == null -> "هنوز هزینه‌ای ثبت نشده"
+                        pct == null && monthlyExpense > 0 -> "دریافتی ثبت نشده است"
+                        pct == null -> "هنوز هزینه‌ای ثبت نشده است"
                         pct > 100 -> "${fa(pct)}٪ دریافتی؛ هزینه از دریافتی بیشتر است"
                         else -> "${fa(pct)}٪ دریافتی هزینه شده"
                     },
@@ -554,7 +554,7 @@ private fun WalletStack(
             }
             Box(
                 Modifier.padding(top = 8.dp).fillMaxWidth().height(8.dp).clip(PillShape).background(Color.White.copy(alpha = 0.22f))
-                    .semantics { contentDescription = "${pct?.let { fa(it) } ?: "۰"} درصد دریافتی $month خرج شده" }
+                    .semantics { contentDescription = "${pct?.let { fa(it) } ?: "۰"} درصد دریافتی $month هزینه شده" }
             ) {
                 Box(
                     Modifier.fillMaxWidth(frac).fillMaxHeight().clip(PillShape)
@@ -633,7 +633,7 @@ private fun TodayCard(
         }
         Box(Modifier.padding(horizontal = 2.dp, vertical = 14.dp).fillMaxWidth().height(1.dp).background(L.Line))
         Column(Modifier.padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("هزینهٔ امروز", style = lt(13.sp, color = L.Muted))
+            Text("هزینه‌های امروز", style = lt(13.sp, color = L.Muted))
             Row(verticalAlignment = Alignment.Bottom) {
                 FitText(
                     money(todayExpense),
@@ -644,7 +644,7 @@ private fun TodayCard(
                 Text("تومان", style = lt(15.sp, FontWeight.SemiBold), modifier = Modifier.padding(bottom = 8.dp))
             }
             Text(
-                if (dailyBudget > 0) "سقف هزینهٔ روزانه: ${toman(dailyBudget)}" else "سقف روزانه ندارید",
+                if (dailyBudget > 0) "سقف هزینهٔ روزانه: ${toman(dailyBudget)}" else "سقف روزانه تعیین نشده است",
                 style = lt(12.sp, color = L.Muted)
             )
             if (dailyBudget > 0) {
@@ -662,7 +662,7 @@ private fun TodayCard(
                     when {
                         dailyBudget <= 0 -> "با تعیین سقف روزانه، تراز نزدیک شدن به سقف را اطلاع می‌دهد."
                         left >= 0 -> "${toman(left)} تا سقف امروز باقی مانده است."
-                        else -> "هزینهٔ امروز ${toman(-left)} از سقف بیشتر شده است."
+                        else -> "هزینه‌های امروز ${toman(-left)} از سقف بیشتر شده است."
                     },
                     style = lt(12.sp, color = if (left < 0 && dailyBudget > 0) L.AmberText else L.Muted, lineHeight = 20.sp),
                     modifier = Modifier.weight(1f)
@@ -754,7 +754,7 @@ internal fun TransactionCard(
             Text(tx.title, style = lt(14.sp, FontWeight.Medium), maxLines = 1)
             Text(
                 buildString {
-                    append(if (tx.isTransfer) "انتقال · در جمع هزینه نیست" else "${tx.category} · ${tx.bankName}")
+                    append(if (tx.isTransfer) "انتقال · در هزینه‌ها منظور نمی‌شود" else "${tx.category} · ${tx.bankName}")
                     tx.tagList.firstOrNull()?.let { append(" · #$it") }
                     if (tx.attachments.isNotBlank()) append(" · 📎")
                 },

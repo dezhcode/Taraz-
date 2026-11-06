@@ -80,9 +80,9 @@ fun LayerBillsScreen(
                 Modifier.fillMaxWidth().padding(start = 28.dp, end = 28.dp, top = 28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("هنوز قبضی اضافه نکرده‌اید", style = lt(15.sp, FontWeight.Bold))
+                Text("هنوز قبضی ثبت نشده است", style = lt(15.sp, FontWeight.Bold))
                 Text(
-                    "شناسهٔ قبض و تاریخ موعد را یک بار وارد کنید؛ سه روز قبل از موعد یادآوری می‌آید و با «پرداخت کردم» هزینه در دستهٔ قبوض ثبت و موعد دورهٔ بعد خودکار تنظیم می‌شود.",
+                    "شناسهٔ قبض و تاریخ موعد را یک بار وارد کنید؛ سه روز پیش از موعد یادآوری ارسال می‌شود و با «ثبت پرداخت»، هزینه در دستهٔ قبوض ثبت و موعد دورهٔ بعد به‌طور خودکار تنظیم می‌شود.",
                     style = lt(13.sp, color = L.Muted, lineHeight = 23.sp)
                 )
             }

@@ -139,7 +139,7 @@ fun BankCardView(
                 Text(
                     when {
                         hasNumber -> cardNumberText(card.cardNumber, revealed)
-                        card.isCash -> "پول نقد"
+                        card.isCash -> "وجه نقد"
                         card.accountType == AccountType.OTHER -> "حساب"
                         else -> "بدون شمارهٔ کارت"
                     },

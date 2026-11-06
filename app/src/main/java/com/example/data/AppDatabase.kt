@@ -146,7 +146,7 @@ interface GoalDao {
         Bill::class,
         NetWorthSnapshot::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -281,6 +281,13 @@ abstract class AppDatabase : RoomDatabase() {
                     }
                     db.execSQL("UPDATE categories SET name = ? WHERE name = ? AND $free", arrayOf<Any>(new, old, new))
                 }
+            }
+        }
+
+        /** v13: نسبت «فامیل» با واژهٔ رسمی «بستگان» */
+        val MIGRATION_12_13 = object : androidx.room.migration.Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("UPDATE persons SET relation = ? WHERE relation = ?", arrayOf<Any>("بستگان", "فامیل"))
             }
         }
 
@@ -425,7 +432,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "fidar_finance_database"
                 )
                 .addCallback(AppDatabaseCallback(scope))
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
                 // Only the first test builds (v1-3) have no migration. Every later
                 // version must have one: a destructive fallback wiped users' money
                 // records silently whenever a migration was forgotten.

@@ -134,7 +134,7 @@ fun LayerTransactionsScreen(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("تراکنش‌های تکراری", style = lt(14.sp, FontWeight.SemiBold))
                 Text(
-                    if (recurringCount > 0) "${fa(recurringCount)} مورد فعال · هر ماه خودکار ثبت می‌شوند" else "اجاره، حقوق، اشتراک‌ها؛ یک بار بنویسید",
+                    if (recurringCount > 0) "${fa(recurringCount)} مورد فعال · هر ماه خودکار ثبت می‌شوند" else "اجاره، حقوق و اشتراک‌ها؛ یک بار ثبت کنید",
                     style = lt(12.sp, color = L.Muted)
                 )
             }
@@ -182,7 +182,7 @@ fun LayerTransactionsScreen(
                         TransactionCard(tx, cards, categories) { onTransactionClick(tx) }
                     }
                 }
-                if (hits.size > 200) Text("۲۰۰ تراکنش اول نشان داده شد؛ همه در خروجی اکسل هستند.", style = lt(12.sp, color = L.Muted))
+                if (hits.size > 200) Text("۲۰۰ تراکنش نخست نمایش داده شد؛ فهرست کامل در خروجی اکسل موجود است.", style = lt(12.sp, color = L.Muted))
             }
             return@Column
         }
@@ -260,7 +260,7 @@ fun LayerTransactionsScreen(
                     Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(L.Amber))
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        if (dailyBudget > 0) "بالای بودجهٔ روزانه (${toman(dailyBudget)})" else "بالای بودجهٔ روزانه",
+                        if (dailyBudget > 0) "فراتر از بودجهٔ روزانه (${toman(dailyBudget)})" else "فراتر از بودجهٔ روزانه",
                         style = lt(11.sp, color = L.Muted)
                     )
                 }
@@ -289,7 +289,7 @@ fun LayerTransactionsScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        if (over) "${toman(daySpend - dailyBudget)} بالای بودجه" else "زیر بودجه",
+                        if (over) "${toman(daySpend - dailyBudget)} بیش از بودجه" else "زیر بودجه",
                         style = lt(12.sp, FontWeight.Bold, if (over) L.AmberText else L.GreenText)
                     )
                 }
@@ -300,7 +300,7 @@ fun LayerTransactionsScreen(
         val dayTx = transactions.filter { it.date >= selected && it.date < selected + DAY_MS }.sortedByDescending { it.date }
         Column(Modifier.padding(horizontal = 20.dp)) {
             if (dayTx.isEmpty()) {
-                Text("در این روز تراکنشی ثبت نشده.", style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(vertical = 12.dp))
+                Text("در این روز تراکنشی ثبت نشده است.", style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(vertical = 12.dp))
             }
             dayTx.forEachIndexed { i, tx ->
                 TimelineRow(

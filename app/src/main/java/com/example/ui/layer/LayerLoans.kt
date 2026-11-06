@@ -86,9 +86,9 @@ internal fun ColumnScope.LoansSection(
 
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 18.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("وام‌ها و خریدهای قسطی", style = lt(17.sp, FontWeight.Bold))
+                Text("وام‌ها و خریدهای اقساطی", style = lt(17.sp, FontWeight.Bold))
                 Text(
-                    if (active.isEmpty()) "قسط فعالی ندارید"
+                    if (active.isEmpty()) "قسط فعالی وجود ندارد"
                     else "${fa(active.size)} مورد فعال · قسط ${today.monthName} ${money(active.sumOf { it.installmentAmount })} تومان",
                     style = lt(12.sp, color = L.Muted)
                 )
@@ -115,7 +115,7 @@ internal fun ColumnScope.LoansSection(
                 Row(verticalAlignment = Alignment.Top) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text("قسط بعدی · ${daysLabel(days)}", style = lt(12.sp, FontWeight.Bold, L.AmberText))
-                        Text((if (loan.isPurchase) "خرید قسطی · " else "") + "${loan.loanName} · ${loan.bankName}", style = lt(15.sp, FontWeight.SemiBold))
+                        Text((if (loan.isPurchase) "خرید اقساطی · " else "") + "${loan.loanName} · ${loan.bankName}", style = lt(15.sp, FontWeight.SemiBold))
                         Text("سررسید ${weekdayName(due)} ${JalaliDate.fromTimestamp(due).formatShort()}", style = lt(12.sp, color = L.Muted))
                     }
                     Row(verticalAlignment = Alignment.Bottom) {
@@ -207,7 +207,7 @@ internal fun ColumnScope.LoansSection(
                     if (pickedLoans != null) pickedLoans.joinToString("\n") {
                         "${fa(picked!!)} ${JalaliDate.MONTH_NAMES[month - 1]}: قسط ${it.loanName} · ${money(it.installmentAmount)} تومان · ${it.bankName}"
                     } else if (active.isEmpty()) "وام فعالی ثبت نشده است."
-                    else "روی روزهای رنگی بزنید تا جزئیات قسط آن روز را ببینید.",
+                    else "برای مشاهدهٔ جزئیات قسط، روی روزهای رنگی ضربه بزنید.",
                     style = lt(12.sp, if (pickedLoans != null) FontWeight.SemiBold else FontWeight.Normal, if (pickedLoans != null) L.Ink else L.Muted, lineHeight = 20.sp)
                 )
             }
@@ -286,7 +286,7 @@ fun LayerPaySheet(
             if (!done) {
                 Column(Modifier.padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("تأیید پرداخت قسط", style = lt(20.sp, FontWeight.Bold))
-                    Text("جزئیات را بررسی کنید و بعد تأیید بزنید.", style = lt(13.sp, color = L.Muted))
+                    Text("جزئیات را بررسی و سپس تأیید کنید.", style = lt(13.sp, color = L.Muted))
                 }
                 Column(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("قسط ${loan.loanName} · ${loan.bankName}", style = lt(12.sp, color = L.Muted))
@@ -322,7 +322,7 @@ fun LayerPaySheet(
                     Text("بعد از تأیید", style = lt(12.sp, FontWeight.Bold, L.Muted))
                     if (fromCard != null) BeforeAfter("موجودی ${fromCard.bankName}", money(fromCard.balance), money(fromCard.balance - payAmount))
                     BeforeAfter("اقساط باقی‌مانده", "${fa(remainingBefore)} قسط", "${fa((remainingBefore - 1).coerceAtLeast(0))} قسط")
-                    Row { Text("خط زمان", style = lt(13.sp), modifier = Modifier.weight(1f)); Text("در امروز ${timeOfDay(System.currentTimeMillis())} نشان داده می‌شود", style = lt(13.sp)) }
+                    Row { Text("خط زمانی", style = lt(13.sp), modifier = Modifier.weight(1f)); Text("در امروز ${timeOfDay(System.currentTimeMillis())} نشان داده می‌شود", style = lt(13.sp)) }
                 }
                 Row(Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(L.PrimarySoft).padding(horizontal = 12.dp, vertical = 10.dp)) {
                     Icon(Icons.Default.Info, null, tint = L.PrimaryText, modifier = Modifier.size(18.dp).padding(top = 2.dp))
@@ -355,7 +355,7 @@ fun LayerPaySheet(
                         Text("قسط بعدی: ${JalaliDate.fromTimestamp(nextDue).formatShort()}", style = lt(13.sp, color = L.Muted))
                     }
                 }
-                PrimaryButton("دیدن در خط زمان امروز", Modifier.fillMaxWidth().height(54.dp), onClick = onGoHome)
+                PrimaryButton("مشاهده در خط زمانی امروز", Modifier.fillMaxWidth().height(54.dp), onClick = onGoHome)
                 Box(Modifier.padding(top = 8.dp).fillMaxWidth().height(50.dp).clip(RoundedCornerShape(16.dp)).background(L.PrimarySoft).clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
                     Text("بازگشت به اقساط", style = lt(15.sp, FontWeight.Bold, L.PrimaryText))
                 }

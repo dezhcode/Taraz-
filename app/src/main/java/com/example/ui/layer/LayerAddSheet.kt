@@ -123,7 +123,7 @@ fun LayerAddSheet(
         d.account?.let { a -> cards.firstOrNull { it.bankName == a || it.bankName.contains(a) || a.contains(it.bankName) }?.let { account = it.bankName } }
         d.personName?.let { p -> persons.firstOrNull { it.name == p || it.name.contains(p) || p.contains(it.name) }?.let { personId = it.id } }
         dateOverride = d.date
-        helperMsg = if (d.amount > 0) "پر شد؛ پیش از ثبت بررسی کنید." else "مبلغ را نفهمیدم؛ دستی وارد کنید."
+        helperMsg = if (d.amount > 0) "اطلاعات تکمیل شد؛ پیش از ثبت بررسی کنید." else "مبلغ تشخیص داده نشد؛ آن را دستی وارد کنید."
     }
     val context = androidx.compose.ui.platform.LocalContext.current
     val micLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -190,7 +190,7 @@ fun LayerAddSheet(
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text("${suggestion.title} · ${money(suggestion.amount)} · ${suggestion.bank}", style = lt(13.sp, FontWeight.SemiBold), maxLines = 1)
-                            Text("این ساعت معمولاً همین را ثبت می‌کنید", style = lt(12.sp, color = L.Muted))
+                            Text("تراکنش پرتکرار در این ساعت", style = lt(12.sp, color = L.Muted))
                         }
                         Box(
                             Modifier.height(36.dp).clip(PillShape).background(L.Primary).clickable {
@@ -330,7 +330,7 @@ fun LayerAddSheet(
                                 BasicTextField(
                                     value = newTag, onValueChange = { newTag = it.replace(",", "").take(30) }, singleLine = true,
                                     textStyle = lt(14.sp), cursorBrush = SolidColor(L.Primary),
-                                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = "برچسب تازه" }
+                                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = "برچسب جدید" }
                                 )
                             }
                             SoftButton("افزودن", height = 44.dp) {
@@ -350,7 +350,7 @@ fun LayerAddSheet(
                             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            LChip("هیچ‌کس", personId == null) { personId = null }
+                            LChip("هیچ‌کدام", personId == null) { personId = null }
                             persons.sortedBy { it.name }.forEach { p -> LChip(p.name, personId == p.id) { personId = p.id } }
                         }
                         val chosen = persons.firstOrNull { it.id == personId }
@@ -359,11 +359,11 @@ fun LayerAddSheet(
                             val out = type == EntryType.EXPENSE
                             Text(
                                 when {
-                                    out && bal < 0 -> "بستانکار: از بدهی شما به ${chosen.name} کم می‌شود."
+                                    out && bal < 0 -> "بستانکار: از بدهی شما به ${chosen.name} کسر می‌شود."
                                     out -> "بستانکار: ${chosen.name} به همین مبلغ به شما بدهکار می‌شود."
-                                    bal > 0 -> "بدهکار: از طلب شما از ${chosen.name} کم می‌شود."
+                                    bal > 0 -> "بدهکار: از بستانکاری شما از ${chosen.name} کسر می‌شود."
                                     else -> "بدهکار: شما به همین مبلغ به ${chosen.name} بدهکار می‌شوید."
-                                } + " در هزینه و درآمد ماه حساب نمی‌شود.",
+                                } + " در هزینه و درآمد ماه منظور نمی‌شود.",
                                 style = lt(12.sp, color = L.PrimaryText, lineHeight = 20.sp), modifier = Modifier.padding(top = 6.dp)
                             )
                         }
@@ -451,7 +451,7 @@ private fun AccountPicker(cards: List<BankCard>, selected: String?, onSelect: (S
             val card = cards.firstOrNull { it.bankName == selected }
             AccountSwatch(selected.orEmpty(), cards)
             Spacer(Modifier.width(8.dp))
-            Text(card?.let { shortAccountLabel(it) } ?: "حسابی ندارید", style = lt(13.sp, FontWeight.Medium), modifier = Modifier.weight(1f), maxLines = 1)
+            Text(card?.let { shortAccountLabel(it) } ?: "حسابی تعریف نشده است", style = lt(13.sp, FontWeight.Medium), modifier = Modifier.weight(1f), maxLines = 1)
             Icon(Icons.Default.KeyboardArrowDown, null, tint = L.Muted, modifier = Modifier.size(16.dp))
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = L.Surface) {

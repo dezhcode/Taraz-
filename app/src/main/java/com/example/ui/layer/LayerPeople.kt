@@ -96,7 +96,7 @@ fun LayerObligationsScreen(
             .verticalScroll(rememberScrollState()).statusBarsPadding().padding(bottom = NavClearance)
     ) {
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("قرض و قسط", style = lt(26.sp, FontWeight.Bold))
+            Text("اقساط و تعهدات", style = lt(26.sp, FontWeight.Bold))
             Text("وام‌ها، خریدهای اقساطی، اشخاص و چک‌ها", style = lt(13.sp, color = L.Muted))
         }
 
@@ -111,7 +111,7 @@ fun LayerObligationsScreen(
                         if (iOwePeople > 0) "اشخاص ${millions(iOwePeople)}" else null,
                         if (chequesOut > 0) "چک پرداختی ${millions(chequesOut)}" else null,
                         if (creditUsed > 0) "اعتباری ${millions(creditUsed)}" else null
-                    ).joinToString("\n").ifEmpty { "بدهی‌ای ندارید" },
+                    ).joinToString("\n").ifEmpty { "بدهکاری ندارید" },
                     style = lt(11.sp, color = L.Muted, lineHeight = 17.sp), modifier = Modifier.padding(top = 4.dp)
                 )
             }
@@ -281,8 +281,8 @@ fun LayerPersonDetailScreen(
             Text(
                 when {
                     balance > 0 -> "${person.name} به شما بدهکار است"
-                    balance < 0 -> "شما به ${person.name} بدهکارید"
-                    else -> "حسابتان با ${person.name} صاف است"
+                    balance < 0 -> "شما به ${person.name} بدهکار هستید"
+                    else -> "حساب شما با ${person.name} تسویه است"
                 },
                 style = lt(13.sp, FontWeight.SemiBold, when { balance > 0 -> L.GreenText; balance < 0 -> L.RedText; else -> L.Muted })
             )
@@ -307,11 +307,11 @@ fun LayerPersonDetailScreen(
                 Box(
                     Modifier.padding(top = 6.dp).height(36.dp).clip(ButtonShape).background(L.Surface).clickable(onClick = onShareReminder).padding(horizontal = 14.dp),
                     contentAlignment = Alignment.Center
-                ) { Text("فرستادن یادآوری برای ${person.name}", style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText)) }
+                ) { Text("ارسال یادآوری به ${person.name}", style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText)) }
             }
         }
 
-        SectionTitle("ریز حساب")
+        SectionTitle("صورت‌حساب")
         LayerCard(radius = 20.dp, padding = 0.dp) {
             if (mine.isEmpty()) {
                 Text("هنوز موردی ثبت نشده است.", style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(16.dp))
@@ -356,12 +356,12 @@ fun LayerPersonDetailScreen(
         Box(
             Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(44.dp).clip(RoundedCornerShape(12.dp)).clickable { askDelete = true },
             contentAlignment = Alignment.Center
-        ) { Text("حذف ${person.name} و حسابش", style = lt(14.sp, FontWeight.SemiBold, L.RedText)) }
+        ) { Text("حذف ${person.name} و حساب مربوط", style = lt(14.sp, FontWeight.SemiBold, L.RedText)) }
     }
 
     if (settling) {
         AccountChoiceSheet(
-            title = if (balance > 0) "${person.name} همهٔ ${money(balance)} تومان را داد؟" else "آیا کل مبلغ ${money(-balance)} تومان به ${person.name} پرداخت شد؟",
+            title = if (balance > 0) "آیا کل مبلغ ${money(balance)} تومان از ${person.name} دریافت شد؟" else "آیا کل مبلغ ${money(-balance)} تومان به ${person.name} پرداخت شد؟",
             question = if (balance > 0) "به کدام حساب واریز شد؟" else "از کدام حساب پرداخت شد؟",
             cards = cards,
             confirm = "تسویه شد",
@@ -376,7 +376,7 @@ fun LayerPersonDetailScreen(
         ) {
             Text(
                 "${d.kindLabel} · ${money(d.amount)} تومان" +
-                    if (d.transactionId != null) "\nتراکنشی که با آن روی حساب ثبت شد هم پاک می‌شود و موجودی حساب برمی‌گردد." else "",
+                    if (d.transactionId != null) "\nتراکنش مرتبط نیز حذف و موجودی حساب اصلاح می‌شود." else "",
                 style = lt(13.sp, color = L.Muted, lineHeight = 23.sp)
             )
         }
@@ -387,7 +387,7 @@ fun LayerPersonDetailScreen(
             bottomBar = { BigButton("بله، حذف شود", background = L.RedText) { onDelete(); askDelete = false } }
         ) {
             Text(
-                "${person.name} و ریز حسابش پاک می‌شود. تراکنش‌هایی که روی حساب‌های بانکی ثبت شده‌اند می‌مانند، زیرا آن مبالغ واقعاً جابه‌جا شده‌اند.",
+                "${person.name} و صورت‌حساب او حذف می‌شود. تراکنش‌هایی که روی حساب‌های بانکی ثبت شده‌اند می‌مانند، زیرا آن مبالغ واقعاً جابه‌جا شده‌اند.",
                 style = lt(13.sp, color = L.Muted, lineHeight = 23.sp)
             )
         }
@@ -416,7 +416,7 @@ private fun AccountChoiceSheet(
 @Composable
 private fun AccountChips(cards: List<BankCard>, selected: String?, onSelect: (String?) -> Unit) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        LChip("بیرون از حساب‌ها (دستی)", selected == null) { onSelect(null) }
+        LChip("خارج از حساب‌ها (دستی)", selected == null) { onSelect(null) }
         cards.forEach { c -> LChip(c.bankName, selected == c.bankName) { onSelect(c.bankName) } }
     }
 }
@@ -436,21 +436,21 @@ fun PersonSheet(person: Person?, existingNames: List<String>, onDismiss: () -> U
         onDismiss = onDismiss,
         topGap = 140.dp,
         bottomBar = {
-            BigButton(if (person == null) "باز کردن حساب" else "ذخیره", enabled = clean.isNotEmpty() && !taken) {
+            BigButton(if (person == null) "ایجاد حساب" else "ذخیره", enabled = clean.isNotEmpty() && !taken) {
                 onSave((person ?: Person(name = clean)).copy(name = clean, relation = relation, phone = phone.trim()))
             }
         }
     ) {
         LField(
-            value = name, onChange = { name = it.take(40) }, label = "نام", placeholder = "مثلاً علی یا مامان",
-            hint = if (taken) "کسی با این نام دارید." else null
+            value = name, onChange = { name = it.take(40) }, label = "نام", placeholder = "مثلاً علی رضایی",
+            hint = if (taken) "شخصی با این نام وجود دارد." else null
         )
         Text("نسبت", style = lt(13.sp, FontWeight.SemiBold))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             PersonRelation.all.forEach { r -> LChip(r, relation == r) { relation = r } }
         }
         LField(
-            value = phone, onChange = { phone = it.filter { c -> c.isDigit() || c == '+' }.take(15) }, label = "شماره (اختیاری)",
+            value = phone, onChange = { phone = it.filter { c -> c.isDigit() || c == '+' }.take(15) }, label = "شمارهٔ تماس (اختیاری)",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
         )
         Spacer(Modifier.height(4.dp))
@@ -508,7 +508,7 @@ fun PersonEntrySheet(
             }
         }
     ) {
-        Text("برای چه کسی؟", style = lt(13.sp, FontWeight.SemiBold))
+        Text("طرف حساب", style = lt(13.sp, FontWeight.SemiBold))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             persons.sortedBy { it.name }.forEach { p -> LChip(p.name, personId == p.id) { personId = p.id } }
             LChip("+ شخص جدید", false, onClick = onAddPerson)
@@ -534,10 +534,10 @@ fun PersonEntrySheet(
             value = amountText, onChange = { amountText = groupedInput(it) }, label = "مبلغ (تومان)", placeholder = "۰",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
         )
-        Text(if (kind.owedToMe) "از کدام حساب رفت؟" else "به کدام حساب آمد؟", style = lt(13.sp, FontWeight.SemiBold))
+        Text(if (kind.owedToMe) "حساب پرداخت‌کننده" else "حساب دریافت‌کننده", style = lt(13.sp, FontWeight.SemiBold))
         AccountChips(cards, account) { account = it }
         Text(
-            "اگر حساب انتخاب کنید موجودی آن هم تغییر می‌کند، ولی در هزینه و درآمد ماه حساب نمی‌شود.",
+            "با انتخاب حساب، موجودی آن نیز به‌روز می‌شود؛ این مبلغ در هزینه و درآمد ماه منظور نمی‌شود.",
             style = lt(11.sp, color = L.Muted, lineHeight = 19.sp)
         )
         if (!isRepayment) {
@@ -547,7 +547,7 @@ fun PersonEntrySheet(
                     LChip(label, dueDays == d) { dueDays = d }
                 }
             }
-            if (dueDays != null) Text("روز موعد یادآوری می‌آید.", style = lt(11.sp, color = L.Muted))
+            if (dueDays != null) Text("در روز موعد یادآوری ارسال می‌شود.", style = lt(11.sp, color = L.Muted))
         }
         LField(value = note, onChange = { note = it.take(60) }, label = "یادداشت (اختیاری)", placeholder = "مثلاً برای اجاره")
         Spacer(Modifier.height(4.dp))
@@ -588,12 +588,12 @@ fun SplitExpenseSheet(
             }
         }
     ) {
-        LField(value = title, onChange = { title = it.take(40) }, label = "برای چه؟", placeholder = "مثلاً شام جمعه")
+        LField(value = title, onChange = { title = it.take(40) }, label = "شرح", placeholder = "مثلاً شام جمعه")
         LField(
             value = totalText, onChange = { totalText = groupedInput(it) }, label = "کل مبلغ (تومان)", placeholder = "۰",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
         )
-        Text("چه کسانی بودند؟", style = lt(13.sp, FontWeight.SemiBold))
+        Text("اشخاص سهیم", style = lt(13.sp, FontWeight.SemiBold))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             LChip("خودم", includeMe) { includeMe = !includeMe }
             persons.sortedBy { it.name }.forEach { p ->
@@ -604,17 +604,17 @@ fun SplitExpenseSheet(
         if (total > 0 && n > 0) {
             Text(
                 "سهم هر نفر ${money(share)} تومان. " +
-                    (if (includeMe) "سهم خودتان هزینه ثبت می‌شود و " else "") +
-                    "سهم ${fa(picked.size)} نفر دیگر به طلب شما از آن‌ها اضافه می‌شود.",
+                    (if (includeMe) "سهم شما به‌عنوان هزینه ثبت می‌شود و " else "") +
+                    "سهم ${fa(picked.size)} نفر دیگر به بستانکاری شما افزوده می‌شود.",
                 style = lt(12.sp, color = L.PrimaryText, lineHeight = 21.sp)
             )
         }
-        Text("از کدام حساب پرداخت کردید؟", style = lt(13.sp, FontWeight.SemiBold))
+        Text("حساب پرداخت‌کننده", style = lt(13.sp, FontWeight.SemiBold))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             cards.forEach { c -> LChip(c.bankName, account == c.bankName) { account = c.bankName } }
         }
         if (includeMe) {
-            Text("دستهٔ سهم خودتان", style = lt(13.sp, FontWeight.SemiBold))
+            Text("دستهٔ سهم شما", style = lt(13.sp, FontWeight.SemiBold))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 expenseCats.forEach { c -> LChip(c.name, category == c.name) { category = c.name } }
             }

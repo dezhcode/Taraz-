@@ -73,7 +73,7 @@ fun ComingSoonPanel(
             }
         }
         Spacer(Modifier.weight(1f))
-        BigButton("باشه", onClick = onClose)
+        BigButton("متوجه شدم", onClick = onClose)
         Spacer(Modifier.height(8.dp))
     }
 }

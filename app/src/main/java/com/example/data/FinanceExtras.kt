@@ -57,7 +57,7 @@ data class Person(
 object PersonRelation {
     const val FRIEND = "دوست"
     const val FAMILY = "خانواده"
-    const val RELATIVE = "فامیل"
+    const val RELATIVE = "بستگان"
     const val COLLEAGUE = "همکار"
     const val OTHER = "سایر"
     val all = listOf(FRIEND, FAMILY, RELATIVE, COLLEAGUE, OTHER)

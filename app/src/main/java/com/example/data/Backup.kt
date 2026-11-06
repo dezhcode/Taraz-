@@ -29,7 +29,7 @@ object Backup {
     private val MAGIC = "TRZB1".toByteArray()
     private const val ITERATIONS = 120_000
 
-    class WrongPasswordException : Exception("رمز پشتیبان درست نیست یا فایل خراب است.")
+    class WrongPasswordException : Exception("رمز پشتیبان نادرست است یا فایل آسیب دیده است.")
     class NotABackupException : Exception("این فایل پشتیبان تراز نیست.")
 
     // ─── encryption ───

@@ -78,7 +78,7 @@ fun LayerThemeChooser(onDone: () -> Unit) {
             )
             Text("حالت نمایش را انتخاب کنید", style = lt(26.sp, FontWeight.Bold), modifier = Modifier.padding(top = 8.dp))
             Text(
-                "روشن برای روز و تیره برای شب و چشم راحت‌تر. بعداً از «تنظیمات › ظاهر» هم عوضش می‌کنید.",
+                "حالت روشن مناسب روز و حالت تیره مناسب شب است. این گزینه بعداً از «تنظیمات › ظاهر» قابل تغییر است.",
                 style = lt(14.sp, color = L.Muted, lineHeight = 26.sp)
             )
         }

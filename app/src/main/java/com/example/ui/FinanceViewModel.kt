@@ -529,7 +529,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     fun splitExpense(title: String, total: Long, account: String, category: String, includeMe: Boolean, personIds: List<Int>) {
         viewModelScope.launch {
             val people = persons.value.filter { it.id in personIds }
-            repository.splitExpense(title.trim().ifBlank { "خرج جمعی" }, total, account, category, includeMe, people)
+            repository.splitExpense(title.trim().ifBlank { "هزینهٔ گروهی" }, total, account, category, includeMe, people)
         }
     }
 
@@ -1459,8 +1459,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             val gone = repository.deleteTransaction(transaction)
             offerUndo(
                 if (transaction.isTransfer) "انتقال حذف شد" else "«${transaction.title}» حذف شد",
-                if (transaction.isTransfer) "موجودی هر دو حساب برگشت"
-                else "${formatNumber(transaction.amount)} تومان ${if (transaction.isExpense) "به" else "از"} ${transaction.bankName} ${if (transaction.isExpense) "برگشت" else "کم شد"}",
+                if (transaction.isTransfer) "موجودی هر دو حساب اصلاح شد"
+                else "${formatNumber(transaction.amount)} تومان ${if (transaction.isExpense) "به" else "از"} ${transaction.bankName} ${if (transaction.isExpense) "بازگشت" else "کسر شد"}",
                 gone
             )
         }
@@ -1953,7 +1953,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
      */
     private suspend fun accountForAssistant(requested: String?): String {
         val all = repository.allCardsNow()
-        if (all.isEmpty()) throw IllegalStateException("هنوز حسابی نساخته‌اید؛ اول یک حساب اضافه کنید.")
+        if (all.isEmpty()) throw IllegalStateException("هنوز حسابی تعریف نشده است؛ ابتدا یک حساب اضافه کنید.")
         val want = requested?.trim().orEmpty()
         if (want.isNotEmpty()) {
             all.firstOrNull { it.bankName.equals(want, ignoreCase = true) }?.let { return it.bankName }

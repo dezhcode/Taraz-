@@ -75,7 +75,7 @@ fun LayerNavBar(
     val entries = listOf(
         NavEntry("خانه", Icons.Outlined.GridView) { onTabSelected(Tab.HOME) },
         NavEntry("تراکنش‌ها", Icons.AutoMirrored.Filled.List) { onTabSelected(Tab.TRANSACTIONS) },
-        NavEntry("قرض و قسط", Icons.Default.AccountBalance) { onTabSelected(Tab.LOANS) },
+        NavEntry("تعهدات", Icons.Default.AccountBalance) { onTabSelected(Tab.LOANS) },
         NavEntry("دستیار", Icons.Default.AutoAwesome, onAssistant)
     )
     val selectedIndex = when (currentTab) {

@@ -108,10 +108,10 @@ fun HomeSearchSheet(
     val total = tools.size + txs.size + people.size + foundBills.size + foundCheques.size
 
     LayerSheet(title = "جستجو", onDismiss = onDismiss, closeLabel = "بستن", topGap = 24.dp) {
-        LField(query, { query = it }, "دنبال چه می‌گردید؟", placeholder = "اسنپ، قبض، علی، ۲۵۰٬۰۰۰ یا #سفر")
+        LField(query, { query = it }, "عبارت جستجو", placeholder = "اسنپ، قبض، علی، ۲۵۰٬۰۰۰ یا #سفر")
         when {
             q.isEmpty() -> Text(
-                "عنوان یا مبلغ تراکنش، نام شخص، قبض یا چک، یا اسم یک ابزار مثل «چک» یا «بودجه» را بنویسید.",
+                "عنوان یا مبلغ تراکنش، نام شخص، قبض یا چک، یا نام یک ابزار مانند «چک» یا «بودجه» را وارد کنید.",
                 style = lt(13.sp, color = L.Muted, lineHeight = 22.sp)
             )
             total == 0 -> Text("موردی یافت نشد.", style = lt(13.sp, color = L.Muted))
@@ -139,7 +139,7 @@ fun HomeSearchSheet(
                 SearchRow(
                     (if (c.issued) "به " else "از ") + c.person,
                     "${JalaliDate.fromTimestamp(c.dueDate).formatShort()} · " + when (c.status) {
-                        ChequeStatus.CLEARED -> "پاس شد"; ChequeStatus.BOUNCED -> "برگشت خورد"; else -> "در انتظار"
+                        ChequeStatus.CLEARED -> "وصول شد"; ChequeStatus.BOUNCED -> "برگشتی"; else -> "در انتظار"
                     },
                     money(c.amount)
                 ) { onDismiss(); onCheque(c) }
@@ -153,7 +153,7 @@ fun HomeSearchSheet(
                     txColor(t, L.Muted)
                 ) { onDismiss(); onTransaction(t) }
             }
-            if (txs.size > 30) Text("${fa(txs.size - 30)} تراکنش دیگر؛ برای دیدن همه از فیلتر تراکنش‌ها استفاده کنید.", style = lt(12.sp, color = L.Muted))
+            if (txs.size > 30) Text("${fa(txs.size - 30)} تراکنش دیگر؛ برای مشاهدهٔ همه از فیلتر تراکنش‌ها استفاده کنید.", style = lt(12.sp, color = L.Muted))
         }
         Spacer(Modifier.height(4.dp))
     }

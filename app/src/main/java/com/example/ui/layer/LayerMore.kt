@@ -86,7 +86,7 @@ fun LayerBudgetSheet(current: Long, avgDaily: Long, onDismiss: () -> Unit, onSav
             }
         }
     ) {
-        Text("روزشمار خانه با این عدد مقایسه می‌کند.", style = lt(13.sp, color = L.Muted))
+        Text("هزینهٔ روزانه در صفحهٔ خانه با این سقف مقایسه می‌شود.", style = lt(13.sp, color = L.Muted))
         Column(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 if (text.isEmpty()) Text("۰", style = lt(54.sp, FontWeight.Light, L.Placeholder, letterSpacing = (-1.5).sp), textAlign = TextAlign.Center)
@@ -151,7 +151,7 @@ fun LayerGoalsScreen(
 
     LayerScreen(
         title = "اهداف پس‌انداز",
-        subtitle = if (active.isEmpty()) "هنوز هدفی ندارید" else "${fa(active.size)} هدف فعال · ${money(saved)} تومان جمع شده",
+        subtitle = if (active.isEmpty()) "هدف فعالی وجود ندارد" else "${fa(active.size)} هدف فعال · ${money(saved)} تومان پس‌انداز شده",
         onBack = onBack,
         trailing = {
             Row(
@@ -168,7 +168,7 @@ fun LayerGoalsScreen(
                 Box(Modifier.size(88.dp).clip(CircleShape).background(L.NavSelected), contentAlignment = Alignment.Center) {
                     Icon(Icons.Default.Flag, null, tint = L.Primary, modifier = Modifier.size(40.dp))
                 }
-                Text("اولین هدفتان را بگذارید", style = lt(17.sp, FontWeight.Bold))
+                Text("نخستین هدف پس‌انداز را تعیین کنید", style = lt(17.sp, FontWeight.Bold))
                 Text("مثلاً سفر، لپ‌تاپ یا صندوق اضطراری.", style = lt(13.sp, color = L.Muted))
             }
         }
@@ -282,7 +282,7 @@ private fun LayerAddGoalSheet(onDismiss: () -> Unit, onSave: (String, Long, Long
     LayerSheet(
         title = "هدف جدید", onDismiss = onDismiss, topGap = 120.dp,
         bottomBar = {
-            BigButton("ساخت هدف", enabled = title.isNotBlank() && t > 0) {
+            BigButton("ایجاد هدف", enabled = title.isNotBlank() && t > 0) {
                 onSave(title.trim(), t, parseAmount(current), months?.let { shiftJalaliMonth(System.currentTimeMillis(), it) })
             }
         }
@@ -290,7 +290,7 @@ private fun LayerAddGoalSheet(onDismiss: () -> Unit, onSave: (String, Long, Long
         LField(title, { title = it }, "نام هدف", placeholder = "مثلاً سفر شمال")
         LField(target, { target = groupedInput(it) }, "مبلغ هدف (تومان)", placeholder = "۰", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
         LField(current, { current = groupedInput(it) }, "مبلغ پس‌انداز فعلی (اختیاری)", placeholder = "۰", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-        Text("تا کی؟", style = lt(13.sp, FontWeight.SemiBold))
+        Text("مهلت", style = lt(13.sp, FontWeight.SemiBold))
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(3 to "۳ ماه", 6 to "۶ ماه", 12 to "یک سال", 24 to "دو سال", null to "بدون موعد").forEach { (m, label) ->
                 LChip(label, months == m) { months = m }
@@ -298,7 +298,7 @@ private fun LayerAddGoalSheet(onDismiss: () -> Unit, onSave: (String, Long, Long
         }
         val left = (t - parseAmount(current)).coerceAtLeast(0)
         months?.let { m ->
-            if (left > 0) Text("یعنی ماهی ${money(left / m)} تومان کنار بگذارید.", style = lt(12.sp, color = L.PrimaryText))
+            if (left > 0) Text("یعنی ماهانه ${money(left / m)} تومان پس‌انداز لازم است.", style = lt(12.sp, color = L.PrimaryText))
         }
     }
 }
@@ -309,12 +309,12 @@ data class GoalPlan(val headline: String, val advice: String, val onTrack: Boole
 fun goalPlan(goal: FinancialGoal, transactions: List<Transaction>, now: Long = System.currentTimeMillis()): GoalPlan? {
     val deadline = goal.deadline ?: return null
     val left = (goal.targetAmount - goal.currentAmount).coerceAtLeast(0)
-    if (left == 0L) return GoalPlan("به هدف رسیدید", "می‌توانید آن را تمام‌شده علامت بزنید.", true)
+    if (left == 0L) return GoalPlan("هدف محقق شد", "می‌توانید آن را به‌عنوان تکمیل‌شده علامت بزنید.", true)
     val d = JalaliDate.fromTimestamp(deadline)
     val t = JalaliDate.fromTimestamp(now)
     val monthsLeft = ((d.year - t.year) * 12 + (d.month - t.month)).coerceAtLeast(1)
     val perMonth = (left + monthsLeft - 1) / monthsLeft
-    val headline = "ماهی ${money(perMonth)} تومان تا ${d.formatMonthYear()}"
+    val headline = "ماهانه ${money(perMonth)} تومان تا ${d.formatMonthYear()}"
 
     // میانگین سه ماه گذشته (بدون ماه جاری که هنوز تمام نشده)
     val months = (1..3).map { shiftJalaliMonth(now, -it) }
@@ -324,10 +324,10 @@ fun goalPlan(goal: FinancialGoal, transactions: List<Transaction>, now: Long = S
         Triple(inMonth.filter { it.countsAsIncome }.sumOf { it.amount }, inMonth.filter { it.countsAsExpense }.sumOf { it.amount }, inMonth)
     }
     val withData = stats.filter { it.first > 0 || it.second > 0 }
-    if (withData.isEmpty()) return GoalPlan(headline, "وقتی چند ماه تراکنش ثبت کنید، می‌گویم با روند فعلی به موقع می‌رسید یا از کجا کم کنید.", true)
+    if (withData.isEmpty()) return GoalPlan(headline, "پس از ثبت تراکنش‌های چند ماه، امکان تحقق هدف با روند فعلی و موارد قابل کاهش نمایش داده می‌شود.", true)
     val avgSaved = withData.sumOf { it.first - it.second } / withData.size
     if (avgSaved >= perMonth) {
-        return GoalPlan(headline, "در سه ماه گذشته به‌طور میانگین ماهی ${money(avgSaved)} تومان پس‌انداز داشتید؛ با همین روند به موقع می‌رسید.", true)
+        return GoalPlan(headline, "میانگین پس‌انداز ماهانهٔ شما در سه ماه گذشته ${money(avgSaved)} تومان بوده است؛ با این روند، هدف در موعد محقق می‌شود.", true)
     }
     val gap = perMonth - avgSaved.coerceAtLeast(0)
     // دسته‌ای که بیشترین خرج اختیاری را دارد (قسط و قبوض را نمی‌شود کم کرد)
@@ -338,9 +338,9 @@ fun goalPlan(goal: FinancialGoal, transactions: List<Transaction>, now: Long = S
     val top = byCat.firstOrNull()
     val advice = if (top != null && top.second > 0) {
         val pct = (gap * 100 / top.second).coerceAtMost(100L)
-        "میانگین پس‌انداز شما ماهی ${money(avgSaved.coerceAtLeast(0))} است و ${money(gap)} کم دارید. " +
-            "اگر از «${top.first}» (ماهی حدود ${money(top.second)}) ${fa(pct)}٪ کم کنید به موقع می‌رسید" +
-            if (pct >= 100) "؛ یا موعد را عقب‌تر بیندازید." else "."
+        "میانگین پس‌انداز ماهانهٔ شما ${money(avgSaved.coerceAtLeast(0))} تومان و کسری ${money(gap)} تومان است. " +
+            "با کاهش ${fa(pct)}٪ از هزینهٔ «${top.first}» (ماهانه حدود ${money(top.second)} تومان)، هدف در موعد محقق می‌شود" +
+            if (pct >= 100) "؛ یا موعد را تمدید کنید." else "."
     } else "ماهانه ${money(gap)} تومان بیش از روند فعلی لازم است؛ موعد را تمدید کنید یا هزینه‌ها را کاهش دهید."
     return GoalPlan(headline, advice, false)
 }
@@ -389,17 +389,17 @@ fun LayerSettingsScreen(
             Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 LSegmented(listOf("روشن", "تیره"), if (darkMode) 1 else 0, { onDarkModeChange(it == 1) })
                 Text(
-                    if (darkMode) "حالت تیره: برای شب و نور کم، چشم راحت‌تر است." else "حالت روشن: برای روز و نور زیاد.",
+                    if (darkMode) "حالت تیره: مناسب شب و محیط کم‌نور." else "حالت روشن: مناسب روز و محیط پرنور.",
                     style = lt(12.sp, color = L.Muted)
                 )
             }
         }
         SettingsGroup("امنیت") {
             SwitchRow("قفل با اثر انگشت", "هر بار که تراز باز می‌شود", biometricEnabled, onBiometricChange)
-            NavRow("امتحان صفحهٔ قفل", null, divider = false, onClick = onTestLock)
+            NavRow("آزمایش صفحهٔ قفل", null, divider = false, onClick = onTestLock)
         }
         SettingsGroup("اعلان‌ها") {
-            SwitchRow("اعلان‌ها و یادآور اقساط", if (com.example.Features.SMS) "سه روز و یک روز قبل از سررسید، و پیامک‌های تازهٔ بانک" else "سه روز و یک روز قبل از سررسید اقساط، چک‌ها و قبض‌ها", alertsEnabled, onAlertsChange, divider = false)
+            SwitchRow("اعلان‌ها و یادآوری اقساط", if (com.example.Features.SMS) "سه روز و یک روز قبل از سررسید، و پیامک‌های تازهٔ بانک" else "سه روز و یک روز قبل از سررسید اقساط، چک‌ها و قبض‌ها", alertsEnabled, onAlertsChange, divider = false)
         }
         SettingsGroup("داده‌ها") {
             if (com.example.Features.SMS) NavRow("پیامک‌های بانکی", if (smsBankCount > 0) "${fa(smsBankCount)} بانک روشن" else "خاموش", onClick = onOpenSms)
@@ -440,10 +440,10 @@ fun LayerSettingsScreen(
             }
             if (askReset) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("همهٔ حساب‌ها، تراکنش‌ها، اقساط و اهداف پاک می‌شوند و برگشتی ندارند. مطمئنید؟", style = lt(13.sp, color = L.RedInk, lineHeight = 23.sp))
+                    Text("همهٔ حساب‌ها، تراکنش‌ها، اقساط و اهداف حذف می‌شوند و قابل بازگردانی نیستند. آیا اطمینان دارید؟", style = lt(13.sp, color = L.RedInk, lineHeight = 23.sp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(12.dp)).background(L.RedText).clickable(onClick = onResetAll), contentAlignment = Alignment.Center) {
-                            Text("بله، همه پاک شود", style = lt(14.sp, FontWeight.Bold, Color.White))
+                            Text("بله، حذف شود", style = lt(14.sp, FontWeight.Bold, Color.White))
                         }
                         Box(Modifier.height(44.dp).clip(RoundedCornerShape(12.dp)).background(L.Chip).clickable { askReset = false }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
                             Text("انصراف", style = lt(14.sp, FontWeight.SemiBold))
@@ -452,12 +452,12 @@ fun LayerSettingsScreen(
                 }
             } else {
                 Column(Modifier.fillMaxWidth().clickable { askReset = true }.padding(horizontal = 16.dp).height(60.dp), verticalArrangement = Arrangement.Center) {
-                    Text("پاک کردن همهٔ داده‌ها", style = lt(14.sp, FontWeight.SemiBold, L.RedText))
-                    Text("قبل از پاک شدن، یک بار دیگر از شما تأیید گرفته می‌شود", style = lt(12.sp, color = L.Muted))
+                    Text("حذف همهٔ داده‌ها", style = lt(14.sp, FontWeight.SemiBold, L.RedText))
+                    Text("پیش از حذف، تأیید مجدد دریافت می‌شود", style = lt(12.sp, color = L.Muted))
                 }
             }
         }
-        Text("تراز · نسخهٔ ۲٫۰", style = lt(12.sp, color = L.Muted), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+        Text("تراز · نسخهٔ ۲۴٫۰٫۱", style = lt(12.sp, color = L.Muted), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
     }
 }
 
@@ -511,7 +511,7 @@ fun LayerCategoriesScreen(
         bottomBar = { BigButton("دستهٔ جدید", onClick = onAdd) }
     ) {
         Text(
-            "روی هر دسته بزنید تا نام، آیکن، رنگ یا بودجهٔ ماهانهٔ آن را تغییر دهید.",
+            "برای تغییر نام، آیکن، رنگ یا بودجهٔ ماهانه، روی دسته ضربه بزنید.",
             style = lt(12.sp, color = L.Muted), modifier = Modifier.padding(horizontal = 24.dp)
         )
         listOf(false to "هزینه‌ها", true to "درآمدها").forEach { (income, label) ->
@@ -588,7 +588,7 @@ fun LayerAddCategoryScreen(
         subtitle = if (existing == null) "نام، آیکن و رنگ را انتخاب کنید" else "تراکنش‌های این دسته نیز با نام جدید نمایش داده می‌شوند",
         onBack = onBack,
         bottomBar = {
-            BigButton(if (existing == null) "ساخت دسته" else "ذخیره", enabled = name.isNotBlank() && !taken) {
+            BigButton(if (existing == null) "ایجاد دسته" else "ذخیره", enabled = name.isNotBlank() && !taken) {
                 onSave(name.trim(), iconKey, colorHex, income, parseAmount(budgetText))
             }
             if (onDelete != null) {
@@ -610,12 +610,12 @@ fun LayerAddCategoryScreen(
         }
         Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             LSegmented(listOf("هزینه", "درآمد"), if (income) 1 else 0, { income = it == 1 })
-            LField(name, { name = it }, "نام دسته", placeholder = "مثلاً قبض برق", hint = if (taken) "دسته‌ای با این نام دارید." else null)
+            LField(name, { name = it }, "نام دسته", placeholder = "مثلاً قبض برق", hint = if (taken) "دسته‌ای با این نام وجود دارد." else null)
             if (!income) {
                 LField(
                     budgetText, { budgetText = groupedInput(it) }, "بودجهٔ ماهانه (اختیاری، تومان)", placeholder = "۰",
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    hint = "با رسیدن به ۸۰٪ در خانه هشدار می‌بینید."
+                    hint = "با رسیدن به ۸۰٪، در صفحهٔ خانه هشدار نمایش داده می‌شود."
                 )
             }
             Text("آیکن", style = lt(13.sp, FontWeight.SemiBold))
@@ -709,7 +709,7 @@ fun LayerNotificationsScreen(
             if (budgetPct >= 0) {
                 NotifItem(
                     L.Chip, L.Ink, "${fa(budgetPct)}٪ سقف امروز مصرف شده",
-                    if (todayExpense <= dailyBudget) "${money(dailyBudget - todayExpense)} تومان تا سقف امروز باقی مانده است" else "${money(todayExpense - dailyBudget)} تومان از سقف گذشته‌اید",
+                    if (todayExpense <= dailyBudget) "${money(dailyBudget - todayExpense)} تومان تا سقف امروز باقی مانده است" else "${money(todayExpense - dailyBudget)} تومان بیش از سقف",
                     null, {}
                 )
             }

@@ -129,7 +129,7 @@ fun BiometricLockScreen(
             )
             Text("تراز قفل است", style = lt(24.sp, FontWeight.Bold), modifier = Modifier.padding(top = 10.dp))
             Text(
-                "برای دیدن حساب‌ها و اقساطتان، هویت‌تان را تأیید کنید.",
+                "برای مشاهدهٔ حساب‌ها و اقساط، هویت خود را تأیید کنید.",
                 style = lt(14.sp, color = L.Muted, lineHeight = 26.sp),
                 textAlign = TextAlign.Center
             )
@@ -152,7 +152,7 @@ fun BiometricLockScreen(
                 }
             }
             Spacer(Modifier.height(14.dp))
-            Text("انگشتتان را روی حسگر بگذارید", style = lt(14.sp, FontWeight.SemiBold, L.PrimaryText))
+            Text("انگشت خود را روی حسگر قرار دهید", style = lt(14.sp, FontWeight.SemiBold, L.PrimaryText))
 
             if (authError != null) {
                 Spacer(Modifier.height(16.dp))
@@ -171,12 +171,12 @@ fun BiometricLockScreen(
         }
 
         if (isUnavailableOnDevice) {
-            BigButton("متوجه شدم، ادامه", Modifier.testTag("biometric_unavailable_ack_button")) { onLockUnavailable() }
+            BigButton("ادامه", Modifier.testTag("biometric_unavailable_ack_button")) { onLockUnavailable() }
         } else {
-            SoftBigButton("استفاده از رمز گوشی", Modifier.testTag("biometric_retry_button")) { triggerBiometricAuthentication() }
+            SoftBigButton("استفاده از رمز دستگاه", Modifier.testTag("biometric_retry_button")) { triggerBiometricAuthentication() }
         }
         Text(
-            "این قفل را از «تنظیمات › امنیت» خاموش یا روشن کنید.",
+            "این قفل را از «تنظیمات › امنیت» فعال یا غیرفعال کنید.",
             style = lt(12.sp, color = L.Muted, lineHeight = 22.sp),
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 14.dp)

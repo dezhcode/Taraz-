@@ -165,7 +165,7 @@ fun TxFilterSheet(
                 }
             }
             BigButton(
-                if (hits.isEmpty()) "تراکنشی با این فیلتر نیست" else "نمایش ${fa(hits.size)} تراکنش",
+                if (hits.isEmpty()) "تراکنشی مطابق این فیلتر یافت نشد" else "نمایش ${fa(hits.size)} تراکنش",
                 enabled = hits.isNotEmpty()
             ) { onApply(built); onDismiss() }
         }

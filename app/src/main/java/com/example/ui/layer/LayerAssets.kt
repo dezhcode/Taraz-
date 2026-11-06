@@ -115,7 +115,7 @@ fun LayerAssetsScreen(
 
     LayerScreen(
         title = "دارایی‌ها",
-        subtitle = if (refreshing) "در حال گرفتن قیمت‌های روز…"
+        subtitle = if (refreshing) "در حال دریافت قیمت‌های روز…"
         else lastAt?.let { "قیمت‌ها: ${agoText(it)}" } ?: "ارز، طلا، رمزارز و صندوق با قیمت روز",
         onBack = onBack,
         trailing = {
@@ -165,8 +165,8 @@ fun LayerAssetsScreen(
         if (errors.isNotEmpty()) {
             Callout(
                 "بعضی قیمت‌ها به‌روز نشد",
-                "آخرین قیمتی که داشتیم نشان داده می‌شود.\n" +
-                    "اگر فیلترشکن روشن است، برای گرفتن قیمت خاموشش کنید: سایت‌های قیمت ایرانی به آی‌پی خارج جواب نمی‌دهند. " +
+                "آخرین قیمت ثبت‌شده نمایش داده می‌شود.\n" +
+                    "در صورت روشن بودن فیلترشکن، برای دریافت قیمت آن را خاموش کنید؛ سایت‌های قیمت داخلی به نشانی‌های خارجی پاسخ نمی‌دهند. " +
                     "در صورت تداوم مشکل، از این کادر تصویر تهیه کرده و برای پشتیبانی ارسال کنید.\n" +
                     errors.joinToString(" · "),
                 L.AmberSoft, L.AmberInk, Modifier.padding(horizontal = 20.dp)
@@ -175,7 +175,7 @@ fun LayerAssetsScreen(
 
         if (assets.isEmpty()) {
             Text(
-                "دلار، طلا، سکه، رمزارز یا واحد صندوقی که دارید را اضافه کنید؛ ارزش تومانی‌اش هر بار با قیمت روز حساب می‌شود.",
+                "دلار، طلا، سکه، رمزارز یا واحدهای صندوق خود را اضافه کنید؛ ارزش تومانی آن با قیمت روز محاسبه می‌شود.",
                 style = lt(13.sp, color = L.Muted, lineHeight = 23.sp), modifier = Modifier.padding(horizontal = 24.dp)
             )
         }
@@ -231,7 +231,7 @@ fun LayerAssetsScreen(
         }
 
         Text(
-            "قیمت‌ها از بازار آزاد خوانده می‌شوند (ارز و طلا از tgju، رمزارز از نوبیتکس، صندوق‌های بورسی از سایت بورس) و ممکن است با قیمت معامله‌ی شما کمی فرق کنند.",
+            "قیمت‌ها از بازار آزاد خوانده می‌شوند (ارز و طلا از tgju، رمزارز از نوبیتکس، صندوق‌های بورسی از سایت بورس) و ممکن است با قیمت معاملهٔ شما اندکی تفاوت داشته باشند.",
             style = lt(11.sp, color = L.Muted, lineHeight = 19.sp), modifier = Modifier.padding(horizontal = 24.dp)
         )
     }
@@ -347,13 +347,13 @@ fun AssetSheet(
             )
         }
         LField(
-            value = buyText, onChange = { buyText = groupedInput(it) }, label = "جمع مبلغی که پرداختید (اختیاری، تومان)",
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), hint = "تا سود یا زیانتان را ببینید."
+            value = buyText, onChange = { buyText = groupedInput(it) }, label = "بهای تمام‌شده (اختیاری، تومان)",
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), hint = "برای محاسبهٔ سود یا زیان"
         )
         LField(
             value = manualText, onChange = { manualText = groupedInput(it) }, label = "قیمت هر واحد به‌صورت دستی (اختیاری)",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            hint = "اگر خالی بماند قیمت روز استفاده می‌شود."
+            hint = "در صورت خالی بودن، قیمت روز اعمال می‌شود."
         )
         Spacer(Modifier.height(4.dp))
     }
@@ -426,9 +426,9 @@ private fun InflationCard(snapshots: List<com.example.data.NetWorthSnapshot>, hi
         val usdChange = if (usdA > 0) (usdB - usdA) / usdA else 0.0
         Text(
             when {
-                b.netWorth > a.netWorth && usdChange < 0 -> "عدد تومانی بالا رفته ولی به دلار کمتر شده؛ یعنی تورم از پس‌انداز جلو زده."
-                usdChange > 0 -> "ارزش واقعی دارایی‌تان بیشتر شده. خوب پیش می‌روید."
-                else -> "ارزش دارایی‌تان به دلار و طلا کم شده است."
+                b.netWorth > a.netWorth && usdChange < 0 -> "ارزش تومانی افزایش یافته اما ارزش دلاری کاهش یافته است؛ یعنی نرخ تورم از رشد پس‌انداز بیشتر بوده است."
+                usdChange > 0 -> "ارزش واقعی دارایی شما افزایش یافته است."
+                else -> "ارزش دارایی شما به دلار و طلا کاهش یافته است."
             },
             style = lt(12.sp, color = L.Muted, lineHeight = 20.sp), modifier = Modifier.padding(top = 8.dp)
         )

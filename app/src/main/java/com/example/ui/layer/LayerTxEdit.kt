@@ -133,7 +133,7 @@ fun LayerTxEditSheet(
                     Text("  تغییرات ذخیره شد", style = lt(13.sp, FontWeight.Bold, L.GreenText))
                 }
             }
-            BigButton(if (dirty) "ذخیره تغییرات" else "تغییری نداده‌اید", enabled = canSave) {
+            BigButton(if (dirty) "ذخیره تغییرات" else "تغییری اعمال نشده است", enabled = canSave) {
                 onSave(
                     tx.copy(
                         amount = amount, category = category, bankName = account, title = title.trim(), date = date,
@@ -149,7 +149,7 @@ fun LayerTxEditSheet(
                     Text(
                         when {
                             tx.isTransfer -> "این انتقال حذف شود؟ هر دو طرف آن پاک می‌شوند و موجودی هر دو حساب به حالت قبل برمی‌گردد."
-                            tx.loanId != null -> "این پرداخت قسط حذف شود؟ ${money(tx.amount)} تومان به موجودی ${tx.bankName} برمی‌گردد و از پرداخت‌شدهٔ وام هم کم می‌شود."
+                            tx.loanId != null -> "این پرداخت قسط حذف شود؟ ${money(tx.amount)} تومان به موجودی ${tx.bankName} برمی‌گردد و از مبلغ پرداخت‌شدهٔ وام نیز کسر می‌شود."
                             else -> "این تراکنش حذف شود؟ ${money(tx.amount)} تومان ${if (tx.isExpense) "به موجودی ${tx.bankName} برمی‌گردد" else "از موجودی ${tx.bankName} کم می‌شود"}."
                         },
                         style = lt(13.sp, color = L.RedInk, lineHeight = 22.sp)
@@ -299,7 +299,7 @@ fun LayerTxEditSheet(
         }
 
         if (locked) {
-            Text("انتقال بین حساب‌ها قابل ویرایش نیست؛ اگر اشتباه شده حذفش کنید و دوباره ثبت کنید.", style = lt(12.sp, color = L.Muted, lineHeight = 20.sp))
+            Text("انتقال بین حساب‌ها قابل ویرایش نیست؛ در صورت اشتباه، آن را حذف و مجدداً ثبت کنید.", style = lt(12.sp, color = L.Muted, lineHeight = 20.sp))
         }
     }
     viewing?.let { name ->

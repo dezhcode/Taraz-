@@ -107,7 +107,7 @@ fun LayerLoanDetailScreen(
         }
     ) {
         LayerCard(radius = 24.dp, padding = 18.dp) {
-            Text(if (loan.isSettled) "این وام تسویه شده" else "باقی‌مانده", style = lt(13.sp, color = L.Muted))
+            Text(if (loan.isSettled) "این وام تسویه شده است" else "باقی‌مانده", style = lt(13.sp, color = L.Muted))
             Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(money(left), style = lt(34.sp, FontWeight.Light, letterSpacing = (-1).sp))
                 Text("تومان", style = lt(14.sp), modifier = Modifier.padding(bottom = 6.dp))
@@ -161,7 +161,7 @@ fun LayerLoanDetailScreen(
         LayerCard(radius = 18.dp, padding = 0.dp) {
             val mine = payments.filter { it.loanId == loan.id }.sortedByDescending { it.monthKey * 10_000_000_000L + it.date / 1000 }
             if (mine.isEmpty() && history.isEmpty()) {
-                Text("هنوز پرداختی از طریق تراز ثبت نشده.", style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(16.dp))
+                Text("هنوز پرداختی از طریق تراز ثبت نشده است.", style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(16.dp))
             } else if (mine.isEmpty()) {
                 // Payments from before the history table existed: show the transactions.
                 history.forEachIndexed { i, tx ->
@@ -238,20 +238,20 @@ fun LayerAddLoanScreen(
     val remainCount = if (inst > 0 && total > paid) ((total - paid + inst - 1) / inst).toInt() else 0
 
     LayerScreen(
-        title = if (purchase) "خرید قسطی" else "وام جدید",
-        subtitle = if (purchase) "گوشی، لوازم خانه یا هر خریدی که قسطی می‌پردازید" else "مشخصات قرارداد وام را وارد کنید",
+        title = if (purchase) "خرید اقساطی" else "وام جدید",
+        subtitle = if (purchase) "گوشی، لوازم خانگی یا هر خریدی که به‌صورت اقساطی پرداخت می‌شود" else "مشخصات قرارداد وام را وارد کنید",
         onBack = onBack,
         bottomBar = {
-            BigButton(if (purchase) "ثبت خرید قسطی" else "ثبت وام", enabled = valid) {
+            BigButton(if (purchase) "ثبت خرید اقساطی" else "ثبت وام", enabled = valid) {
                 onConfirm(bank.trim(), name.trim(), total, paid, inst, day, reminder,
                     if (purchase) com.example.data.LoanKind.PURCHASE else com.example.data.LoanKind.LOAN)
             }
         }
     ) {
         Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            LSegmented(listOf("وام بانکی", "خرید قسطی"), if (purchase) 1 else 0, { purchase = it == 1 })
+            LSegmented(listOf("وام بانکی", "خرید اقساطی"), if (purchase) 1 else 0, { purchase = it == 1 })
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                LField(name, { name = it }, if (purchase) "چه خریدی؟" else "نام وام", Modifier.weight(1f), placeholder = if (purchase) "مثلاً یخچال" else "مثلاً وام خودرو")
+                LField(name, { name = it }, if (purchase) "شرح خرید" else "نام وام", Modifier.weight(1f), placeholder = if (purchase) "مثلاً یخچال" else "مثلاً وام خودرو")
                 LField(bank, { bank = it }, if (purchase) "فروشنده" else "بانک", Modifier.weight(1f), placeholder = if (purchase) "مثلاً دیجی‌کالا" else "مثلاً ملت")
             }
             if (cards.isNotEmpty() && !purchase) {
@@ -268,7 +268,7 @@ fun LayerAddLoanScreen(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
             }
             LField(
-                paidText, { paidText = groupedInput(it) }, "تا امروز پرداخت شده (تومان)", placeholder = "۰",
+                paidText, { paidText = groupedInput(it) }, "مبلغ پرداخت‌شده تاکنون (تومان)", placeholder = "۰",
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 hint = if (paid > total && total > 0) "مبلغ پرداخت‌شده از کل وام بیشتر است." else null
             )
@@ -291,10 +291,10 @@ fun LayerAddLoanScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("یادآور یک روز قبل", style = lt(14.sp, FontWeight.SemiBold))
+                    Text("یادآوری یک روز پیش از سررسید", style = lt(14.sp, FontWeight.SemiBold))
                     Text("ساعت ۱۰ صبح", style = lt(12.sp, color = L.Muted))
                 }
-                LSwitch(reminder, "یادآور یک روز قبل") { reminder = it }
+                LSwitch(reminder, "یادآوری یک روز پیش از سررسید") { reminder = it }
             }
 
             if (remainCount > 0) {
@@ -303,7 +303,7 @@ fun LayerAddLoanScreen(
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(L.PrimarySoft).padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("خلاصه", style = lt(12.sp, FontWeight.Bold, L.PrimaryText))
                     Text(
-                        "${fa(remainCount)} قسط ${money(inst)} تومانی مانده است. قسط بعدی ${JalaliDate.fromTimestamp(next).formatShort()} و آخرین قسط ${JalaliDate.fromTimestamp(last).formatMonthYear()}.",
+                        "${fa(remainCount)} قسط ${money(inst)} تومانی باقی مانده است. قسط بعدی ${JalaliDate.fromTimestamp(next).formatShort()} و آخرین قسط ${JalaliDate.fromTimestamp(last).formatMonthYear()}.",
                         style = lt(13.sp, color = L.Info, lineHeight = 24.sp)
                     )
                 }

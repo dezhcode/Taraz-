@@ -40,49 +40,49 @@ data class HomeSection(val id: String, val label: String, val sub: String)
 
 object HomeTools {
     const val G_RECORD = "ثبت"
-    const val G_PAY = "پرداخت و حساب"
+    const val G_PAY = "پرداخت‌ها و حساب‌ها"
     const val G_PEOPLE = "اشخاص"
     const val G_PLAN = "برنامه‌ریزی و دارایی"
     const val G_REPORT = "گزارش"
-    const val G_KEEP = "نگه‌داری"
+    const val G_KEEP = "نگهداری داده‌ها"
     val groups = listOf(G_RECORD, G_PAY, G_PEOPLE, G_PLAN, G_REPORT, G_KEEP)
 
     val all = listOf(
         HomeTool("expense", "ثبت هزینه", "با دسته، برچسب و تصویر فاکتور", Icons.Default.RemoveCircleOutline, G_RECORD),
         HomeTool("income", "ثبت درآمد", "حقوق، فروش، هدیه", Icons.Default.AddCircleOutline, G_RECORD),
         HomeTool("voice", "با صدا", if (com.example.Features.VOICE) "«دیروز ۲۰۰ تومن به علی قرض دادم»" else com.example.Features.SOON, Icons.Default.Mic, G_RECORD),
-        HomeTool("transfer", "انتقال", "بین حساب‌ها؛ در جمع هزینه نیست", Icons.AutoMirrored.Filled.CompareArrows, G_RECORD),
+        HomeTool("transfer", "انتقال", "بین حساب‌ها؛ در هزینه‌ها منظور نمی‌شود", Icons.AutoMirrored.Filled.CompareArrows, G_RECORD),
         HomeTool("sms", "پیامک بانک", if (com.example.Features.SMS) "تأیید برداشت و واریزها" else com.example.Features.SOON, Icons.Default.Sms, G_RECORD),
-        HomeTool("recurring", "تکراری‌ها", "اجاره، حقوق، اشتراک‌ها", Icons.Default.Autorenew, G_RECORD),
+        HomeTool("recurring", "تراکنش‌های تکراری", "اجاره، حقوق و اشتراک‌ها", Icons.Default.Autorenew, G_RECORD),
 
-        HomeTool("pay_loan", "پرداخت قسط", "وام‌ها و خریدهای قسطی", Icons.Default.EventAvailable, G_PAY),
+        HomeTool("pay_loan", "پرداخت قسط", "وام‌ها و خریدهای اقساطی", Icons.Default.EventAvailable, G_PAY),
         HomeTool("bills", "پرداخت قبض", "برق، آب، گاز، تلفن، اینترنت", Icons.AutoMirrored.Filled.ReceiptLong, G_PAY),
         HomeTool("cheque", "ثبت چک", "پرداختی یا دریافتی، با تاریخ سررسید", Icons.Default.Payments, G_PAY),
         HomeTool("cheques", "چک‌ها", "فهرست چک‌ها و وضعیت آن‌ها", Icons.Default.CalendarMonth, G_PAY),
         HomeTool("add_loan", "وام یا خرید اقساطی", "ثبت قرارداد و تقویم اقساط", Icons.Default.ShoppingCart, G_PAY),
-        HomeTool("accounts", "حساب‌ها", "کارت‌ها، نقد و اعتباری", Icons.Default.CreditCard, G_PAY),
-        HomeTool("add_account", "حساب جدید", "کارت بانکی، اعتباری یا نقد", Icons.Default.AddCard, G_PAY),
+        HomeTool("accounts", "حساب‌ها", "کارت‌ها، وجه نقد و اعتباری", Icons.Default.CreditCard, G_PAY),
+        HomeTool("add_account", "حساب جدید", "کارت بانکی، اعتباری یا وجه نقد", Icons.Default.AddCard, G_PAY),
 
-        HomeTool("add_person", "شخص جدید", "حساب جدا برای هر نفر", Icons.Default.PersonAdd, G_PEOPLE),
+        HomeTool("add_person", "شخص جدید", "حساب جداگانه برای هر شخص", Icons.Default.PersonAdd, G_PEOPLE),
         HomeTool("person_entry", "بستانکار / بدهکار", "حساب با اشخاص، با موعد", Icons.Default.Groups, G_PEOPLE),
         HomeTool("split", "تقسیم هزینه", "سهم شما هزینه، سهم دیگران بستانکاری", Icons.AutoMirrored.Filled.CallSplit, G_PEOPLE),
-        HomeTool("people", "حساب اشخاص", "چه کسی به چه کسی بدهکار است", Icons.Default.NotificationsActive, G_PEOPLE),
+        HomeTool("people", "حساب اشخاص", "مانده‌حساب بدهکاران و بستانکاران", Icons.Default.NotificationsActive, G_PEOPLE),
 
         HomeTool("budget", "بودجه", "سقف روزانه و ماهانهٔ دسته‌ها", Icons.Default.PieChart, G_PLAN),
         HomeTool("goals", "هدف پس‌انداز", "با موعد و پیشنهاد ماهانه", Icons.Default.Flag, G_PLAN),
-        HomeTool("categories", "دسته‌ها", "ساختن و ویرایش دسته", Icons.Default.Category, G_PLAN),
+        HomeTool("categories", "دسته‌ها", "ایجاد و ویرایش دسته", Icons.Default.Category, G_PLAN),
         HomeTool("assets", "دارایی‌ها", "دلار، طلا، رمزارز، صندوق", Icons.AutoMirrored.Filled.TrendingUp, G_PLAN),
 
         HomeTool("report", "گزارش ماه", "دسته‌ها و مقایسه با ماه قبل", Icons.Default.BarChart, G_REPORT),
-        HomeTool("weekly", "خلاصهٔ هفته", "هر جمعه ساعت ۸ شب", Icons.Default.Schedule, G_REPORT),
-        HomeTool("year", "سال من", "مرور یک سال", Icons.Default.CalendarMonth, G_REPORT),
-        HomeTool("share", "فرستادن گزارش", "تصویر یا PDF، با امکان پنهان کردن مبالغ", Icons.Default.Share, G_REPORT),
+        HomeTool("weekly", "خلاصهٔ هفته", "هر جمعه ساعت ۲۰", Icons.Default.Schedule, G_REPORT),
+        HomeTool("year", "گزارش سالانه", "مرور عملکرد سالانه", Icons.Default.CalendarMonth, G_REPORT),
+        HomeTool("share", "ارسال گزارش", "تصویر یا PDF، با امکان پنهان کردن مبالغ", Icons.Default.Share, G_REPORT),
         HomeTool("assistant", "دستیار", if (com.example.Features.AI) "پرسیدن به زبان خودمانی" else com.example.Features.SOON, Icons.Default.AutoAwesome, G_REPORT),
 
         HomeTool("search", "جستجو و فیلتر", "نوع، تاریخ، مبلغ، برچسب", Icons.Default.Search, G_KEEP),
         HomeTool("tags", "برچسب‌ها", "#سفر، #خانه؛ در گزارش‌ها", Icons.AutoMirrored.Filled.Label, G_KEEP),
         HomeTool("backup", "پشتیبان", "دستی یا خودکار هفتگی", Icons.Default.Shield, G_KEEP),
-        HomeTool("wallet", "کیف پول", "موجودی همهٔ حساب‌ها", Icons.Default.AccountBalanceWallet, G_KEEP)
+        HomeTool("wallet", "موجودی", "موجودی همهٔ حساب‌ها", Icons.Default.AccountBalanceWallet, G_KEEP)
     )
 
     private val byId = all.associateBy { it.id }
@@ -92,11 +92,11 @@ object HomeTools {
     val defaultTools = listOf(if (com.example.Features.VOICE) "voice" else "income", "transfer", "bills", "person_entry", "cheque", "assets", "report")
 
     val sections = listOf(
-        HomeSection("glance", "یک نگاه", "هزینهٔ ماه، بدهکار، بستانکار"),
-        HomeSection("upcoming", "پیش رو", "اقساط، قبوض، چک‌ها و مطالبات ۷ روز آینده"),
+        HomeSection("glance", "خلاصهٔ وضعیت", "هزینهٔ ماه، بدهکار، بستانکار"),
+        HomeSection("upcoming", "سررسیدهای پیش رو", "اقساط، قبوض، چک‌ها و مطالبات ۷ روز آینده"),
         HomeSection("sms", "پیامک‌های منتظر تأیید", if (com.example.Features.SMS) "فقط وقتی پیامکی هست" else com.example.Features.SOON),
-        HomeSection("today", "هزینهٔ امروز", "نوار هفته و سقف روزانه"),
-        HomeSection("tools", "ابزارهای من", "دکمه‌هایی که خودتان انتخاب کرده‌اید"),
+        HomeSection("today", "هزینه‌های امروز", "نوار هفته و سقف روزانه"),
+        HomeSection("tools", "ابزارهای من", "ابزارهای منتخب شما"),
         HomeSection("plan", "هدف و بودجه", "پیشرفت هدف و دستهٔ نزدیک سقف"),
         HomeSection("recent", "آخرین تراکنش‌ها", "چهار تراکنش آخر")
     )

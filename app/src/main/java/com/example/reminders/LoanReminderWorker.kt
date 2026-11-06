@@ -62,7 +62,7 @@ class LoanReminderWorker(
                     if (!prefs.getBoolean(lateKey, false)) {
                         NotificationHelper.showNotification(
                             context = applicationContext,
-                            title = "قسط ${loan.loanName} عقب افتاده",
+                            title = "قسط معوق ${loan.loanName}",
                             message = "${NotificationHelper.formatAmount(loan.installmentAmount)} تومان — سررسید ${JalaliDate.fromTimestamp(thisDue).formatLong()} گذشته است.",
                             notificationId = NOTIFICATION_ID_BASE + loan.id
                         )
@@ -170,7 +170,7 @@ class LoanReminderWorker(
             notifyOnce(
                 prefs, "bill_${b.id}_${b.dueDate}_$days",
                 "${whenText(days)} موعد قبض ${b.title.ifBlank { b.kind }}",
-                (if (b.amount > 0) "${NotificationHelper.formatAmount(b.amount)} تومان" else "مبلغ را در قبض ببینید") +
+                (if (b.amount > 0) "${NotificationHelper.formatAmount(b.amount)} تومان" else "مبلغ در قبض درج شده است") +
                     if (b.billId.isNotBlank()) " · شناسه ${b.billId}" else "",
                 11_000 + b.id
             )

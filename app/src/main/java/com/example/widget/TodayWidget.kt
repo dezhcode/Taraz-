@@ -84,7 +84,7 @@ class TodayWidget : AppWidgetProvider() {
                         else -> "${JalaliDate.toPersianDigits(days)} روز دیگر"
                     }
                     "قسط ${loan.loanName}: ${fa(minOf(loan.installmentAmount, loan.totalAmount - loan.paidAmount))} تومان، $whenText"
-                } ?: "قسطی در پیش نیست"
+                } ?: "قسط پیش رویی وجود ندارد"
             )
             val open = PendingIntent.getActivity(
                 context, 0,

@@ -179,7 +179,7 @@ fun AuthScreen(
                             viewModel.loginAsGuest(fullName.ifBlank { "کاربر مهمان" })
                         }
                         Text(
-                            "بدون ورود، داده‌ها فقط روی همین گوشی می‌ماند.",
+                            "بدون ورود، داده‌ها فقط روی همین دستگاه ذخیره می‌شود.",
                             style = lt(12.sp, color = L.Muted), textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
                         )
@@ -285,8 +285,8 @@ fun AuthScreen(
 private fun OnboardingPager(onFinish: () -> Unit, onLogin: () -> Unit) {
     var page by remember { mutableIntStateOf(0) }
     val titles = listOf(
-        "همهٔ حساب‌هایتان، یک نگاه",
-        "قسط، چک و قبض سر موعد",
+        "تمام حساب‌ها در یک نگاه",
+        "اقساط، چک‌ها و قبوض در سررسید",
         "گزارش ماهانهٔ هزینه‌ها"
     )
     val bodies = listOf(
@@ -301,7 +301,7 @@ private fun OnboardingPager(onFinish: () -> Unit, onLogin: () -> Unit) {
             Image(painterResource(id = R.drawable.logo_taraz_app), null, modifier = Modifier.size(44.dp))
             Spacer(Modifier.weight(1f))
             Box(Modifier.height(40.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onFinish).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
-                Text("رد شدن", style = lt(14.sp, FontWeight.SemiBold, L.PrimaryText))
+                Text("رد کردن", style = lt(14.sp, FontWeight.SemiBold, L.PrimaryText))
             }
         }
 

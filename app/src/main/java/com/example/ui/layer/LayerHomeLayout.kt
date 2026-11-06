@@ -72,7 +72,7 @@ fun HomeLayoutSheet(
     LayerSheet(
         title = "چیدمان خانه",
         onDismiss = onDismiss,
-        closeLabel = "تمام",
+        closeLabel = "تأیید",
         topGap = 40.dp
     ) {
         Text(

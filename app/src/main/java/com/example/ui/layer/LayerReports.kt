@@ -164,7 +164,7 @@ fun LayerReportsScreen(
         // نمودار شش‌ماهه
         LayerCard(padding = 16.dp) {
             Text(
-                if (best != null && best.start == series.last().start && best.saved > 0) "${date.monthName}، پرپس‌اندازترین ماه شش ماه اخیر"
+                if (best != null && best.start == series.last().start && best.saved > 0) "${date.monthName}، بیشترین پس‌انداز در شش ماه اخیر"
                 else "پس‌انداز شش ماه اخیر",
                 style = lt(14.sp, FontWeight.Bold)
             )
@@ -215,7 +215,7 @@ fun LayerReportsScreen(
                 Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(14.dp)).background(L.Surface)
                     .clickable { onShare(monthTs) }.padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
-            ) { Text("فرستادن گزارش ماه", style = lt(14.sp, FontWeight.Bold, L.PrimaryText)) }
+            ) { Text("ارسال گزارش ماه", style = lt(14.sp, FontWeight.Bold, L.PrimaryText)) }
         }
 
         // سال من
@@ -224,8 +224,8 @@ fun LayerReportsScreen(
                 .background(L.Surface).clickable(onClick = onOpenYear).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("سال من · مرور ${fa(JalaliDate.today().year)}", style = lt(14.sp, FontWeight.Bold), modifier = Modifier.weight(1f))
-            Text("ببینید", style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText))
+            Text("گزارش سالانهٔ ${fa(JalaliDate.today().year)}", style = lt(14.sp, FontWeight.Bold), modifier = Modifier.weight(1f))
+            Text("مشاهده", style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText))
         }
 
         // جریان پول: درآمد ماه کجا رفت
@@ -262,7 +262,7 @@ fun LayerReportsScreen(
                                 Text(money(t.amount), style = lt(12.sp, FontWeight.SemiBold, L.RedText))
                             }
                         }
-                        if (list.size > 6) Text("برای دیدن همه، در تراکنش‌ها با این برچسب فیلتر کنید.", style = lt(11.sp, color = L.Muted), modifier = Modifier.padding(start = 12.dp, top = 4.dp))
+                        if (list.size > 6) Text("برای مشاهدهٔ همه، تراکنش‌ها را با این برچسب فیلتر کنید.", style = lt(11.sp, color = L.Muted), modifier = Modifier.padding(start = 12.dp, top = 4.dp))
                     }
                 }
             }
@@ -275,7 +275,7 @@ fun LayerReportsScreen(
                 Text("از ${toman(cur.expense)}", style = lt(12.sp, color = L.Muted))
             }
             if (top.isEmpty()) {
-                Text("هنوز هزینه‌ای در این ماه ثبت نشده.", style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(top = 12.dp))
+                Text("هنوز هزینه‌ای در این ماه ثبت نشده است.", style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(top = 12.dp))
             } else {
                 val maxCat = top.first().second.coerceAtLeast(1L)
                 Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -315,7 +315,7 @@ fun LayerReportsScreen(
             if (goal == null) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("هنوز هدفی نگذاشته‌اید", style = lt(14.sp, FontWeight.Bold))
+                        Text("هدفی تعیین نشده است", style = lt(14.sp, FontWeight.Bold))
                         Text("یک هدف پس‌انداز تعیین کنید تا پیشرفت آن در این بخش نمایش داده شود.", style = lt(12.sp, color = L.Muted))
                     }
                     SoftButton("هدف جدید", 36.dp, onOpenGoals)
@@ -401,9 +401,9 @@ private fun MoneyFlowCard(income: Long, expense: Long, byCategory: List<Pair<Str
     val whole = maxOf(income, expense).coerceAtLeast(1)
     LayerCard(padding = 16.dp) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-            Text("جریان پول", style = lt(14.sp, FontWeight.Bold), modifier = Modifier.weight(1f))
+            Text("جریان وجوه", style = lt(14.sp, FontWeight.Bold), modifier = Modifier.weight(1f))
             Text(
-                if (income >= expense) "${fa((((income - expense) * 100) / income.coerceAtLeast(1)).toInt())}٪ درآمد ماند"
+                if (income >= expense) "${fa((((income - expense) * 100) / income.coerceAtLeast(1)).toInt())}٪ درآمد پس‌انداز شد"
                 else "${toman(expense - income)} بیشتر از درآمد",
                 style = lt(12.sp, FontWeight.SemiBold, if (income >= expense) L.GreenText else L.RedText)
             )

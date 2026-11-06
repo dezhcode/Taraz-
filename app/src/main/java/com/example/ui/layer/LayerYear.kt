@@ -106,7 +106,7 @@ fun LayerYearScreen(
                 .padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text("سال ${fa(year)} شما", style = lt(14.sp, FontWeight.SemiBold, Color(0xD9FFFFFF)))
+            Text("عملکرد سال ${fa(year)}", style = lt(14.sp, FontWeight.SemiBold, Color(0xD9FFFFFF)))
             Text(
                 if (saved >= 0) "${millions(saved)} پس‌انداز" else "هزینه ${millions(-saved)} تومان بیش از درآمد بود",
                 style = lt(30.sp, FontWeight.Bold, Color.White)
@@ -116,12 +116,12 @@ fun LayerYearScreen(
                 style = lt(13.sp, color = Color(0xD9FFFFFF))
             )
             if (st.income > 0 && saved > 0) {
-                Text("${fa((saved * 100 / st.income).toInt())}٪ از درآمدتان را نگه داشتید.", style = lt(13.sp, FontWeight.SemiBold, Color.White))
+                Text("${fa((saved * 100 / st.income).toInt())}٪ از درآمد پس‌انداز شد.", style = lt(13.sp, FontWeight.SemiBold, Color.White))
             }
         }
 
         if (st.count == 0) {
-            Text("برای این سال تراکنشی ثبت نشده.", style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(horizontal = 24.dp))
+            Text("برای این سال تراکنشی ثبت نشده است.", style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(horizontal = 24.dp))
             return@LayerScreen
         }
 
