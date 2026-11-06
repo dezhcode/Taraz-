@@ -219,7 +219,11 @@ private fun TourOverlay(step: TourStep, index: Int, count: Int, target: Rect?, o
                         .semantics { contentDescription = "${step.title}. ${step.body}" },
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text("راهنمای تراز · ${fa(index + 1)} از ${fa(count)}", style = lt(12.sp, FontWeight.SemiBold, Color(0xFF5D6573)))
+                    // دو متن جدا تا جای «·» و عددها در راست‌به‌چپ به هم نریزد
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("راهنمای تراز", style = lt(12.sp, FontWeight.SemiBold, Color(0xFF5D6573)), modifier = Modifier.weight(1f))
+                        Text("گام ${fa(index + 1)} از ${fa(count)}", style = lt(12.sp, FontWeight.SemiBold, Color(0xFF2250F4)))
+                    }
                     Text(step.title, style = lt(16.sp, FontWeight.Bold, Color(0xFF0E1116)))
                     Text(step.body, style = lt(14.sp, color = Color(0xFF2B313B), lineHeight = 25.sp))
                 }
