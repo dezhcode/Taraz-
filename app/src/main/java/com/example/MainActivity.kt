@@ -14,6 +14,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -1243,6 +1244,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 BackHandler { quickCategory = null }
                                 Box(
                                     Modifier.fillMaxSize().background(com.example.ui.layer.L.Bg)
+                                        // لمس‌ها به برگه‌های زیرین نرسد
                                         .clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) {}
                                 ) {
                                     com.example.ui.layer.LayerAddCategoryScreen(
