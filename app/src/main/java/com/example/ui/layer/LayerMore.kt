@@ -370,7 +370,7 @@ fun LayerSettingsScreen(
     var askReset by remember { mutableStateOf(false) }
     val name = profile?.name?.ifBlank { "کاربر تراز" } ?: "کاربر تراز"
     val phone = profile?.phone.orEmpty()
-    val phoneMasked = if (phone.length >= 7) fa(phone.take(4) + " ••• " + phone.takeLast(4)) else if (profile?.isGuest == true) "حساب مهمان" else ""
+    val phoneMasked = if (phone.length >= 7) fa(phone.take(4) + " ••• " + phone.takeLast(4)) else if (profile?.isGuest == true) (if (com.example.Features.LOGIN) "حساب مهمان" else "داده‌ها روی همین گوشی") else ""
 
     LayerScreen(title = "تنظیمات", onBack = onBack) {
         LayerCard(radius = 20.dp, padding = 14.dp) {
@@ -430,11 +430,14 @@ fun LayerSettingsScreen(
         }
 
         LayerCard(radius = 20.dp, padding = 0.dp, modifier = Modifier.padding(top = 6.dp)) {
-            Row(
-                Modifier.fillMaxWidth().clickable(onClick = onLogout).padding(horizontal = 16.dp).height(52.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) { Text("خروج از حساب", style = lt(14.sp, FontWeight.SemiBold, L.PrimaryText)) }
-            Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(L.Line))
+            // تا ورود با شماره روشن نشده، «خروج از حساب» معنایی ندارد
+            if (com.example.Features.LOGIN) {
+                Row(
+                    Modifier.fillMaxWidth().clickable(onClick = onLogout).padding(horizontal = 16.dp).height(52.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) { Text("خروج از حساب", style = lt(14.sp, FontWeight.SemiBold, L.PrimaryText)) }
+                Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(L.Line))
+            }
             if (askReset) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("همهٔ حساب‌ها، تراکنش‌ها، اقساط و اهداف پاک می‌شوند و برگشتی ندارند. مطمئنید؟", style = lt(13.sp, color = L.RedInk, lineHeight = 23.sp))

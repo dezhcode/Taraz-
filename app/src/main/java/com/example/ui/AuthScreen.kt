@@ -144,6 +144,17 @@ fun AuthScreen(
                         }
                         Spacer(Modifier.height(28.dp))
                         LField(fullName, { fullName = it; errorMessage = null }, "نام شما", placeholder = "مثلاً مریم")
+                        if (!com.example.Features.LOGIN) {
+                            // ورود با شماره فعلاً خاموش است: فقط نام، و همه‌چیز روی همین گوشی
+                            Text(
+                                "اطلاعات شما فقط روی همین گوشی ذخیره می‌شود. ورود با شمارهٔ موبایل به زودی اضافه می‌شود.",
+                                style = lt(12.sp, color = L.Muted, lineHeight = 20.sp), modifier = Modifier.padding(top = 10.dp)
+                            )
+                            Spacer(Modifier.height(32.dp))
+                            BigButton("شروع", Modifier.testTag("auth_guest_button")) {
+                                viewModel.loginAsGuest(fullName.ifBlank { "کاربر تراز" })
+                            }
+                        } else {
                         Spacer(Modifier.height(12.dp))
                         LField(
                             phoneNumber, { v -> phoneNumber = v.filter { it.isDigit() }.take(11); errorMessage = null }, "شمارهٔ موبایل",
@@ -172,6 +183,7 @@ fun AuthScreen(
                             style = lt(12.sp, color = L.Muted), textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
                         )
+                        }
                     }
                 } else {
                     val focus = remember { FocusRequester() }
@@ -365,8 +377,10 @@ private fun OnboardingPager(onFinish: () -> Unit, onLogin: () -> Unit) {
             }
         }
         BigButton(if (last) "شروع کنیم" else "بعدی", height = 56.dp) { if (last) onFinish() else page++ }
-        Box(Modifier.padding(top = 8.dp).fillMaxWidth().height(46.dp).clip(RoundedCornerShape(14.dp)).clickable(onClick = onLogin), contentAlignment = Alignment.Center) {
-            Text("حساب دارم، ورود", style = lt(15.sp, FontWeight.SemiBold, L.PrimaryText))
+        if (com.example.Features.LOGIN) {
+            Box(Modifier.padding(top = 8.dp).fillMaxWidth().height(46.dp).clip(RoundedCornerShape(14.dp)).clickable(onClick = onLogin), contentAlignment = Alignment.Center) {
+                Text("حساب دارم، ورود", style = lt(15.sp, FontWeight.SemiBold, L.PrimaryText))
+            }
         }
     }
 }
