@@ -223,7 +223,12 @@ fun ChequeSheet(
         if (cheque != null && cheque.status == ChequeStatus.CLEARED) {
             Callout("این چک پاس شده", "${money(cheque.amount)} تومان روی حساب ${cheque.bankName} ثبت شده است. «در انتظار» آن تراکنش را برمی‌دارد.", L.GreenSoft, L.GreenText)
         }
-        LSegmented(listOf("چکی که می‌دهم", "چکی که می‌گیرم"), if (issued) 0 else 1, { issued = it == 0 })
+        LSegmented(listOf("چکی که می‌دهم", "چکی که می‌گیرم"), if (issued) 0 else 1, {
+            issued = it == 0
+            // دستهٔ هزینه برای چک دریافتی معنا ندارد و برعکس
+            val fits = categories.filter { c -> c.isIncome == !issued }.map { c -> c.name }
+            if (category !in fits) category = fits.firstOrNull() ?: category
+        })
         LField(amountText, { amountText = groupedInput(it) }, "مبلغ (تومان)", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
         LField(person, { person = it }, if (issued) "در وجه" else "از طرف", placeholder = "نام شخص یا فروشگاه")
         val sugg = personNames.filter { it != person && (person.isBlank() || it.contains(person.trim())) }.take(6)

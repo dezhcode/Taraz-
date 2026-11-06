@@ -877,8 +877,13 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun prepareChatForOpening(prefilledPrompt: String? = null) {
+        // اگر پرسشی در راه است (مثلاً «تحلیل با دستیار» از گزارش‌ها که قبل از باز شدن شیت فرستاده شده)،
+        // گفتگو پاک نشود؛ وگرنه پاسخش گم می‌شود.
+        val inFlight = _isAiLoading.value || _chatMessages.value.any { it.status == "pending" }
         val lastMsg = _chatMessages.value.lastOrNull()
-        if (lastMsg != null && lastMsg.sender == "user") {
+        if (inFlight) {
+            // دست نزن
+        } else if (lastMsg != null && lastMsg.sender == "user") {
             _chatMessages.value = listOf(
                 ChatMessage(
                     sender = "ai",
@@ -2158,7 +2163,24 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
         val cardsCtx = cards.value.joinToString("\n") { "کارت: ${it.bankName} | شماره کارت: ${it.cardNumber} | موجودی: ${it.balance} تومان" }
         val loansCtx = loans.value.joinToString("\n") { "وام: آیدی: ${it.id} | بانک: ${it.bankName} | نام وام: ${it.loanName} | مبلغ کل وام: ${it.totalAmount} | مبلغ پرداخت‌شده تا الان: ${it.paidAmount} | مبلغ هر قسط: ${it.installmentAmount} | تاریخ سررسید: روز ${it.dueDay} هر ماه | قسط بعدی: ${com.example.utils.JalaliDate.fromTimestamp(com.example.utils.JalaliDate.nextDueTimestamp(it.dueDay)).formatLong()}" }
-        val latestTransactionsCtx = transactions.value.take(15).joinToString("\n") { "تراکنش: آیدی: ${it.id} | عنوان: ${it.title} | مبلغ: ${it.amount} | دسته‌بندی: ${it.category} | نوع: ${if (it.isExpense) "هزینه" else "درآمد"} | کارت/بانک: ${it.bankName}" }
+        val creditCtx = cards.value.filter { it.accountType == AccountType.CREDIT }.joinToString("\n") {
+            "کارت اعتباری: ${it.bankName} | سقف: ${it.creditLimit} | استفاده‌شده: ${(-it.balance).coerceAtLeast(0)} | روز بازپرداخت: ${it.dueDay}"
+        }
+        val monthCtx = "این ماه: درآمد ${monthlyIncome.value} تومان، هزینه ${monthlyExpense.value} تومان، خرج امروز ${todayExpense.value} تومان"
+        val peopleCtx = persons.value.mapNotNull { p ->
+            val bal = personBalances.value[p.id] ?: 0L
+            if (bal == 0L) null else "${p.name}: " + if (bal > 0) "به کاربر $bal تومان بدهکار است (طلب کاربر)" else "کاربر ${-bal} تومان به او بدهکار است"
+        }.take(12).joinToString("\n")
+        val chequesCtx = cheques.value.filter { it.status == ChequeStatus.PENDING }.sortedBy { it.dueDate }.take(8).joinToString("\n") {
+            (if (it.issued) "چک داده‌شده به ${it.person}" else "چک دریافتی از ${it.person}") +
+                " | ${it.amount} تومان | سررسید ${com.example.utils.JalaliDate.fromTimestamp(it.dueDate).formatLong()} | حساب ${it.bankName}"
+        }
+        val billsCtx = bills.value.filter { it.enabled }.sortedBy { it.dueDate }.take(8).joinToString("\n") {
+            "قبض ${it.title.ifBlank { it.kind }} | ${if (it.amount > 0) "${it.amount} تومان" else "مبلغ نامشخص"} | موعد ${com.example.utils.JalaliDate.fromTimestamp(it.dueDate).formatLong()}"
+        }
+        // Duck.ai هر پیام را تا ۱۶ هزار نویسه می‌پذیرد؛ اگر داده‌ها زیاد باشد تراکنش‌های کمتری فرستاده می‌شود
+        val txLimit = if (transactions.value.size > 15 && (peopleCtx.length + chequesCtx.length + billsCtx.length) > 2500) 8 else 15
+        val latestTransactionsCtx = transactions.value.take(txLimit).joinToString("\n") { "تراکنش: آیدی: ${it.id} | عنوان: ${it.title} | مبلغ: ${it.amount} | دسته‌بندی: ${it.category} | نوع: ${if (it.isExpense) "هزینه" else "درآمد"} | کارت/بانک: ${it.bankName}" }
 
         val systemPrompt = """
             # Context
@@ -2219,7 +2241,20 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             وام‌های ثبت شده (با اقساط مرتبط):
             ${if (loansCtx.isEmpty()) "هیچ وامی ثبت نشده است." else loansCtx}
             
-            ۱۵ تراکنش اخیر ثبت شده:
+            خلاصهٔ ماه:
+            $monthCtx
+            ${if (creditCtx.isNotEmpty()) "\n$creditCtx" else ""}
+
+            حساب با اشخاص (فقط آن‌هایی که صاف نشده‌اند):
+            ${peopleCtx.ifEmpty { "حساب باز با کسی ندارد." }}
+
+            چک‌های در انتظار:
+            ${chequesCtx.ifEmpty { "چک در انتظاری ندارد." }}
+
+            قبض‌ها:
+            ${billsCtx.ifEmpty { "قبضی ثبت نشده است." }}
+
+            تراکنش‌های اخیر ثبت شده:
             ${if (latestTransactionsCtx.isEmpty()) "هیچ تراکنشی ثبت نشده است." else latestTransactionsCtx}
             
             [قوانین مدیریت تراکنش‌ها، وام‌ها و اقساط]:
@@ -2266,6 +2301,10 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         val fullPrompt = buildString {
             append(systemPrompt)
             append("\n\n[پیام جدید کاربر برای پاسخ صمیمی]:\n$text")
+        }.let { full ->
+            // سقف ۱۶ هزار نویسهٔ Duck.ai: اگر باز هم بیشتر شد، از وسط دادهٔ تراکنش‌ها کوتاه می‌شود نه پیام کاربر
+            if (full.length <= 15_500) full
+            else systemPrompt.take((15_500 - text.length - 60).coerceAtLeast(4000)) + "\n\n[پیام جدید کاربر برای پاسخ صمیمی]:\n$text"
         }
 
         viewModelScope.launch {

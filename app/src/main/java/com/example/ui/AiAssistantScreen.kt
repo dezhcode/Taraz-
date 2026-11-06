@@ -141,7 +141,8 @@ fun AiAssistantScreen(
 
     // با آمدن پیام تازه به پایین گفتگو برو
     LaunchedEffect(visible.size, isLoading) {
-        if (visible.isNotEmpty()) coroutineScope.launch { listState.animateScrollToItem(visible.size) }
+        val count = visible.size + if (isLoading && visible.none { it.status == "pending" }) 1 else 0
+        if (count > 0) coroutineScope.launch { listState.animateScrollToItem(count - 1) }
     }
 
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
