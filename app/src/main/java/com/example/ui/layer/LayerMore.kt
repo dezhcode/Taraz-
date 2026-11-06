@@ -290,6 +290,9 @@ fun LayerSettingsScreen(
     onOpenSms: () -> Unit,
     onOpenCategories: () -> Unit,
     onOpenGoals: () -> Unit,
+    onOpenRecurring: () -> Unit,
+    onOpenDebts: () -> Unit,
+    onOpenBackup: () -> Unit,
     onTestServer: ((Boolean, String) -> Unit) -> Unit,
     onLogout: () -> Unit,
     onResetAll: () -> Unit
@@ -328,12 +331,15 @@ fun LayerSettingsScreen(
             NavRow("امتحان صفحهٔ قفل", null, divider = false, onClick = onTestLock)
         }
         SettingsGroup("اعلان‌ها") {
-            SwitchRow("اعلان‌ها و یادآور اقساط", "یک روز قبل از هر سررسید و هنگام ثبت‌ها", alertsEnabled, onAlertsChange, divider = false)
+            SwitchRow("اعلان‌ها و یادآور اقساط", "سه روز و یک روز قبل از سررسید، و پیامک‌های تازهٔ بانک", alertsEnabled, onAlertsChange, divider = false)
         }
         SettingsGroup("داده‌ها") {
             NavRow("پیامک‌های بانکی", if (smsBankCount > 0) "${fa(smsBankCount)} بانک روشن" else "خاموش", onClick = onOpenSms)
             NavRow("دسته‌بندی‌ها", "${fa(categoryCount)} دسته", onClick = onOpenCategories)
-            NavRow("اهداف پس‌انداز", null, divider = false, onClick = onOpenGoals)
+            NavRow("اهداف پس‌انداز", null, onClick = onOpenGoals)
+            NavRow("تراکنش‌های تکراری", "اجاره، حقوق، اشتراک", onClick = onOpenRecurring)
+            NavRow("طلب و بدهی", null, onClick = onOpenDebts)
+            NavRow("پشتیبان و خروجی اکسل", null, divider = false, onClick = onOpenBackup)
         }
         SettingsGroup("دستیار") {
             NavRow(
@@ -420,17 +426,25 @@ private fun NavRow(title: String, value: String?, divider: Boolean = true, value
 @Composable
 fun LayerCategoriesScreen(
     categories: List<Category>,
+    transactions: List<Transaction>,
     onBack: () -> Unit,
     onAdd: () -> Unit,
-    onDelete: (Category) -> Unit
+    onDelete: (Category) -> Unit,
+    onSetBudget: (Category, Long) -> Unit
 ) {
     var askDelete by remember { mutableStateOf<Category?>(null) }
+    var editBudget by remember { mutableStateOf<Category?>(null) }
+    val spent = remember(transactions) { spentThisMonthByCategory(transactions) }
     LayerScreen(
         title = "دسته‌بندی‌ها",
         subtitle = "${fa(categories.size)} دسته",
         onBack = onBack,
         bottomBar = { BigButton("دستهٔ جدید", onClick = onAdd) }
     ) {
+        Text(
+            "روی هر دستهٔ هزینه بزنید تا برایش بودجهٔ ماهانه بگذارید.",
+            style = lt(12.sp, color = L.Muted), modifier = Modifier.padding(horizontal = 24.dp)
+        )
         listOf(false to "هزینه‌ها", true to "درآمدها").forEach { (income, label) ->
             val list = categories.filter { it.isIncome == income }.sortedBy { it.sortOrder }
             if (list.isNotEmpty()) {
@@ -438,12 +452,26 @@ fun LayerCategoriesScreen(
                 LayerCard(radius = 20.dp, padding = 0.dp) {
                     list.forEachIndexed { i, c ->
                         val col = CategoryIcons.colorOf(c.colorHex)
+                        val used = spent[c.name] ?: 0L
                         Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 14.dp).height(56.dp),
+                            Modifier.fillMaxWidth().clickable(enabled = !c.isIncome) { editBudget = c }.padding(horizontal = 14.dp, vertical = 9.dp),
                             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             IconWell(CategoryIcons.vectorFor(c.iconKey), size = 38.dp, bg = col, fg = Color.White, iconSize = 20.dp, radius = 12.dp)
-                            Text(c.name, style = lt(14.sp, FontWeight.Medium), modifier = Modifier.weight(1f))
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(c.name, style = lt(14.sp, FontWeight.Medium))
+                                if (!c.isIncome && c.monthlyBudget > 0) {
+                                    val pct = (used * 100 / c.monthlyBudget).toInt()
+                                    LProgress(
+                                        (used.toFloat() / c.monthlyBudget).coerceIn(0f, 1f),
+                                        if (pct >= 100) L.RedText else if (pct >= 80) L.Amber else L.Primary,
+                                        height = 5.dp
+                                    )
+                                    Text("${millions(used)} از ${millions(c.monthlyBudget)} · ${fa(pct)}٪", style = lt(11.sp, color = if (pct >= 100) L.RedText else L.Muted))
+                                } else if (!c.isIncome && used > 0) {
+                                    Text("این ماه ${millions(used)}", style = lt(11.sp, color = L.Muted))
+                                }
+                            }
                             Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).clickable { askDelete = c }.semantics { contentDescription = "حذف دستهٔ ${c.name}" }, contentAlignment = Alignment.Center) {
                                 Icon(Icons.Default.Delete, null, tint = L.Faint, modifier = Modifier.size(18.dp))
                             }
@@ -453,6 +481,9 @@ fun LayerCategoriesScreen(
                 }
             }
         }
+    }
+    editBudget?.let { c ->
+        CategoryBudgetSheet(c, spent[c.name] ?: 0L, onDismiss = { editBudget = null }) { onSetBudget(c, it) }
     }
     askDelete?.let { c ->
         LayerSheet(

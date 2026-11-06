@@ -210,6 +210,15 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     val allGoals: StateFlow<List<FinancialGoal>> = repository.allGoals
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val loanPayments: StateFlow<List<LoanPayment>> = repository.allLoanPayments
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val recurring: StateFlow<List<RecurringTransaction>> = repository.allRecurring
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val debts: StateFlow<List<Debt>> = repository.allDebts
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // UI calculations
     val totalBalance: StateFlow<Long> = cards
         .map { cardList -> cardList.sumOf { it.balance } }
@@ -390,6 +399,107 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
      * category is stored as text, so old rows keep their label and only the
      * chooser loses the entry.
      */
+    /** بودجهٔ ماهانهٔ یک دسته (تومان)؛ صفر یعنی بدون بودجه */
+    fun setCategoryBudget(category: Category, amount: Long) {
+        viewModelScope.launch { repository.insertCategory(category.copy(monthlyBudget = amount.coerceAtLeast(0))) }
+    }
+
+    // ─── تراکنش‌های تکراری ───
+
+    fun addRecurring(title: String, amount: Long, category: String, isExpense: Boolean, bankName: String, dayOfMonth: Int) {
+        if (amount <= 0 || title.isBlank() || bankName.isBlank()) return
+        viewModelScope.launch {
+            repository.insertRecurring(
+                RecurringTransaction(
+                    title = title.trim(), amount = amount, category = category, isExpense = isExpense,
+                    bankName = bankName, dayOfMonth = dayOfMonth.coerceIn(1, 31),
+                    // Starts from the next due day; this month's is not back-filled.
+                    lastRunKey = if (com.example.utils.JalaliDate.today().day >= dayOfMonth) com.example.utils.JalaliDate.today().monthKey() else 0
+                )
+            )
+        }
+    }
+
+    fun setRecurringEnabled(item: RecurringTransaction, enabled: Boolean) {
+        viewModelScope.launch { repository.insertRecurring(item.copy(enabled = enabled)) }
+    }
+
+    fun deleteRecurring(id: Int) {
+        viewModelScope.launch { repository.deleteRecurring(id) }
+    }
+
+    // ─── طلب و بدهی ───
+
+    fun addDebt(person: String, amount: Long, owedToMe: Boolean, note: String) {
+        if (person.isBlank() || amount <= 0) return
+        viewModelScope.launch { repository.insertDebt(Debt(person = person.trim(), amount = amount, owedToMe = owedToMe, note = note.trim())) }
+    }
+
+    /**
+     * تسویهٔ طلب یا بدهی. اگر [account] داده شود پول هم روی آن حساب ثبت می‌شود
+     * (طلب: واریز، بدهی: برداشت).
+     */
+    fun settleDebt(debt: Debt, account: String?) {
+        viewModelScope.launch {
+            if (!account.isNullOrBlank()) {
+                repository.insertTransaction(
+                    Transaction(
+                        title = if (debt.owedToMe) "دریافت طلب از ${debt.person}" else "پرداخت بدهی به ${debt.person}",
+                        amount = debt.amount,
+                        category = if (debt.owedToMe) "درآمد دیگر" else "سایر",
+                        isExpense = !debt.owedToMe,
+                        bankName = account,
+                        type = if (debt.owedToMe) TransactionType.INCOME else TransactionType.EXPENSE
+                    )
+                )
+            }
+            repository.insertDebt(debt.copy(settled = true, settledAt = System.currentTimeMillis()))
+        }
+    }
+
+    fun deleteDebt(id: Int) {
+        viewModelScope.launch { repository.deleteDebt(id) }
+    }
+
+    // ─── پشتیبان و خروجی ───
+
+    /** فایل پشتیبان رمزدار؛ [onDone] با بایت‌های فایل یا پیام خطا صدا زده می‌شود */
+    fun createBackup(password: String, onDone: (ByteArray?, String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val json = Backup.snapshot(db)
+                val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Backup.encrypt(json, password) }
+                onDone(bytes, null)
+            } catch (e: Exception) {
+                onDone(null, e.message ?: "ساخت پشتیبان انجام نشد.")
+            }
+        }
+    }
+
+    /** بازگردانی از فایل پشتیبان؛ همهٔ داده‌های فعلی جایگزین می‌شوند */
+    fun restoreBackup(data: ByteArray, password: String, onDone: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val json = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Backup.decrypt(data, password) }
+                val count = Backup.restore(db, json)
+                sharedPrefs.edit().remove("ai_insight_at").apply()
+                onDone(true, "${com.example.utils.JalaliDate.toPersianDigits(count)} تراکنش و همهٔ حساب‌ها بازگردانده شد.")
+            } catch (e: Exception) {
+                onDone(false, e.message ?: "بازگردانی انجام نشد.")
+            }
+        }
+    }
+
+    fun exportCsv(onDone: (ByteArray?, String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                onDone(Backup.transactionsCsv(db), null)
+            } catch (e: Exception) {
+                onDone(null, e.message ?: "ساخت فایل انجام نشد.")
+            }
+        }
+    }
+
     fun deleteCategory(categoryId: Int) {
         viewModelScope.launch { repository.deleteCategory(categoryId) }
     }
@@ -597,6 +707,16 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         // instead of on every change (each call sent all of the user's figures).
         // Between calls the last answer is reused and the local rules fill in.
         restoreAiInsights()
+        // Rent, salary and other monthly items whose day has come.
+        viewModelScope.launch { repository.runDueRecurring() }
+
+        // Keep the home-screen widget in step with the data.
+        viewModelScope.launch {
+            @OptIn(kotlinx.coroutines.FlowPreview::class)
+            combine(transactions, loans, dailyBudget) { _, _, _ -> Unit }
+                .debounce(1_500)
+                .collectLatest { com.example.widget.TodayWidget.refresh(getApplication()) }
+        }
         viewModelScope.launch {
             @OptIn(kotlinx.coroutines.FlowPreview::class)
             combine(transactions, cards, loans) { _, _, _ -> Unit }

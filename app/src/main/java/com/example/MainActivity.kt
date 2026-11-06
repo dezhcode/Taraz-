@@ -124,6 +124,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 var loanToPay by remember { mutableStateOf<com.example.data.Loan?>(null) }
                 val bankSenders by viewModel.bankSenders.collectAsStateWithLifecycle()
                 val allGoals by viewModel.allGoals.collectAsStateWithLifecycle()
+                val loanPayments by viewModel.loanPayments.collectAsStateWithLifecycle()
+                val recurringItems by viewModel.recurring.collectAsStateWithLifecycle()
+                val debts by viewModel.debts.collectAsStateWithLifecycle()
 
                 // Overlays states
                 var isAddTransactionOpen by remember { mutableStateOf(false) }
@@ -145,6 +148,44 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 
                 // System Back Button Handling
                 val context = LocalContext.current
+
+                // ─── پشتیبان: انتخاب جای فایل با پنجرهٔ خود اندروید ───
+                var backupMsg by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
+                var backupBusy by remember { mutableStateOf(false) }
+                var pendingBackupBytes by remember { mutableStateOf<ByteArray?>(null) }
+                var pendingRestorePassword by remember { mutableStateOf<String?>(null) }
+                val writeFileLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/octet-stream")
+                ) { uri ->
+                    val bytes = pendingBackupBytes
+                    pendingBackupBytes = null
+                    backupBusy = false
+                    if (uri != null && bytes != null) {
+                        backupMsg = try {
+                            context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                            true to "فایل ذخیره شد."
+                        } catch (e: Exception) {
+                            false to "ذخیرهٔ فایل انجام نشد."
+                        }
+                    }
+                }
+                val readFileLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+                ) { uri ->
+                    val pass = pendingRestorePassword
+                    pendingRestorePassword = null
+                    if (uri == null || pass == null) {
+                        backupBusy = false
+                    } else {
+                        val bytes = try { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } } catch (e: Exception) { null }
+                        if (bytes == null) {
+                            backupBusy = false
+                            backupMsg = false to "فایل خوانده نشد."
+                        } else {
+                            viewModel.restoreBackup(bytes, pass) { ok, msg -> backupBusy = false; backupMsg = ok to msg }
+                        }
+                    }
+                }
                 val activity = context as? androidx.fragment.app.FragmentActivity
                 var lastBackPressTime by remember { mutableStateOf(0L) }
                 val exitToastMessage = "برای خروج از برنامه دوبار برگشت بزنید پشت سر هم"
@@ -265,6 +306,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         com.example.ui.layer.LayerLoanDetailScreen(
                                             loan = loan,
                                             transactions = transactions,
+                                            payments = loanPayments,
                                             onBack = { closeSub() },
                                             onPay = { loanToPay = loan },
                                             onToggleReminder = { viewModel.setLoanReminder(loan, it) },
@@ -306,6 +348,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         onOpenSms = { openSub("sms_setup") },
                                         onOpenCategories = { openSub("categories") },
                                         onOpenGoals = { openSub("goals") },
+                                        onOpenRecurring = { openSub("recurring") },
+                                        onOpenDebts = { openSub("debts") },
+                                        onOpenBackup = { openSub("backup") },
                                         onTestServer = { cb -> viewModel.testAiServerConnection(cb) },
                                         onLogout = {
                                             subStack.clear()
@@ -334,9 +379,11 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 "categories" -> {
                                     com.example.ui.layer.LayerCategoriesScreen(
                                         categories = categories,
+                                        transactions = transactions,
                                         onBack = { closeSub() },
                                         onAdd = { openSub("add_category") },
-                                        onDelete = { viewModel.deleteCategory(it.id) }
+                                        onDelete = { viewModel.deleteCategory(it.id) },
+                                        onSetBudget = { c, amount -> viewModel.setCategoryBudget(c, amount) }
                                     )
                                 }
 
@@ -346,6 +393,71 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         onSave = { name, icon, color, income ->
                                             viewModel.addCategory(name, icon, color, income)
                                             closeSub()
+                                        }
+                                    )
+                                }
+
+                                "recurring" -> {
+                                    com.example.ui.layer.LayerRecurringScreen(
+                                        items = recurringItems,
+                                        cards = cards,
+                                        categories = categories,
+                                        onBack = { closeSub() },
+                                        onAdd = { t, a, c, e, b, d -> viewModel.addRecurring(t, a, c, e, b, d) },
+                                        onToggle = { r, on -> viewModel.setRecurringEnabled(r, on) },
+                                        onDelete = { viewModel.deleteRecurring(it.id) }
+                                    )
+                                }
+
+                                "debts" -> {
+                                    com.example.ui.layer.LayerDebtsScreen(
+                                        debts = debts,
+                                        cards = cards,
+                                        onBack = { closeSub() },
+                                        onAdd = { p, a, owed, n -> viewModel.addDebt(p, a, owed, n) },
+                                        onSettle = { d, acc -> viewModel.settleDebt(d, acc) },
+                                        onDelete = { viewModel.deleteDebt(it.id) }
+                                    )
+                                }
+
+                                "backup" -> {
+                                    com.example.ui.layer.LayerBackupScreen(
+                                        message = backupMsg,
+                                        busy = backupBusy,
+                                        onBack = { backupMsg = null; closeSub() },
+                                        onCreate = { pass ->
+                                            backupBusy = true
+                                            backupMsg = null
+                                            viewModel.createBackup(pass) { bytes, err ->
+                                                if (bytes == null) {
+                                                    backupBusy = false
+                                                    backupMsg = false to (err ?: "ساخت پشتیبان انجام نشد.")
+                                                } else {
+                                                    pendingBackupBytes = bytes
+                                                    val d = com.example.utils.JalaliDate.today()
+                                                    writeFileLauncher.launch("taraz-backup-%04d-%02d-%02d.taraz".format(java.util.Locale.US, d.year, d.month, d.day))
+                                                }
+                                            }
+                                        },
+                                        onRestore = { pass ->
+                                            backupBusy = true
+                                            backupMsg = null
+                                            pendingRestorePassword = pass
+                                            readFileLauncher.launch(arrayOf("*/*"))
+                                        },
+                                        onExportCsv = {
+                                            backupBusy = true
+                                            backupMsg = null
+                                            viewModel.exportCsv { bytes, err ->
+                                                if (bytes == null) {
+                                                    backupBusy = false
+                                                    backupMsg = false to (err ?: "ساخت فایل انجام نشد.")
+                                                } else {
+                                                    pendingBackupBytes = bytes
+                                                    val d = com.example.utils.JalaliDate.today()
+                                                    writeFileLauncher.launch("taraz-transactions-%04d-%02d-%02d.csv".format(java.util.Locale.US, d.year, d.month, d.day))
+                                                }
+                                            }
                                         }
                                     )
                                 }
@@ -474,7 +586,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             transactions = transactions,
                                                             goal = activeGoal,
                                                             onOpenGoals = { openSub("goals") },
-                                                            onAskAssistant = { isAiSheetOpen = true }
+                                                            onAskAssistant = { prompt ->
+                                                                viewModel.prepareChatForOpening(prompt)
+                                                                isAiSheetOpen = true
+                                                            }
                                                         )
                                                     }
                                                 }

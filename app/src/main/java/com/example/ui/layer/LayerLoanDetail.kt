@@ -61,6 +61,7 @@ private fun dueAfter(dueDay: Int, from: Long, monthsAhead: Int): Long {
 fun LayerLoanDetailScreen(
     loan: Loan,
     transactions: List<Transaction>,
+    payments: List<com.example.data.LoanPayment>,
     onBack: () -> Unit,
     onPay: () -> Unit,
     onToggleReminder: (Boolean) -> Unit,
@@ -156,30 +157,51 @@ fun LayerLoanDetailScreen(
             }
         }
 
-        SectionTitle("پرداخت‌های قبلی")
+        SectionTitle("سابقهٔ اقساط")
         LayerCard(radius = 18.dp, padding = 0.dp) {
-            if (history.isEmpty()) {
+            val mine = payments.filter { it.loanId == loan.id }.sortedByDescending { it.monthKey * 10_000_000_000L + it.date / 1000 }
+            if (mine.isEmpty() && history.isEmpty()) {
                 Text("هنوز پرداختی از طریق تراز ثبت نشده.", style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(16.dp))
-            } else {
+            } else if (mine.isEmpty()) {
+                // Payments from before the history table existed: show the transactions.
                 history.forEachIndexed { i, tx ->
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 14.dp).height(54.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(Modifier.size(28.dp).clip(CircleShape).background(L.GreenSoft), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Check, null, tint = L.Green, modifier = Modifier.size(16.dp))
-                        }
-                        Column(Modifier.weight(1f)) {
-                            Text("قسط ${fa(max(paidCount - i, 1))} · ${JalaliDate.fromTimestamp(tx.date).formatShort()}", style = lt(14.sp, FontWeight.Medium))
-                            Text("از ${tx.bankName}", style = lt(12.sp, color = L.Muted))
-                        }
-                        Text(money(tx.amount), style = lt(14.sp, FontWeight.SemiBold))
-                    }
+                    PaymentRow("قسط ${fa(max(paidCount - i, 1))} · ${JalaliDate.fromTimestamp(tx.date).formatShort()}", "از ${tx.bankName}", tx.amount, late = false)
                     if (i < history.size - 1) Box(Modifier.padding(horizontal = 14.dp).fillMaxWidth().height(1.dp).background(L.Line))
+                }
+            } else {
+                mine.forEachIndexed { i, p ->
+                    val due = JalaliDate.dueTimestampFor(p.monthKey, loan.dueDay)
+                    val late = JalaliDate.daysUntil(p.date, due) > 0
+                    val paidOn = JalaliDate.fromTimestamp(p.date).formatShort()
+                    val monthName = JalaliDate.MONTH_NAMES[p.jalaliMonth - 1]
+                    PaymentRow(
+                        "قسط $monthName ${fa(p.jalaliYear)}",
+                        if (late) "پرداخت با تأخیر · $paidOn" else "پرداخت شده · $paidOn",
+                        p.amount,
+                        late
+                    )
+                    if (i < mine.size - 1) Box(Modifier.padding(horizontal = 14.dp).fillMaxWidth().height(1.dp).background(L.Line))
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PaymentRow(title: String, sub: String, amount: Long, late: Boolean) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 14.dp).height(56.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(Modifier.size(28.dp).clip(CircleShape).background(if (late) L.AmberSoft else L.GreenSoft), contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.Check, null, tint = if (late) L.AmberInk else L.Green, modifier = Modifier.size(16.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title, style = lt(14.sp, FontWeight.Medium))
+            Text(sub, style = lt(12.sp, color = if (late) L.AmberInk else L.Muted))
+        }
+        Text(money(amount), style = lt(14.sp, FontWeight.SemiBold))
     }
 }
 

@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Taraz</string>
+    <string name="widget_today_desc">خرج امروز و نزدیک‌ترین قسط</string>
 </resources>

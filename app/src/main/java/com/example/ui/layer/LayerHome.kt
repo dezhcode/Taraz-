@@ -153,6 +153,21 @@ fun LayerHomeScreen(
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp)
         )
 
+        // ── هشدار بودجهٔ دسته‌ها (۸۰٪ به بالا)
+        val alerts = remember(categories, transactions) { budgetAlerts(categories, transactions) }
+        if (alerts.isNotEmpty()) {
+            val (cat, used, pct) = alerts.first()
+            val over = pct >= 100
+            Callout(
+                title = if (over) "بودجهٔ «${cat.name}» تمام شد" else "${fa(pct)}٪ بودجهٔ «${cat.name}» خرج شده",
+                body = "${millions(used)} از ${millions(cat.monthlyBudget)} این ماه" +
+                    (if (alerts.size > 1) " · ${fa(alerts.size - 1)} دستهٔ دیگر هم نزدیک سقف است" else ""),
+                bg = if (over) L.RedSoft else L.AmberSoft,
+                titleColor = if (over) L.RedText else L.AmberInk,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp).clickable(onClick = onOpenReports)
+            )
+        }
+
         // ── خط زمان
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text("خط زمان", style = lt(17.sp, FontWeight.Bold))

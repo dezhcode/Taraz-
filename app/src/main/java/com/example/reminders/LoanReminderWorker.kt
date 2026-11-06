@@ -26,12 +26,15 @@ class LoanReminderWorker(
     override suspend fun doWork(): Result {
         return try {
             val prefs = applicationContext.getSharedPreferences("fidar_prefs", Context.MODE_PRIVATE)
-            if (!prefs.getBoolean("alerts_enabled", true)) return Result.success()
-
             val database = AppDatabase.getDatabase(
                 applicationContext,
                 CoroutineScope(Dispatchers.IO)
             )
+            // Monthly recurring items are recorded here too, so they arrive even
+            // if the app is not opened on their day.
+            runCatching { com.example.data.FinanceRepository(database).runDueRecurring() }
+
+            if (!prefs.getBoolean("alerts_enabled", true)) return Result.success()
             val loans = database.loanDao().getAllLoans().first()
 
             for (loan in loans) {

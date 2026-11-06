@@ -69,7 +69,7 @@ fun LayerReportsScreen(
     transactions: List<Transaction>,
     goal: FinancialGoal?,
     onOpenGoals: () -> Unit,
-    onAskAssistant: () -> Unit,
+    onAskAssistant: (prompt: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var offset by remember { mutableIntStateOf(0) } // ۰ = ماه جاری، منفی = ماه‌های قبل
@@ -92,6 +92,15 @@ fun LayerReportsScreen(
             .groupBy { it.category.ifBlank { "سایر" } }
             .mapValues { it.value.sumOf { t -> t.amount } }
             .toList().sortedByDescending { it.second }
+    }
+    // همان دسته‌ها در ماه قبل، برای «نسبت به ماه قبل»
+    val prevTs = shiftJalaliMonth(monthTs, -1)
+    val prev = remember(transactions, prevTs) { monthStat(transactions, prevTs) }
+    val prevByCategory = remember(transactions, prevTs) {
+        val (ps, pe) = JalaliDate.monthRange(prevTs)
+        transactions.filter { it.countsAsExpense && it.date in ps until pe }
+            .groupBy { it.category.ifBlank { "سایر" } }
+            .mapValues { it.value.sumOf { t -> t.amount } }
     }
     val top = byCategory.take(4)
     val rest = byCategory.drop(4).sumOf { it.second }
@@ -208,6 +217,16 @@ fun LayerReportsScreen(
                                 Text(" ${fa(pct)}٪", style = lt(13.sp, color = L.Muted))
                             }
                         }
+                        val before = prevByCategory[name] ?: 0L
+                        if (before > 0) {
+                            val change = ((sum - before) * 100 / before).toInt()
+                            if (change != 0) Text(
+                                if (change > 0) "${fa(change)}٪ بیشتر از ${JalaliDate.fromTimestamp(prevTs).monthName}"
+                                else "${fa(-change)}٪ کمتر از ${JalaliDate.fromTimestamp(prevTs).monthName}",
+                                style = lt(11.sp, color = if (change > 0) L.RedText else L.GreenText),
+                                modifier = Modifier.padding(start = 76.dp)
+                            )
+                        }
                     }
                 }
                 if (rest > 0) {
@@ -254,13 +273,26 @@ fun LayerReportsScreen(
         // پیوند به دستیار
         Row(
             Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(48.dp)
-                .clip(RoundedCornerShape(14.dp)).background(L.PrimarySoft).clickable(onClick = onAskAssistant),
+                .clip(RoundedCornerShape(14.dp)).background(L.PrimarySoft).clickable {
+                    // خلاصهٔ واقعی همین ماه برای دستیار؛ پاسخ در چت ذخیره می‌شود
+                    val cats = byCategory.take(6).joinToString("، ") { (n, v) ->
+                        val b = prevByCategory[n] ?: 0L
+                        "$n ${v} تومان" + if (b > 0) " (ماه قبل $b)" else ""
+                    }
+                    onAskAssistant(
+                        "گزارش ${date.formatMonthYear()} من را کوتاه و کاربردی تحلیل کن.\n" +
+                            "دریافتی: ${cur.income} تومان، هزینه: ${cur.expense} تومان، پس‌انداز: ${cur.saved} تومان.\n" +
+                            "ماه قبل: دریافتی ${prev.income}، هزینه ${prev.expense}.\n" +
+                            "هزینه به تفکیک دسته: ${cats.ifBlank { "ثبت نشده" }}.\n" +
+                            "بگو کجا بیشتر از معمول خرج کرده‌ام و برای ماه بعد سه پیشنهاد مشخص بده."
+                    )
+                },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
             Icon(Icons.Default.AutoAwesome, null, tint = L.PrimaryText, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
-            Text("از دستیار بپرسید: چرا ماه‌ها فرق می‌کنند؟", style = lt(14.sp, FontWeight.Bold, L.PrimaryText))
+            Text("تحلیل ${date.monthName} با دستیار", style = lt(14.sp, FontWeight.Bold, L.PrimaryText))
         }
     }
 }
