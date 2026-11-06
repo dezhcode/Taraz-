@@ -44,4 +44,20 @@ object Attachments {
     fun delete(c: Context, name: String) {
         runCatching { file(c, name).delete() }
     }
+
+    /**
+     * Pictures no transaction points to any more (the transaction was deleted, or the
+     * photo was replaced) are removed once they are [graceDays] old; the grace keeps
+     * them for «برگردان» and for a restore from a recent backup. Returns how many went.
+     */
+    fun cleanOrphans(c: Context, used: Set<String>, graceDays: Int = 3, now: Long = System.currentTimeMillis()): Int {
+        val cutoff = now - graceDays * 86_400_000L
+        var removed = 0
+        dir(c).listFiles()?.forEach { f ->
+            if (f.isFile && f.name !in used && f.lastModified() < cutoff && f.delete()) removed++
+        }
+        // the camera's temporary captures are never needed after a day
+        File(c.cacheDir, "camera").listFiles()?.forEach { f -> if (f.lastModified() < now - 86_400_000L) f.delete() }
+        return removed
+    }
 }

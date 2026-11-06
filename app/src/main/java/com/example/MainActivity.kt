@@ -202,6 +202,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 var txFilterOpen by remember { mutableStateOf(false) }
                 var allToolsOpen by remember { mutableStateOf(false) }
                 var billToPay by remember { mutableStateOf<com.example.data.Bill?>(null) }
+                var creditToRepay by remember { mutableStateOf<com.example.data.BankCard?>(null) }
                 var loansSegment by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableIntStateOf(0) }
 
                 fun runTool(id: String) {
@@ -385,6 +386,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                             onBack = { closeSub() },
                                             onEdit = { accountToEdit = card },
                                             onTransfer = { isTransferOpen = true },
+                                            onRepay = { creditToRepay = card },
                                             onOpenTransactions = {
                                                 subStack.clear()
                                                 viewModel.setTab(Tab.TRANSACTIONS)
@@ -761,7 +763,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                                 cards.filter { it.accountType == com.example.data.AccountType.CREDIT && it.dueDay > 0 && it.balance < 0 }.forEach { c ->
                                                                     val due = J.nextDueTimestamp(c.dueDay, now)
                                                                     if (J.daysUntil(due, now) in 0..7) add(
-                                                                        com.example.ui.layer.UpcomingItem("اعتباری", c.bankName, -c.balance, due, "بازپرداخت", 0) { isTransferOpen = true }
+                                                                        com.example.ui.layer.UpcomingItem("اعتباری", c.bankName, -c.balance, due, "بازپرداخت", 0) { creditToRepay = c }
                                                                     )
                                                                 }
                                                             }.distinctBy { it.kind + it.title + it.at }.sortedBy { it.at }
@@ -1110,6 +1112,14 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     onToggle = { viewModel.toggleHomeTool(it) },
                                     onRun = { id -> allToolsOpen = false; homeLayoutOpen = false; runTool(id) },
                                     onDismiss = { allToolsOpen = false }
+                                )
+                            }
+                            creditToRepay?.let { c ->
+                                com.example.ui.layer.RepayCreditSheet(
+                                    card = cards.firstOrNull { it.id == c.id } ?: c,
+                                    cards = cards,
+                                    onDismiss = { creditToRepay = null },
+                                    onRepay = { from, amount -> viewModel.transferBetweenCards(from, c.bankName, amount) }
                                 )
                             }
                             billToPay?.let { b ->

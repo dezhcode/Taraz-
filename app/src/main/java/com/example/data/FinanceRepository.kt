@@ -99,6 +99,7 @@ class FinanceRepository(private val db: AppDatabase) {
         var y = d.year
         var m = d.month + n
         while (m > 12) { m -= 12; y++ }
+        while (m < 1) { m += 12; y-- }
         val day = d.day.coerceAtMost(com.example.utils.JalaliDate.daysInMonth(y, m))
         val timeOfDay = ts - com.example.utils.JalaliDate.toTimestamp(d.year, d.month, d.day)
         return com.example.utils.JalaliDate.toTimestamp(y, m, day) + timeOfDay
@@ -182,14 +183,28 @@ class FinanceRepository(private val db: AppDatabase) {
             // A loan to or from a person goes with the money that moved for it.
             debtDao.deleteByTransaction(row.id)
         }
-        Deleted(rows, payments, debts)
+        // A cleared cheque whose money is taken back is pending again, and a bill whose
+        // payment is taken back is due again, so neither says «done» with nothing behind it.
+        val ids = rows.map { it.id }.toSet()
+        val cheques = chequeDao.getAllNow().filter { it.transactionId != null && it.transactionId in ids }
+        cheques.forEach { chequeDao.insert(it.copy(status = ChequeStatus.PENDING, transactionId = null)) }
+        val bills = billDao.getAllNow().filter { b ->
+            b.lastPaidAt != null && rows.any { r -> r.isExpense && r.category == "قبوض" && r.date == b.lastPaidAt }
+        }
+        bills.forEach { b ->
+            billDao.insert(b.copy(lastPaidAt = null, dueDate = shiftMonths(b.dueDate, -b.periodMonths.coerceAtLeast(1))))
+        }
+        Deleted(rows, payments, debts, cheques, bills)
     }
 
     /** What a delete removed: enough to restore it exactly. */
     data class Deleted(
         val transactions: List<Transaction>,
         val loanPayments: List<LoanPayment>,
-        val debts: List<Debt>
+        val debts: List<Debt>,
+        /** Cheques and bills as they were before the delete reopened them. */
+        val cheques: List<Cheque> = emptyList(),
+        val bills: List<Bill> = emptyList()
     )
 
     /** Undoes [deleteTransaction] / [deletePersonEntry]: rows, balances, loan payments and ledger lines come back. */
@@ -205,6 +220,8 @@ class FinanceRepository(private val db: AppDatabase) {
         }
         d.loanPayments.forEach { loanPaymentDao.insert(it) }
         d.debts.forEach { debtDao.insert(it) }
+        d.cheques.forEach { chequeDao.insert(it) }
+        d.bills.forEach { billDao.insert(it) }
     }
 
     /**

@@ -216,7 +216,8 @@ fun LayerAccountDetailScreen(
     onOpenTransaction: (Transaction) -> Unit,
     onToggleSms: (BankSender) -> Unit,
     onOpenSmsSetup: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onRepay: () -> Unit = {}
 ) {
     val color = if (card.isCash) L.Green else cardColor(cardIndex)
     val mine = transactions.filter { it.bankName == card.bankName }.sortedByDescending { it.date }
@@ -248,7 +249,8 @@ fun LayerAccountDetailScreen(
         // عملیات
         Row(Modifier.padding(horizontal = 20.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("ویرایش", Icons.Default.Edit, Modifier.weight(1f), onEdit)
-            if (cards.size >= 2) ActionTile("انتقال", Icons.Default.SwapHoriz, Modifier.weight(1f), onTransfer)
+            if (card.isCredit && cards.any { !it.isCredit }) ActionTile("بازپرداخت", Icons.Default.Payments, Modifier.weight(1f), onRepay)
+            else if (cards.size >= 2) ActionTile("انتقال", Icons.Default.SwapHoriz, Modifier.weight(1f), onTransfer)
             ActionTile("تراکنش‌ها", Icons.Default.List, Modifier.weight(1f), onOpenTransactions)
         }
 
@@ -413,7 +415,7 @@ fun LayerAddAccountSheet(
             label = if (credit) "تا امروز استفاده‌شده (تومان)" else "موجودی فعلی (تومان)",
             placeholder = "۰",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            hint = if (credit) "خریدها از این کارت به بدهی‌اش اضافه می‌شود؛ بازپرداخت را با «انتقال» به این کارت ثبت کنید."
+            hint = if (credit) "خریدها از این کارت به بدهی‌اش اضافه می‌شود؛ بازپرداخت را با دکمهٔ «بازپرداخت» در صفحهٔ همین کارت ثبت کنید."
             else "تا موجودی کل از همین حالا درست باشد."
         )
         if (credit) CreditDueDay(dueDay) { dueDay = it }
@@ -521,5 +523,38 @@ fun LayerEditAccountSheet(
             LField(value = holder, onChange = { holder = it }, label = "نام صاحب کارت")
         }
         Spacer(Modifier.height(4.dp))
+    }
+}
+
+/**
+ * بازپرداخت کارت اعتباری: از یک حساب دیگر به این کارت منتقل می‌شود (در جمع هزینه نمی‌آید،
+ * چون خریدها قبلاً هزینه شده‌اند) و بدهی کارت کم می‌شود.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun RepayCreditSheet(card: BankCard, cards: List<BankCard>, onDismiss: () -> Unit, onRepay: (from: String, amount: Long) -> Unit) {
+    val used = (-card.balance).coerceAtLeast(0)
+    val sources = cards.filter { !it.isCredit && it.bankName != card.bankName }
+    var from by remember { mutableStateOf(sources.maxByOrNull { it.balance }?.bankName.orEmpty()) }
+    var amountText by remember { mutableStateOf(if (used > 0) money(used) else "") }
+    val amount = parseAmount(amountText)
+    val src = sources.firstOrNull { it.bankName == from }
+    LayerSheet(
+        title = "بازپرداخت ${card.bankName}",
+        onDismiss = onDismiss,
+        topGap = 120.dp,
+        bottomBar = {
+            BigButton("ثبت بازپرداخت", enabled = amount > 0 && from.isNotBlank()) { onRepay(from, amount); onDismiss() }
+        }
+    ) {
+        Text("بدهی این کارت: ${money(used)} تومان", style = lt(14.sp, FontWeight.SemiBold))
+        LField(amountText, { amountText = groupedInput(it) }, "مبلغ بازپرداخت (تومان)", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            hint = if (src != null && amount > src.balance) "موجودی ${src.bankName} کمتر از این مبلغ است." else null)
+        if (used > 0 && amount != used) SoftButton("کل بدهی: ${money(used)}", height = 34.dp) { amountText = money(used) }
+        Text("از حساب", style = lt(13.sp, FontWeight.Bold))
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            sources.forEach { c -> LChip(c.bankName, c.bankName == from) { from = c.bankName } }
+        }
+        Text("در جمع هزینه‌ها نمی‌آید؛ خریدهای کارت قبلاً هزینه حساب شده‌اند.", style = lt(12.sp, color = L.Muted, lineHeight = 20.sp))
     }
 }

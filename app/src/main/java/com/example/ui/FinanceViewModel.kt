@@ -53,7 +53,10 @@ data class ProposedAction(
     val loanInstallmentAmount: Long? = null,
     val loanDueDate: String? = null,
     val loanId: Int? = null,
-    
+
+    /** The whole proposal as the assistant wrote it, for the kinds added later (cheque, bill, person). */
+    val raw: String? = null,
+
     // Status
     val description: String,
     val isPending: Boolean = true,
@@ -224,22 +227,35 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         .map { cardList -> cardList.sumOf { it.balance } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
+    /**
+     * Ticks at start and again just after every midnight, so «امروز» and «این ماه»
+     * move on even if the app stays open across the day or month boundary.
+     */
+    private val dayTick: Flow<Long> = flow {
+        while (true) {
+            val now = System.currentTimeMillis()
+            emit(now)
+            val next = com.example.utils.JalaliDate.dayRange(now).second
+            kotlinx.coroutines.delay((next - now).coerceAtLeast(1_000L) + 1_000L)
+        }
+    }
+
     // "This month" means the Jalali month: it starts on 1 Mehr, not 1 October.
-    val monthlyIncome: StateFlow<Long> = transactions
+    val monthlyIncome: StateFlow<Long> = combine(transactions, dayTick) { txList, _ -> txList }
         .map { txList ->
             val (start, end) = com.example.utils.JalaliDate.monthRange(System.currentTimeMillis())
             txList.filter { it.countsAsIncome && it.date >= start && it.date < end }.sumOf { it.amount }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
-    val monthlyExpense: StateFlow<Long> = transactions
+    val monthlyExpense: StateFlow<Long> = combine(transactions, dayTick) { txList, _ -> txList }
         .map { txList ->
             val (start, end) = com.example.utils.JalaliDate.monthRange(System.currentTimeMillis())
             txList.filter { it.countsAsExpense && it.date >= start && it.date < end }.sumOf { it.amount }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
-    val todayExpense: StateFlow<Long> = transactions
+    val todayExpense: StateFlow<Long> = combine(transactions, dayTick) { txList, _ -> txList }
         .map { txList ->
             val (start, end) = com.example.utils.JalaliDate.dayRange(System.currentTimeMillis())
             txList.filter { it.countsAsExpense && it.date >= start && it.date < end }.sumOf { it.amount }
@@ -867,33 +883,16 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     private val _isAiLoading = MutableStateFlow(false)
     val isAiLoading: StateFlow<Boolean> = _isAiLoading.asStateFlow()
 
+    /** «گفتگوی تازه»: صفحهٔ دستیار خالی می‌شود و پیشنهادهای آماده نشان داده می‌شوند */
     fun resetVisibleChat() {
-        _chatMessages.value = listOf(
-            ChatMessage(
-                sender = "ai",
-                text = "سلام! من تراز، دستیار مالی هوشمند و صمیمی تو هستم. هزینه‌ها، قسط‌ها و تحلیل‌های مالی‌ت رو به من بسپار. چطوری می‌تونم امروز کمکت کنم؟"
-            )
-        )
+        _chatMessages.value = emptyList()
     }
 
+    /**
+     * با باز شدن دستیار: گفتگوی قبلی می‌ماند و فقط با «گفتگوی تازه» پاک می‌شود.
+     * اگر هنوز چیزی نمانده، پیام خوش‌آمد نشان داده می‌شود.
+     */
     fun prepareChatForOpening(prefilledPrompt: String? = null) {
-        // اگر پرسشی در راه است (مثلاً «تحلیل با دستیار» از گزارش‌ها که قبل از باز شدن شیت فرستاده شده)،
-        // گفتگو پاک نشود؛ وگرنه پاسخش گم می‌شود.
-        val inFlight = _isAiLoading.value || _chatMessages.value.any { it.status == "pending" }
-        val lastMsg = _chatMessages.value.lastOrNull()
-        if (inFlight) {
-            // دست نزن
-        } else if (lastMsg != null && lastMsg.sender == "user") {
-            _chatMessages.value = listOf(
-                ChatMessage(
-                    sender = "ai",
-                    text = "سلام! من تراز، دستیار مالی هوشمند و صمیمی تو هستم. هزینه‌ها، قسط‌ها و تحلیل‌های مالی‌ت رو به من بسپار. چطوری می‌تونم امروز کمکت کنم؟"
-                ),
-                lastMsg
-            )
-        } else {
-            resetVisibleChat()
-        }
         if (prefilledPrompt != null) {
             sendChatMessage(prefilledPrompt)
         }
@@ -932,6 +931,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                             action.loanInstallmentAmount?.let { put("loanInstallmentAmount", it) }
                             action.loanDueDate?.let { put("loanDueDate", it) }
                             action.loanId?.let { put("loanId", it) }
+                            action.raw?.let { put("raw", it) }
                         }
                         put("actionProposed", actObj)
                     }
@@ -984,6 +984,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                         loanBankName = actionObj.optString("loanBankName").takeIf { it.isNotEmpty() },
                         loanName = actionObj.optString("loanName").takeIf { it.isNotEmpty() },
                         loanTotalAmount = if (actionObj.has("loanTotalAmount")) actionObj.getLong("loanTotalAmount") else null,
+                        raw = actionObj.optString("raw").takeIf { it.isNotEmpty() },
                         loanPaidAmount = if (actionObj.has("loanPaidAmount")) actionObj.getLong("loanPaidAmount") else null,
                         loanInstallmentAmount = if (actionObj.has("loanInstallmentAmount")) actionObj.getLong("loanInstallmentAmount") else null,
                         loanDueDate = actionObj.optString("loanDueDate").takeIf { it.isNotEmpty() },
@@ -1886,6 +1887,23 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         return fullText
     }
 
+    /**
+     * The date an assistant proposal names: «dueInDays» from today, or «dueDate» as a Jalali
+     * YYYY/MM/DD (Latin or Persian digits). Ten in the morning, like the reminders.
+     */
+    private fun assistantDate(j: JSONObject, defaultDays: Int): Long {
+        val J = com.example.utils.JalaliDate
+        val today = J.dayRange(System.currentTimeMillis()).first
+        if (j.has("dueInDays")) return today + j.optInt("dueInDays", defaultDays).coerceIn(0, 3650) * 86_400_000L + 36_000_000L
+        val txt = j.optString("dueDate").map { ch -> val p = "۰۱۲۳۴۵۶۷۸۹".indexOf(ch); if (p >= 0) '0' + p else ch }.joinToString("")
+        val parts = Regex("(\\d{4})\\D(\\d{1,2})\\D(\\d{1,2})").find(txt)?.groupValues
+        if (parts != null) {
+            val (y, m, d) = Triple(parts[1].toInt(), parts[2].toInt(), parts[3].toInt())
+            if (y in 1300..1500 && m in 1..12 && d in 1..31) return J.toTimestamp(y, m, d.coerceAtMost(J.daysInMonth(y, m))) + 36_000_000L
+        }
+        return today + defaultDays * 86_400_000L + 36_000_000L
+    }
+
     private fun parseProposedAction(fullText: String): Pair<String, ProposedAction?> {
         try {
             val regex = Regex("\\[PROPOSE_ACTION:\\s*(\\{[\\s\\S]*?\\})\\s*\\]")
@@ -1913,7 +1931,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     loanPaidAmount = if (json.has("loanPaidAmount")) json.getLong("loanPaidAmount") else null,
                     loanInstallmentAmount = if (json.has("loanInstallmentAmount")) json.getLong("loanInstallmentAmount") else null,
                     loanDueDate = json.optString("loanDueDate").takeIf { it.isNotEmpty() },
-                    loanId = if (json.has("loanId")) json.getInt("loanId") else null
+                    loanId = if (json.has("loanId")) json.getInt("loanId") else null,
+                    raw = jsonStr
                 )
                 val cleanedText = fullText.replace(match.value, "").trim()
                 return Pair(cleanedText, action)
@@ -2025,6 +2044,54 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                                 dueDate = "روز ${com.example.utils.JalaliDate.toPersianDigits(day)} هر ماه",
                                 dueDay = day
                             )
+                        )
+                    }
+                    "add_cheque" -> {
+                        val j = JSONObject(action.raw ?: throw IllegalStateException("جزئیات چک نیامده."))
+                        val amount = j.optLong("amount").takeIf { it > 0 } ?: throw IllegalStateException("مبلغ چک مشخص نیست.")
+                        val person = j.optString("person").trim().ifEmpty { throw IllegalStateException("طرف چک مشخص نیست.") }
+                        val issued = j.optBoolean("issued", true)
+                        repository.saveCheque(
+                            Cheque(
+                                issued = issued, amount = amount, dueDate = assistantDate(j, defaultDays = 30), person = person,
+                                bankName = accountForAssistant(j.optString("bankName").takeIf { it.isNotEmpty() }),
+                                category = if (issued) "سایر" else (categories.value.firstOrNull { it.isIncome }?.name ?: "درآمد"),
+                                note = j.optString("note")
+                            )
+                        )
+                    }
+                    "add_bill" -> {
+                        val j = JSONObject(action.raw ?: throw IllegalStateException("جزئیات قبض نیامده."))
+                        val kind = j.optString("kind").takeIf { it in BillKind.all } ?: BillKind.OTHER
+                        repository.saveBill(
+                            Bill(
+                                kind = kind, title = j.optString("title").ifBlank { kind },
+                                billId = j.optString("billId").filter { it.isDigit() }, amount = j.optLong("amount"),
+                                dueDate = assistantDate(j, defaultDays = 14), periodMonths = j.optInt("periodMonths", 2).coerceIn(1, 3)
+                            )
+                        )
+                    }
+                    "pay_bill" -> {
+                        val j = JSONObject(action.raw ?: throw IllegalStateException("جزئیات قبض نیامده."))
+                        val name = j.optString("billTitle").trim()
+                        val bill = bills.value.firstOrNull { it.title == name }
+                            ?: bills.value.firstOrNull { name.isNotEmpty() && (it.title.contains(name) || name.contains(it.title) || it.kind == name) }
+                            ?: throw IllegalStateException("قبض «$name» پیدا نشد.")
+                        val amount = j.optLong("amount").takeIf { it > 0 } ?: bill.amount.takeIf { it > 0 }
+                            ?: throw IllegalStateException("مبلغ پرداخت مشخص نیست.")
+                        repository.payBill(bill, amount, accountForAssistant(j.optString("bankName").takeIf { it.isNotEmpty() }))
+                    }
+                    "person_entry" -> {
+                        val j = JSONObject(action.raw ?: throw IllegalStateException("جزئیات نیامده."))
+                        val name = j.optString("person").trim().ifEmpty { throw IllegalStateException("نام شخص مشخص نیست.") }
+                        val amount = j.optLong("amount").takeIf { it > 0 } ?: throw IllegalStateException("مبلغ مشخص نیست.")
+                        val person = persons.value.firstOrNull { it.name == name }
+                            ?: repository.savePerson(Person(name = name)).let { id -> Person(id = id, name = name) }
+                        val account = j.optString("bankName").takeIf { it.isNotEmpty() }?.let { accountForAssistant(it) }
+                        repository.addPersonEntry(
+                            person, amount, owedToMe = j.optBoolean("owedToMe", true), isRepayment = j.optBoolean("isRepayment", false),
+                            account = account, note = j.optString("note"),
+                            dueDate = if (j.has("dueInDays") || j.has("dueDate")) assistantDate(j, defaultDays = 30) else null
                         )
                     }
                     "pay_installment" -> {
@@ -2258,7 +2325,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             ${if (latestTransactionsCtx.isEmpty()) "هیچ تراکنشی ثبت نشده است." else latestTransactionsCtx}
             
             [قوانین مدیریت تراکنش‌ها، وام‌ها و اقساط]:
-            تو دسترسی کامل داری تا تراکنش‌ها، وام‌ها و اقساط کاربر را ویرایش، حذف یا اضافه کنی.
+            تو دسترسی کامل داری تا تراکنش‌ها، وام‌ها و اقساط کاربر را ویرایش، حذف یا اضافه کنی، و چک، قبض و حساب با اشخاص را ثبت کنی.
             کاربر نباید کدهای مارک‌داون یا آیدی‌های سیستمی را ببیند. تمام ارتباطات باید کاملاً صمیمی، دوستانه و محترمانه باشد.
             برای ویرایش یا حذف، حتماً از آیدی (آیدی عددی)های واقعی تراکنش‌ها یا وام‌های بالا استفاده کن. آیدی‌های من‌درآوردی ننویس!
             هر زمان که کاربر خواست تغییری ایجاد کند، ابتدا با لحن صمیمی تأیید کن و پیشنهاد خود را از طریق تگ PROPOSE_ACTION ارسال کن.
@@ -2285,6 +2352,18 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             - پرداخت قسط (installment):
             [PROPOSE_ACTION: {"type": "pay_installment", "loanId": 3, "loanName": "وام مسکن", "loanInstallmentAmount": 2000000, "description": "پرداخت قسط وام مسکن به مبلغ 2,000,000 تومان"}]
             
+            - ثبت چک (issued=true یعنی چکی که کاربر داده؛ false یعنی گرفته):
+            [PROPOSE_ACTION: {"type": "add_cheque", "issued": true, "amount": 15000000, "person": "صاحبخانه", "dueDate": "1405/09/01", "bankName": "ملت", "description": "ثبت چک 15,000,000 تومانی به صاحبخانه با سررسید 1 آذر"}]
+
+            - ثبت قبض (kind یکی از: برق، آب، گاز، تلفن ثابت، موبایل، اینترنت، سایر):
+            [PROPOSE_ACTION: {"type": "add_bill", "kind": "برق", "title": "برق خانه", "amount": 620000, "dueInDays": 5, "periodMonths": 2, "description": "ثبت قبض برق خانه با موعد 5 روز دیگر"}]
+
+            - پرداخت قبض ثبت‌شده (billTitle همان نام قبض در فهرست بالا):
+            [PROPOSE_ACTION: {"type": "pay_bill", "billTitle": "برق خانه", "amount": 620000, "bankName": "ملت", "description": "پرداخت قبض برق خانه به مبلغ 620,000 تومان"}]
+
+            - قرض به شخص یا از شخص (owedToMe=true یعنی کاربر قرض داده یا طلب دارد؛ isRepayment=true یعنی پس دادن/پس گرفتن؛ bankName فقط اگر پول از حسابی جابه‌جا شده):
+            [PROPOSE_ACTION: {"type": "person_entry", "person": "علی", "amount": 2000000, "owedToMe": true, "isRepayment": false, "bankName": "ملت", "dueInDays": 30, "description": "2,000,000 تومان قرض به علی از حساب ملت"}]
+
             توجه: برای هر قسطی که کاربر می‌پردازد، علاوه بر آپدیت وام، یک تراکنش هزینه نیز ثبت می‌شود. برای این کار از نوع "pay_installment" استفاده کن.
             
             همیشه یک کادر تایید تعاملی با استفاده از این تگ ایجاد کن. دیتابیس بدون تایید کاربر تغییر نخواهد کرد.

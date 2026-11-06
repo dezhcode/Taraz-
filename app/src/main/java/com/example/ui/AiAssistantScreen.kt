@@ -495,6 +495,10 @@ fun ProposedActionCard(
         "delete_loan" -> "حذف وام"
         "edit_loan" -> "ویرایش اطلاعات وام"
         "pay_installment" -> "پرداخت قسط وام"
+        "add_cheque" -> "ثبت چک"
+        "add_bill" -> "ثبت قبض"
+        "pay_bill" -> "پرداخت قبض"
+        "person_entry" -> "ثبت در حساب شخص"
         else -> "عملیات سیستم"
     }
 

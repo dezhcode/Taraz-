@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.data.AppDatabase
+import com.example.data.attachmentList
 import com.example.utils.JalaliDate
 import com.example.utils.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
@@ -35,6 +36,11 @@ class LoanReminderWorker(
             runCatching { com.example.data.FinanceRepository(database).runDueRecurring() }
             // Weekly or monthly encrypted backup into the folder the user chose.
             runCatching { com.example.data.AutoBackup.runIfDue(applicationContext) }
+            // Photos of deleted transactions, after a few days' grace.
+            runCatching {
+                val used = database.transactionDao().getAllTransactions().first().flatMap { it.attachmentList }.toSet()
+                com.example.data.Attachments.cleanOrphans(applicationContext, used)
+            }
 
             if (!prefs.getBoolean("alerts_enabled", true)) return Result.success()
             val loans = database.loanDao().getAllLoans().first()
