@@ -25,6 +25,10 @@ import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Icon
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -103,10 +107,25 @@ fun LayerAccountsScreen(
     onBack: () -> Unit,
     onOpenAccount: (BankCard) -> Unit,
     onAdd: () -> Unit,
-    onTransfer: () -> Unit
+    onTransfer: () -> Unit,
+    holderName: String = ""
 ) {
+    // چشم سراسری: همهٔ مبلغ‌های این صفحه را با هم پنهان می‌کند
+    var hideAmounts by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     LayerScreen(
         title = "حساب‌ها",
+        trailing = {
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).clickable { hideAmounts = !hideAmounts }
+                    .semantics { contentDescription = if (hideAmounts) "نمایش مبلغ‌ها" else "پنهان کردن مبلغ‌ها" },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    if (hideAmounts) Icons.Default.VisibilityOff else Icons.Default.Visibility, null,
+                    tint = L.Ink, modifier = Modifier.size(20.dp)
+                )
+            }
+        },
         subtitle = if (cards.isEmpty()) "هنوز حسابی ندارید" else "${fa(cards.size)} حساب · روی هر حساب بزنید تا جزئیاتش را ببینید",
         onBack = onBack,
         bottomBar = {
@@ -117,10 +136,13 @@ fun LayerAccountsScreen(
         Column(Modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text("موجودی کل", style = lt(13.sp, color = L.Muted))
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(money(totalBalance), style = lt(38.sp, FontWeight.Light, letterSpacing = (-1.5).sp))
+                Text(if (hideAmounts) "••••••" else money(totalBalance), style = lt(38.sp, FontWeight.Light, letterSpacing = (-1.5).sp))
                 Text("تومان", style = lt(14.sp), modifier = Modifier.padding(bottom = 6.dp))
             }
         }
+        // کارت‌ها با طرح دوتکه، ورق‌خوردنی
+        BankCardPager(cards = cards, holderName = holderName, hideBalance = hideAmounts, onOpen = onOpenAccount)
+
         Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             cards.forEachIndexed { i, card ->
                 Row(
@@ -137,7 +159,7 @@ fun LayerAccountsScreen(
                         if (hasAutoSms(card, senders)) StatusPill("پیامک خودکار روشن", L.GreenSoft, L.GreenText)
                         else StatusPill("ثبت دستی", L.Chip, L.Muted)
                     }
-                    Text(money(card.balance), style = lt(15.sp, FontWeight.SemiBold))
+                    Text(if (hideAmounts) "••••" else money(card.balance), style = lt(15.sp, FontWeight.SemiBold))
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = L.Chevron, modifier = Modifier.size(18.dp))
                 }
             }
@@ -182,30 +204,16 @@ fun LayerAccountDetailScreen(
         subtitle = "${if (card.isCash) "حساب نقدی" else "حساب"} · ${fa(monthCount)} تراکنش در ${JalaliDate.today().monthName}",
         onBack = onBack
     ) {
-        // کارت
-        Box(
-            Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(178.dp).clip(RoundedCornerShape(24.dp)).background(color).padding(horizontal = 20.dp, vertical = 18.dp)
-        ) {
-            if (logo != null) {
-                Box(
-                    Modifier.align(Alignment.TopEnd).size(46.dp).clip(RoundedCornerShape(14.dp)).background(Color.White).padding(6.dp),
-                    contentAlignment = Alignment.Center
-                ) { BankLogo(logo, Modifier.fillMaxSize(), card.bankName) }
-            }
-            Column(Modifier.align(Alignment.TopStart).padding(end = if (logo != null) 54.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("موجودی", style = lt(12.sp, color = Color(0xD9FFFFFF)))
-                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(money(card.balance), style = lt(32.sp, FontWeight.Light, Color.White, letterSpacing = (-1).sp))
-                    Text("تومان", style = lt(13.sp, color = Color.White), modifier = Modifier.padding(bottom = 5.dp))
-                }
-            }
-            Row(Modifier.align(Alignment.BottomStart).fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-                Text(holderName.ifBlank { card.cardHolderName }, style = lt(13.sp, color = Color.White), modifier = Modifier.weight(1f))
-                if (card.cardNumber.length >= 4) {
-                    Text("•••• •••• •••• ${fa(card.cardNumber.takeLast(4))}", style = lt(14.sp, color = Color.White, letterSpacing = 1.sp))
-                }
-            }
-        }
+        // کارت (طرح دوتکه)
+        var revealed by remember(card.id) { mutableStateOf(false) }
+        BankCardView(
+            card = card,
+            fallbackColor = color,
+            revealed = revealed,
+            onToggleReveal = { revealed = !revealed },
+            holderName = holderName,
+            modifier = Modifier.padding(horizontal = 20.dp)
+        )
 
         // عملیات
         Row(Modifier.padding(horizontal = 20.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

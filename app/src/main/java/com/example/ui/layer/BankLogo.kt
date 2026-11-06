@@ -45,6 +45,30 @@ object BankLogos {
     /** برای نشان دادن «شناسایی شد» و پیش‌نمایش: فقط از روی شمارهٔ کارت */
     fun assetForCard(cardNumber: String): String? = BankBin.bankFor(cardNumber)?.let { byName(it) }
 
+    /** نسخهٔ خطی سفید همان لوگو (برای پشت کارت)، یا null برای لوگوهایی که نسخهٔ خطی ندارند */
+    fun lineAssetFor(asset: String?): String? =
+        asset?.takeIf { it.startsWith("banklogos/") }?.replace("banklogos/", "banklogos_line/")
+
+    /** رنگ اصلی هر بانک برای کارت؛ null یعنی بانک ناشناخته */
+    fun brandColor(asset: String?): Long? {
+        val key = asset?.substringAfterLast('/')?.removeSuffix(".svg") ?: return null
+        return BRAND[key] ?: if (key == "blu") 0xFF0891B2 else null
+    }
+
+    private val BRAND: Map<String, Long> = mapOf(
+        "ansar" to 0xFFAA1A1F, "ayandeh" to 0xFF6B3F1F, "bank_markazi" to 0xFF00194A, "caspian" to 0xFF313C4C,
+        "dey" to 0xFF008B9A, "eghtesad_novin" to 0xFF662892, "futurebank" to 0xFF2B7BD0, "gardeshgari" to 0xFFB11116,
+        "ghavamin" to 0xFF007D3D, "hekmat" to 0xFF324C88, "iran_europe" to 0xFF05326E, "iran_venezuela" to 0xFF2E3390,
+        "iran_zamin" to 0xFF4C2A93, "karafarin" to 0xFF0C730A, "keshavarzi" to 0xFF2E7D32, "khavar_mianeh" to 0xFFE08600,
+        "kosar" to 0xFF832D6A, "maskan" to 0xFFEC520D, "mehr_eghtesad" to 0xFF029A4C, "mehr_iran" to 0xFF209B1C,
+        "melall" to 0xFF37389A, "mellat" to 0xFFC4122F, "melli" to 0xFF123F7A, "noor" to 0xFF002263,
+        "parsian" to 0xFF8E5E3B, "pasargad" to 0xFF2A2A2A, "postbank" to 0xFF14763E, "refah" to 0xFF173576,
+        "resalat" to 0xFF00A3CC, "saderat" to 0xFF2D2A68, "saman" to 0xFF0A78C2, "sanat_madan" to 0xFF8A7040,
+        "sarmayeh" to 0xFF1F1F48, "sepah" to 0xFF1B5FC1, "shahr" to 0xFFD8262C, "sina" to 0xFF277EB5,
+        "standard_chartered" to 0xFF086DA9, "taavon_eslami" to 0xFF00920A, "tejarat" to 0xFF2F4A98, "tosee" to 0xFF8F2426,
+        "tosee_saderat" to 0xFF006D08, "tosee_taavon" to 0xFF2F8FB0
+    )
+
     private fun norm(s: String): String = s
         .replace('ي', 'ی').replace('ك', 'ک').replace('آ', 'ا').replace('أ', 'ا')
         .replace('‌', ' ').replace('-', ' ').replace('_', ' ')

@@ -270,7 +270,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         onBack = { closeSub() },
                                         onOpenAccount = { selectedAccountId = it.id; openSub("account_detail") },
                                         onAdd = { isAddCardOpen = true },
-                                        onTransfer = { isTransferOpen = true }
+                                        onTransfer = { isTransferOpen = true },
+                                        holderName = userProfile?.name.orEmpty()
                                     )
                                 }
 
