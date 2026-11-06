@@ -37,7 +37,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.BankCard
 import com.example.data.Category
-import com.example.data.Debt
 import com.example.data.RecurringTransaction
 import com.example.data.Transaction
 import com.example.data.countsAsExpense
@@ -175,129 +174,6 @@ fun LayerRecurringScreen(
             Text("دسته", style = lt(13.sp, FontWeight.SemiBold))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 cats.forEach { c -> LChip(c.name, category == c.name) { category = c.name } }
-            }
-            Spacer(Modifier.height(4.dp))
-        }
-    }
-}
-
-// ───────────────────────── طلب و بدهی ─────────────────────────
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun LayerDebtsScreen(
-    debts: List<Debt>,
-    cards: List<BankCard>,
-    onBack: () -> Unit,
-    onAdd: (person: String, amount: Long, owedToMe: Boolean, note: String) -> Unit,
-    onSettle: (Debt, String?) -> Unit,
-    onDelete: (Debt) -> Unit
-) {
-    var adding by remember { mutableStateOf(false) }
-    var settling by remember { mutableStateOf<Debt?>(null) }
-    val open = debts.filter { !it.settled }
-    val owedToMe = open.filter { it.owedToMe }.sumOf { it.amount }
-    val iOwe = open.filter { !it.owedToMe }.sumOf { it.amount }
-
-    LayerScreen(
-        title = "طلب و بدهی",
-        subtitle = if (open.isEmpty()) "حساب‌وکتاب با دوستان و آشنایان" else "${fa(open.size)} مورد باز",
-        onBack = onBack,
-        bottomBar = { BigButton("ثبت طلب یا بدهی") { adding = true } }
-    ) {
-        Row(Modifier.padding(horizontal = 20.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(Modifier.weight(1f).cardSurface(18.dp).padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("طلب من", style = lt(12.sp, color = L.Muted))
-                Text(money(owedToMe), style = lt(18.sp, FontWeight.Bold, L.Green))
-            }
-            Column(Modifier.weight(1f).cardSurface(18.dp).padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("بدهی من", style = lt(12.sp, color = L.Muted))
-                Text(money(iOwe), style = lt(18.sp, FontWeight.Bold, L.RedText))
-            }
-        }
-        if (debts.isEmpty()) {
-            Text(
-                "پولی که به کسی قرض داده‌اید یا از کسی گرفته‌اید را اینجا بنویسید تا یادتان بماند.",
-                style = lt(13.sp, color = L.Muted, lineHeight = 23.sp), modifier = Modifier.padding(horizontal = 24.dp)
-            )
-        } else {
-            LayerCard(radius = 20.dp, padding = 0.dp) {
-                debts.forEachIndexed { i, d ->
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                            Text(d.person, style = lt(14.sp, FontWeight.SemiBold, if (d.settled) L.Muted else L.Ink), maxLines = 1)
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                if (d.settled) StatusPill("تسویه شد", L.GreenSoft, L.GreenText)
-                                else if (d.owedToMe) StatusPill("طلب", L.GreenSoft, L.GreenText)
-                                else StatusPill("بدهی", L.RedSoft, L.RedText)
-                                Text(
-                                    (if (d.note.isNotBlank()) d.note + " · " else "") + JalaliDate.fromTimestamp(d.createdAt).formatShort(),
-                                    style = lt(12.sp, color = L.Muted), maxLines = 1
-                                )
-                            }
-                        }
-                        Text(money(d.amount), style = lt(14.sp, FontWeight.SemiBold, if (d.settled) L.Muted else L.Ink))
-                        if (!d.settled) SoftButton("تسویه", height = 34.dp) { settling = d }
-                        Box(
-                            Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).clickable { onDelete(d) }.semantics { contentDescription = "حذف ${d.person}" },
-                            contentAlignment = Alignment.Center
-                        ) { Icon(Icons.Default.Delete, null, tint = L.Faint, modifier = Modifier.size(18.dp)) }
-                    }
-                    if (i < debts.size - 1) Box(Modifier.padding(horizontal = 14.dp).fillMaxWidth().height(1.dp).background(L.Line))
-                }
-            }
-        }
-    }
-
-    if (adding) {
-        var owed by remember { mutableStateOf(true) }
-        var person by remember { mutableStateOf("") }
-        var amountText by remember { mutableStateOf("") }
-        var note by remember { mutableStateOf("") }
-        val amount = parseAmount(amountText)
-        LayerSheet(
-            title = "طلب یا بدهی تازه",
-            onDismiss = { adding = false },
-            topGap = 120.dp,
-            bottomBar = {
-                BigButton("ذخیره", enabled = person.isNotBlank() && amount > 0) {
-                    onAdd(person, amount, owed, note)
-                    adding = false
-                }
-            }
-        ) {
-            LSegmented(listOf("طلب دارم", "بدهکارم"), if (owed) 0 else 1, { owed = it == 0 })
-            LField(value = person, onChange = { person = it }, label = "نام شخص", placeholder = "مثلاً علی")
-            LField(
-                value = amountText, onChange = { amountText = groupedInput(it) }, label = "مبلغ (تومان)", placeholder = "۰",
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-            )
-            LField(value = note, onChange = { note = it }, label = "یادداشت (اختیاری)", placeholder = "مثلاً پول شام")
-            Spacer(Modifier.height(4.dp))
-        }
-    }
-
-    settling?.let { d ->
-        var account by remember(d.id) { mutableStateOf<String?>(cards.firstOrNull()?.bankName) }
-        LayerSheet(
-            title = if (d.owedToMe) "${d.person} طلبتان را داد؟" else "بدهی به ${d.person} را دادید؟",
-            onDismiss = { settling = null },
-            topGap = 200.dp,
-            bottomBar = {
-                BigButton("تسویه شد") { onSettle(d, account); settling = null }
-            }
-        ) {
-            Text(
-                if (d.owedToMe) "${money(d.amount)} تومان به کدام حساب واریز شد؟" else "${money(d.amount)} تومان از کدام حساب پرداخت شد؟",
-                style = lt(14.sp, lineHeight = 24.sp)
-            )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                cards.forEach { c -> LChip(c.bankName, account == c.bankName) { account = c.bankName } }
-                LChip("هیچ‌کدام (نقدی/بیرون از تراز)", account == null) { account = null }
             }
             Spacer(Modifier.height(4.dp))
         }

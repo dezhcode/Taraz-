@@ -68,7 +68,7 @@ fun LayerNavBar(
         ) {
             NavItem("خانه", Icons.Outlined.GridView, currentTab == Tab.HOME || currentTab == Tab.REPORTS) { onTabSelected(Tab.HOME) }
             NavItem("تراکنش‌ها", Icons.AutoMirrored.Filled.List, currentTab == Tab.TRANSACTIONS) { onTabSelected(Tab.TRANSACTIONS) }
-            NavItem("اقساط", Icons.Default.AccountBalance, currentTab == Tab.LOANS) { onTabSelected(Tab.LOANS) }
+            NavItem("قرض و قسط", Icons.Default.AccountBalance, currentTab == Tab.LOANS) { onTabSelected(Tab.LOANS) }
             NavItem("دستیار", Icons.Default.AutoAwesome, false, onAssistant)
         }
         Spacer(Modifier.width(12.dp))

@@ -136,9 +136,10 @@ interface GoalDao {
         Category::class,
         LoanPayment::class,
         RecurringTransaction::class,
-        Debt::class
+        Debt::class,
+        Person::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -154,6 +155,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun loanPaymentDao(): LoanPaymentDao
     abstract fun recurringDao(): RecurringDao
     abstract fun debtDao(): DebtDao
+    abstract fun personDao(): PersonDao
 
     companion object {
         @Volatile
@@ -189,6 +191,29 @@ abstract class AppDatabase : RoomDatabase() {
                 // Fresh v7 installs never got categories; give them the defaults now.
                 val empty = db.query("SELECT COUNT(*) FROM categories").use { it.moveToFirst() && it.getInt(0) == 0 }
                 if (empty) seedCategories(db)
+            }
+        }
+
+        /**
+         * v9: people get their own table, and each debt line points at one, so a
+         * friend or relative has one running account. Existing debts are grouped
+         * into people by the name they were written with.
+         */
+        val MIGRATION_8_9 = object : androidx.room.migration.Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS persons (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL, relation TEXT NOT NULL, " +
+                    "phone TEXT NOT NULL, note TEXT NOT NULL, createdAt INTEGER NOT NULL)"
+                )
+                db.execSQL("ALTER TABLE debts ADD COLUMN personId INTEGER")
+                db.execSQL("ALTER TABLE debts ADD COLUMN isRepayment INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE debts ADD COLUMN transactionId INTEGER")
+                db.execSQL(
+                    "INSERT INTO persons (name, relation, phone, note, createdAt) " +
+                    "SELECT TRIM(person), 'سایر', '', '', MIN(createdAt) FROM debts GROUP BY TRIM(person)"
+                )
+                db.execSQL("UPDATE debts SET personId = (SELECT id FROM persons WHERE persons.name = TRIM(debts.person))")
             }
         }
 
@@ -331,7 +356,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "fidar_finance_database"
                 )
                 .addCallback(AppDatabaseCallback(scope))
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                 // Only the first test builds (v1-3) have no migration. Every later
                 // version must have one: a destructive fallback wiped users' money
                 // records silently whenever a migration was forgotten.

@@ -8,6 +8,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -67,13 +68,13 @@ internal fun totalInstallments(loan: Loan): Int =
     else ((loan.totalAmount + loan.installmentAmount - 1) / loan.installmentAmount).toInt()
 
 @Composable
-fun LayerLoansScreen(
+internal fun ColumnScope.LoansSection(
     loans: List<Loan>,
     onAddLoan: () -> Unit,
     onPay: (Loan) -> Unit,
-    onOpenLoan: (Loan) -> Unit = {},
-    modifier: Modifier = Modifier
+    onOpenLoan: (Loan) -> Unit
 ) {
+
     val now = System.currentTimeMillis()
     val active = loans.filter { !it.isSettled }
     val withDue = active.map { it to JalaliDate.nextDueTimestamp(it.dueDay, now) }.sortedBy { it.second }
@@ -82,26 +83,22 @@ fun LayerLoansScreen(
     var monthShift by remember { mutableIntStateOf(0) }
     var picked by remember { mutableStateOf<Int?>(null) }
 
-    Column(
-        modifier.fillMaxSize().background(L.Bg)
-            .verticalScroll(rememberScrollState()).statusBarsPadding().padding(bottom = NavClearance)
-    ) {
-        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 18.dp), verticalAlignment = Alignment.Bottom) {
+        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 18.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("اقساط", style = lt(26.sp, FontWeight.Bold))
+                Text("وام‌های بانکی", style = lt(17.sp, FontWeight.Bold))
                 Text(
                     if (active.isEmpty()) "وام فعالی ندارید"
                     else "${fa(active.size)} وام فعال · قسط ${today.monthName} ${money(active.sumOf { it.installmentAmount })} تومان",
-                    style = lt(13.sp, color = L.Muted)
+                    style = lt(12.sp, color = L.Muted)
                 )
             }
             Row(
-                Modifier.height(40.dp).clip(ButtonShape).background(L.PrimarySoft).clickable(onClick = onAddLoan).padding(horizontal = 12.dp),
+                Modifier.height(38.dp).clip(ButtonShape).background(L.PrimarySoft).clickable(onClick = onAddLoan).padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(Icons.Default.Add, null, tint = L.PrimaryText, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("وام جدید", style = lt(14.sp, FontWeight.Bold, L.PrimaryText))
+                Text("وام جدید", style = lt(13.sp, FontWeight.Bold, L.PrimaryText))
             }
         }
 
@@ -248,7 +245,6 @@ fun LayerLoansScreen(
                 }
             }
         }
-    }
 }
 
 /**

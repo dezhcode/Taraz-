@@ -217,7 +217,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val debts: StateFlow<List<Debt>> = repository.allDebts
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // UI calculations
     val totalBalance: StateFlow<Long> = cards
@@ -428,37 +428,58 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { repository.deleteRecurring(id) }
     }
 
-    // ─── طلب و بدهی ───
+    // ─── اشخاص: حساب جدا برای هر دوست، عضو خانواده یا فامیل ───
 
-    fun addDebt(person: String, amount: Long, owedToMe: Boolean, note: String) {
-        if (person.isBlank() || amount <= 0) return
-        viewModelScope.launch { repository.insertDebt(Debt(person = person.trim(), amount = amount, owedToMe = owedToMe, note = note.trim())) }
+    val persons: StateFlow<List<Person>> = repository.allPersons
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** مانده با هر شخص؛ مثبت یعنی او به من بدهکار است (طلب من)، منفی یعنی من بدهکارم */
+    val personBalances: StateFlow<Map<Int, Long>> = debts
+        .map { list -> list.filter { it.personId != null }.groupBy { it.personId!! }.mapValues { (_, l) -> l.sumOf { it.signedAmount } } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    /** شخص تازه یا ویرایش شخص؛ [onSaved] شناسه‌اش را می‌گیرد */
+    fun savePerson(person: Person, onSaved: (Int) -> Unit = {}) {
+        if (person.name.isBlank()) return
+        viewModelScope.launch { onSaved(repository.savePerson(person.copy(name = person.name.trim(), phone = person.phone.trim()))) }
+    }
+
+    fun deletePerson(id: Int) {
+        viewModelScope.launch { repository.deletePerson(id) }
     }
 
     /**
-     * تسویهٔ طلب یا بدهی. اگر [account] داده شود پول هم روی آن حساب ثبت می‌شود
-     * (طلب: واریز، بدهی: برداشت).
+     * یک ردیف در حساب شخص. [owedToMe]: درست یعنی طلب من بیشتر می‌شود (قرض دادم / پس دادم)،
+     * نادرست یعنی کمتر (قرض گرفتم / پس گرفتم). با [account] پول روی آن حساب هم جابه‌جا می‌شود.
      */
-    fun settleDebt(debt: Debt, account: String?) {
+    fun addPersonEntry(personId: Int, amount: Long, owedToMe: Boolean, isRepayment: Boolean, account: String?, note: String) {
+        if (amount <= 0) return
         viewModelScope.launch {
-            if (!account.isNullOrBlank()) {
-                repository.insertTransaction(
-                    Transaction(
-                        title = if (debt.owedToMe) "دریافت طلب از ${debt.person}" else "پرداخت بدهی به ${debt.person}",
-                        amount = debt.amount,
-                        category = if (debt.owedToMe) "درآمد دیگر" else "سایر",
-                        isExpense = !debt.owedToMe,
-                        bankName = account,
-                        type = if (debt.owedToMe) TransactionType.INCOME else TransactionType.EXPENSE
-                    )
-                )
-            }
-            repository.insertDebt(debt.copy(settled = true, settledAt = System.currentTimeMillis()))
+            val person = persons.value.firstOrNull { it.id == personId } ?: return@launch
+            repository.addPersonEntry(person, amount, owedToMe, isRepayment, account, note)
         }
     }
 
-    fun deleteDebt(id: Int) {
-        viewModelScope.launch { repository.deleteDebt(id) }
+    /**
+     * از شیت ثبت تراکنش: پولی که به شخص دادم ([outgoing]) یا از او گرفتم. خودش تشخیص می‌دهد
+     * قرض تازه است یا پس دادن/پس گرفتن: اگر به او بدهکارم و پول می‌دهم یعنی دارم پس می‌دهم.
+     */
+    fun recordPersonMoney(personId: Int, amount: Long, outgoing: Boolean, account: String?, note: String) {
+        val balance = personBalances.value[personId] ?: 0L
+        val isRepayment = if (outgoing) balance < 0 else balance > 0
+        addPersonEntry(personId, amount, owedToMe = outgoing, isRepayment = isRepayment, account = account, note = note)
+    }
+
+    /** تسویهٔ کامل حساب با یک شخص؛ مانده با یک ردیف «پس دادم/پس گرفتم» صفر می‌شود */
+    fun settlePerson(personId: Int, account: String?) {
+        val balance = personBalances.value[personId] ?: 0L
+        if (balance == 0L) return
+        // طلب دارم (مثبت) → پس گرفتم؛ بدهکارم (منفی) → پس دادم
+        addPersonEntry(personId, kotlin.math.abs(balance), owedToMe = balance < 0, isRepayment = true, account = account, note = "تسویهٔ کامل")
+    }
+
+    fun deletePersonEntry(debt: Debt) {
+        viewModelScope.launch { repository.deletePersonEntry(debt) }
     }
 
     // ─── پشتیبان و خروجی ───

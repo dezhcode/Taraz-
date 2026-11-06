@@ -24,6 +24,7 @@ class FinanceRepository(private val db: AppDatabase) {
     private val loanPaymentDao = db.loanPaymentDao()
     private val recurringDao = db.recurringDao()
     private val debtDao = db.debtDao()
+    private val personDao = db.personDao()
 
     val allTransactions: Flow<List<Transaction>> = transactionDao.getAllTransactions()
     val allCards: Flow<List<BankCard>> = bankCardDao.getAllCards()
@@ -34,6 +35,7 @@ class FinanceRepository(private val db: AppDatabase) {
     val allLoanPayments: Flow<List<LoanPayment>> = loanPaymentDao.getAll()
     val allRecurring: Flow<List<RecurringTransaction>> = recurringDao.getAll()
     val allDebts: Flow<List<Debt>> = debtDao.getAll()
+    val allPersons: Flow<List<Person>> = personDao.getAll()
 
     private fun signed(tx: Transaction): Long = if (tx.isExpense) -tx.amount else tx.amount
 
@@ -90,6 +92,8 @@ class FinanceRepository(private val db: AppDatabase) {
                 }
                 loanPaymentDao.deleteByTransaction(row.id)
             }
+            // A loan to or from a person goes with the money that moved for it.
+            debtDao.deleteByTransaction(row.id)
         }
     }
 
@@ -247,11 +251,62 @@ class FinanceRepository(private val db: AppDatabase) {
         return count
     }
 
-    // ─── Debts ───
+    // ─── People ───
 
-    suspend fun insertDebt(debt: Debt) = debtDao.insert(debt)
+    /** Adds or edits a person; a new name is copied onto their ledger lines. Returns the id. */
+    suspend fun savePerson(person: Person): Int = db.withTransaction {
+        val id = personDao.insert(person).toInt()
+        if (person.id != 0) {
+            debtDao.renamePerson(person.id, person.name)
+            person.id
+        } else id
+    }
 
-    suspend fun deleteDebt(id: Int) = debtDao.delete(id)
+    /** Removes a person and their ledger. Account transactions stay: that money really moved. */
+    suspend fun deletePerson(id: Int) = db.withTransaction {
+        debtDao.deleteForPerson(id)
+        personDao.delete(id)
+    }
+
+    /**
+     * Adds a line to a person's ledger. With [account], the money is also
+     * recorded on that account as a transfer — it changes the balance but is
+     * not spending or income (lending is not buying anything).
+     */
+    suspend fun addPersonEntry(
+        person: Person, amount: Long, owedToMe: Boolean, isRepayment: Boolean, account: String?, note: String,
+        at: Long = System.currentTimeMillis()
+    ) = db.withTransaction {
+        var txId: Int? = null
+        if (!account.isNullOrBlank()) {
+            val title = when {
+                !isRepayment && owedToMe -> "قرض به ${person.name}"
+                !isRepayment -> "قرض از ${person.name}"
+                owedToMe -> "پس دادن به ${person.name}"
+                else -> "پس گرفتن از ${person.name}"
+            }
+            txId = insertTransaction(
+                Transaction(
+                    title = if (note.isNotBlank()) "$title · $note" else title,
+                    amount = amount, category = "قرض و طلب", date = at,
+                    // Lending or paying back takes money out; borrowing or getting it back brings it in.
+                    isExpense = owedToMe, bankName = account, type = TransactionType.TRANSFER
+                )
+            ).toInt()
+        }
+        debtDao.insert(
+            Debt(
+                person = person.name, amount = amount, owedToMe = owedToMe, note = note.trim(), createdAt = at,
+                personId = person.id, isRepayment = isRepayment, transactionId = txId
+            )
+        )
+    }
+
+    /** Removes a ledger line and the account transaction recorded with it. */
+    suspend fun deletePersonEntry(debt: Debt) = db.withTransaction {
+        debt.transactionId?.let { id -> transactionDao.getById(id)?.let { deleteTransaction(it) } }
+        debtDao.delete(debt.id)
+    }
 
     // ─── Reset ───
 

@@ -42,19 +42,64 @@ data class RecurringTransaction(
     val createdAt: Long = System.currentTimeMillis()
 )
 
-/** Money owed between the user and another person, outside any bank account. */
+/** Someone the user keeps an account with: a friend, family, a relative, a colleague. */
+@Entity(tableName = "persons")
+data class Person(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val name: String,
+    /** One of [PersonRelation]. */
+    val relation: String = PersonRelation.OTHER,
+    val phone: String = "",
+    val note: String = "",
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+object PersonRelation {
+    const val FRIEND = "دوست"
+    const val FAMILY = "خانواده"
+    const val RELATIVE = "فامیل"
+    const val COLLEAGUE = "همکار"
+    const val OTHER = "سایر"
+    val all = listOf(FRIEND, FAMILY, RELATIVE, COLLEAGUE, OTHER)
+}
+
+/**
+ * One line in a person's ledger. Each line moves the balance with that person:
+ * [owedToMe] true adds to what they owe me, false takes from it (or adds to
+ * what I owe them). [isRepayment] only changes the wording:
+ *  - lent       (قرض دادم):  owedToMe = true,  isRepayment = false
+ *  - borrowed   (قرض گرفتم): owedToMe = false, isRepayment = false
+ *  - got back   (پس گرفتم):  owedToMe = false, isRepayment = true
+ *  - paid back  (پس دادم):   owedToMe = true,  isRepayment = true
+ * Lines marked [settled] are from the older settle-in-one-go model and no
+ * longer count towards the balance.
+ */
 @Entity(tableName = "debts")
 data class Debt(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    /** The person's name at the time; [personId] is what links the line. */
     val person: String,
     val amount: Long,
-    /** true: they owe me (طلب). false: I owe them (بدهی). */
     val owedToMe: Boolean,
     val note: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     val settled: Boolean = false,
-    val settledAt: Long? = null
-)
+    val settledAt: Long? = null,
+    val personId: Int? = null,
+    val isRepayment: Boolean = false,
+    /** The account transaction recorded with this line, if money moved through an account. */
+    val transactionId: Int? = null
+) {
+    /** Effect on the balance with the person: positive means they owe me. */
+    val signedAmount: Long get() = if (settled) 0L else if (owedToMe) amount else -amount
+
+    val kindLabel: String get() = when {
+        !isRepayment && owedToMe -> "قرض دادم"
+        !isRepayment -> "قرض گرفتم"
+        owedToMe -> "پس دادم"
+        else -> "پس گرفتم"
+    }
+}
 
 @Dao
 interface LoanPaymentDao {
@@ -99,6 +144,21 @@ interface RecurringDao {
 }
 
 @Dao
+interface PersonDao {
+    @Query("SELECT * FROM persons ORDER BY name ASC")
+    fun getAll(): Flow<List<Person>>
+
+    @Query("SELECT * FROM persons WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Int): Person?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(person: Person): Long
+
+    @Query("DELETE FROM persons WHERE id = :id")
+    suspend fun delete(id: Int)
+}
+
+@Dao
 interface DebtDao {
     @Query("SELECT * FROM debts ORDER BY settled ASC, createdAt DESC")
     fun getAll(): Flow<List<Debt>>
@@ -108,4 +168,19 @@ interface DebtDao {
 
     @Query("DELETE FROM debts WHERE id = :id")
     suspend fun delete(id: Int)
+
+    @Query("SELECT * FROM debts WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Int): Debt?
+
+    @Query("SELECT * FROM debts WHERE personId = :personId")
+    suspend fun forPerson(personId: Int): List<Debt>
+
+    @Query("DELETE FROM debts WHERE personId = :personId")
+    suspend fun deleteForPerson(personId: Int)
+
+    @Query("DELETE FROM debts WHERE transactionId = :transactionId")
+    suspend fun deleteByTransaction(transactionId: Int)
+
+    @Query("UPDATE debts SET person = :name WHERE personId = :personId")
+    suspend fun renamePerson(personId: Int, name: String)
 }

@@ -127,6 +127,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 val loanPayments by viewModel.loanPayments.collectAsStateWithLifecycle()
                 val recurringItems by viewModel.recurring.collectAsStateWithLifecycle()
                 val debts by viewModel.debts.collectAsStateWithLifecycle()
+                val persons by viewModel.persons.collectAsStateWithLifecycle()
+                val personBalances by viewModel.personBalances.collectAsStateWithLifecycle()
 
                 // Overlays states
                 var isAddTransactionOpen by remember { mutableStateOf(false) }
@@ -143,6 +145,12 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 val activeSubScreen: String? = subStack.lastOrNull()
                 var selectedAccountId by remember { mutableStateOf<Int?>(null) }
                 var selectedLoanId by remember { mutableStateOf<Int?>(null) }
+                // اشخاص: صفحهٔ شخص، شیت افزودن/ویرایش، شیت ثبت قرض
+                var selectedPersonId by remember { mutableStateOf<Int?>(null) }
+                var personSheetFor by remember { mutableStateOf<com.example.data.Person?>(null) }
+                var isPersonSheetOpen by remember { mutableStateOf(false) }
+                var entrySheetPersonId by remember { mutableStateOf<Int?>(null) }
+                var isEntrySheetOpen by remember { mutableStateOf(false) }
                 fun openSub(name: String) { subStack.add(name) }
                 fun closeSub() { if (subStack.isNotEmpty()) subStack.removeAt(subStack.lastIndex) }
 
@@ -349,7 +357,6 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         onOpenCategories = { openSub("categories") },
                                         onOpenGoals = { openSub("goals") },
                                         onOpenRecurring = { openSub("recurring") },
-                                        onOpenDebts = { openSub("debts") },
                                         onOpenBackup = { openSub("backup") },
                                         onTestServer = { cb -> viewModel.testAiServerConnection(cb) },
                                         onLogout = {
@@ -409,15 +416,27 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     )
                                 }
 
-                                "debts" -> {
-                                    com.example.ui.layer.LayerDebtsScreen(
-                                        debts = debts,
-                                        cards = cards,
-                                        onBack = { closeSub() },
-                                        onAdd = { p, a, owed, n -> viewModel.addDebt(p, a, owed, n) },
-                                        onSettle = { d, acc -> viewModel.settleDebt(d, acc) },
-                                        onDelete = { viewModel.deleteDebt(it.id) }
-                                    )
+                                "person_detail" -> {
+                                    val person = persons.firstOrNull { it.id == selectedPersonId }
+                                    if (person == null) {
+                                        LaunchedEffect(Unit) { closeSub() }
+                                    } else {
+                                        com.example.ui.layer.LayerPersonDetailScreen(
+                                            person = person,
+                                            balance = personBalances[person.id] ?: 0L,
+                                            entries = debts,
+                                            cards = cards,
+                                            onBack = { closeSub() },
+                                            onAddEntry = { entrySheetPersonId = person.id; isEntrySheetOpen = true },
+                                            onSettle = { acc -> viewModel.settlePerson(person.id, acc) },
+                                            onDeleteEntry = { viewModel.deletePersonEntry(it) },
+                                            onEdit = { personSheetFor = person; isPersonSheetOpen = true },
+                                            onDelete = {
+                                                viewModel.deletePerson(person.id)
+                                                closeSub()
+                                            }
+                                        )
+                                    }
                                 }
 
                                 "backup" -> {
@@ -573,11 +592,16 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                     }
 
                                                     Tab.LOANS -> {
-                                                        com.example.ui.layer.LayerLoansScreen(
+                                                        com.example.ui.layer.LayerObligationsScreen(
                                                             loans = loans,
+                                                            persons = persons,
+                                                            balances = personBalances,
                                                             onAddLoan = { openSub("add_loan") },
                                                             onPay = { loanToPay = it },
-                                                            onOpenLoan = { selectedLoanId = it.id; openSub("loan_detail") }
+                                                            onOpenLoan = { selectedLoanId = it.id; openSub("loan_detail") },
+                                                            onOpenPerson = { selectedPersonId = it.id; openSub("person_detail") },
+                                                            onAddPerson = { personSheetFor = null; isPersonSheetOpen = true },
+                                                            onAddEntry = { entrySheetPersonId = null; isEntrySheetOpen = true }
                                                         )
                                                     }
 
@@ -673,6 +697,11 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     },
                                     onTransfer = { from, to, amount ->
                                         viewModel.transferBetweenCards(from, to, amount)
+                                    },
+                                    persons = persons,
+                                    personBalances = personBalances,
+                                    onPersonMoney = { pid, amount, outgoing, account, note ->
+                                        viewModel.recordPersonMoney(pid, amount, outgoing, account, note)
                                     }
                                 )
                             }
@@ -753,6 +782,35 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     onConfirm = { fromCardName, toCardName, amount ->
                                         viewModel.transferBetweenCards(fromCardName, toCardName, amount)
                                         isTransferOpen = false
+                                    }
+                                )
+                            }
+
+                            // ثبت قرض یا پس‌دادن با یک شخص
+                            if (isEntrySheetOpen) {
+                                com.example.ui.layer.PersonEntrySheet(
+                                    persons = persons,
+                                    preselectedId = entrySheetPersonId,
+                                    balances = personBalances,
+                                    cards = cards,
+                                    onDismiss = { isEntrySheetOpen = false },
+                                    onAddPerson = { personSheetFor = null; isPersonSheetOpen = true },
+                                    onSave = { pid, amount, owed, rep, account, note ->
+                                        viewModel.addPersonEntry(pid, amount, owed, rep, account, note)
+                                    }
+                                )
+                            }
+
+                            // افزودن یا ویرایش شخص (روی شیت ثبت قرض هم باز می‌شود)
+                            if (isPersonSheetOpen) {
+                                com.example.ui.layer.PersonSheet(
+                                    person = personSheetFor,
+                                    existingNames = persons.map { it.name },
+                                    onDismiss = { isPersonSheetOpen = false },
+                                    onSave = { p ->
+                                        val isNew = p.id == 0
+                                        viewModel.savePerson(p) { id -> if (isNew) entrySheetPersonId = id }
+                                        isPersonSheetOpen = false
                                     }
                                 )
                             }

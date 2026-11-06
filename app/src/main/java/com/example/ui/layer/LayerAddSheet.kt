@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -78,9 +79,14 @@ fun LayerAddSheet(
     startAsExpense: Boolean = true,
     onDismiss: () -> Unit,
     onSave: (title: String, amount: Long, category: String, isExpense: Boolean, bankName: String) -> Unit,
-    onTransfer: (from: String, to: String, amount: Long) -> Unit
+    onTransfer: (from: String, to: String, amount: Long) -> Unit,
+    persons: List<com.example.data.Person> = emptyList(),
+    personBalances: Map<Int, Long> = emptyMap(),
+    onPersonMoney: (personId: Int, amount: Long, outgoing: Boolean, account: String?, note: String) -> Unit = { _, _, _, _, _ -> }
 ) {
     BackHandler(onBack = onDismiss)
+    // اگر این پول برای یک شخص بود (قرض دادن/گرفتن یا پس دادن)، در حساب همان شخص ثبت می‌شود
+    var personId by remember { mutableStateOf<Int?>(null) }
 
     var type by remember { mutableStateOf(if (startAsExpense) EntryType.EXPENSE else EntryType.INCOME) }
     var amount by remember { mutableStateOf("") }
@@ -120,7 +126,7 @@ fun LayerAddSheet(
                                 .then(if (on) Modifier.shadow(2.dp, PillShape) else Modifier)
                                 .clip(PillShape)
                                 .background(if (on) L.Surface else Color.Transparent)
-                                .clickable { type = t; category = null; showAllCats = false }
+                                .clickable { type = t; category = null; showAllCats = false; if (t == EntryType.TRANSFER) personId = null }
                                 .semantics { selected = on }
                                 .padding(horizontal = 16.dp),
                             contentAlignment = Alignment.Center
@@ -233,6 +239,33 @@ fun LayerAddSheet(
                             )
                         }
                     }
+                    if (persons.isNotEmpty()) {
+                        Text(
+                            if (type == EntryType.EXPENSE) "به کسی دادید؟" else "از کسی گرفتید؟",
+                            style = lt(12.sp, FontWeight.SemiBold, L.Muted), modifier = Modifier.padding(top = 12.dp, bottom = 6.dp)
+                        )
+                        Row(
+                            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            LChip("هیچ‌کس", personId == null) { personId = null }
+                            persons.sortedBy { it.name }.forEach { p -> LChip(p.name, personId == p.id) { personId = p.id } }
+                        }
+                        val chosen = persons.firstOrNull { it.id == personId }
+                        if (chosen != null) {
+                            val bal = personBalances[chosen.id] ?: 0L
+                            val out = type == EntryType.EXPENSE
+                            Text(
+                                when {
+                                    out && bal < 0 -> "از بدهی شما به ${chosen.name} کم می‌شود (پس دادن)."
+                                    out -> "به طلب شما از ${chosen.name} اضافه می‌شود (قرض دادن)."
+                                    bal > 0 -> "از طلب شما از ${chosen.name} کم می‌شود (پس گرفتن)."
+                                    else -> "به بدهی شما به ${chosen.name} اضافه می‌شود (قرض گرفتن)."
+                                } + " در هزینه و درآمد ماه حساب نمی‌شود.",
+                                style = lt(12.sp, color = L.PrimaryText, lineHeight = 20.sp), modifier = Modifier.padding(top = 6.dp)
+                            )
+                        }
+                    }
                 } else {
                     Column(Modifier.padding(top = 10.dp).fillMaxWidth().clip(ItemShape).background(L.Chip).padding(horizontal = 14.dp, vertical = 4.dp)) {
                         TransferRow("از", cards, account) { account = it }
@@ -274,8 +307,11 @@ fun LayerAddSheet(
                 Modifier.padding(top = 10.dp).fillMaxWidth().height(56.dp).clip(PillShape)
                     .background(if (enabled) L.Primary else L.PrimaryDisabled)
                     .clickable(enabled = enabled) {
+                        val pid = personId
                         if (type == EntryType.TRANSFER) {
                             onTransfer(account!!, transferTo!!, n)
+                        } else if (pid != null) {
+                            onPersonMoney(pid, n, type == EntryType.EXPENSE, account, note)
                         } else {
                             val cat = category ?: typeCats.firstOrNull()?.name ?: if (type == EntryType.INCOME) "درآمد" else "سایر"
                             onSave(note.ifBlank { cat }, n, cat, type == EntryType.EXPENSE, account ?: "کیف پول")
@@ -283,7 +319,10 @@ fun LayerAddSheet(
                         onDismiss()
                     },
                 contentAlignment = Alignment.Center
-            ) { Text(type.cta, style = lt(16.sp, FontWeight.Bold, Color.White)) }
+            ) {
+                val who = persons.firstOrNull { it.id == personId }
+                Text(if (who != null && type != EntryType.TRANSFER) "ثبت در حساب ${who.name}" else type.cta, style = lt(16.sp, FontWeight.Bold, Color.White))
+            }
         }
     }
 }

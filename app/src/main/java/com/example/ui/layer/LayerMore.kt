@@ -291,7 +291,6 @@ fun LayerSettingsScreen(
     onOpenCategories: () -> Unit,
     onOpenGoals: () -> Unit,
     onOpenRecurring: () -> Unit,
-    onOpenDebts: () -> Unit,
     onOpenBackup: () -> Unit,
     onTestServer: ((Boolean, String) -> Unit) -> Unit,
     onLogout: () -> Unit,
@@ -338,7 +337,6 @@ fun LayerSettingsScreen(
             NavRow("دسته‌بندی‌ها", "${fa(categoryCount)} دسته", onClick = onOpenCategories)
             NavRow("اهداف پس‌انداز", null, onClick = onOpenGoals)
             NavRow("تراکنش‌های تکراری", "اجاره، حقوق، اشتراک", onClick = onOpenRecurring)
-            NavRow("طلب و بدهی", null, onClick = onOpenDebts)
             NavRow("پشتیبان و خروجی اکسل", null, divider = false, onClick = onOpenBackup)
         }
         SettingsGroup("دستیار") {

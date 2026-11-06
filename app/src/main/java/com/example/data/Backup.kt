@@ -103,6 +103,11 @@ object Backup {
         root.put("debts", JSONArray(db.debtDao().getAll().first().map { d ->
             JSONObject().put("id", d.id).put("person", d.person).put("amount", d.amount).put("owedToMe", d.owedToMe)
                 .put("note", d.note).put("createdAt", d.createdAt).put("settled", d.settled).put("settledAt", d.settledAt ?: JSONObject.NULL)
+                .put("personId", d.personId ?: JSONObject.NULL).put("isRepayment", d.isRepayment).put("transactionId", d.transactionId ?: JSONObject.NULL)
+        }))
+        root.put("persons", JSONArray(db.personDao().getAll().first().map { p ->
+            JSONObject().put("id", p.id).put("name", p.name).put("relation", p.relation).put("phone", p.phone)
+                .put("note", p.note).put("createdAt", p.createdAt)
         }))
         root.put("senders", JSONArray(db.bankSenderDao().getAllSenders().map { s ->
             JSONObject().put("bankName", s.bankName).put("senderNumber", s.senderNumber).put("isEnabled", s.isEnabled)
@@ -178,7 +183,14 @@ object Backup {
             root.optJSONArray("debts").each { o ->
                 db.debtDao().insert(
                     Debt(o.getInt("id"), o.getString("person"), o.getLong("amount"), o.getBoolean("owedToMe"), o.optString("note"),
-                        o.optLong("createdAt", System.currentTimeMillis()), o.optBoolean("settled"), o.optLongOrNull("settledAt"))
+                        o.optLong("createdAt", System.currentTimeMillis()), o.optBoolean("settled"), o.optLongOrNull("settledAt"),
+                        o.optIntOrNull("personId"), o.optBoolean("isRepayment"), o.optIntOrNull("transactionId"))
+                )
+            }
+            root.optJSONArray("persons").each { o ->
+                db.personDao().insert(
+                    Person(o.getInt("id"), o.getString("name"), o.optString("relation", PersonRelation.OTHER), o.optString("phone"),
+                        o.optString("note"), o.optLong("createdAt", System.currentTimeMillis()))
                 )
             }
             root.optJSONArray("senders").each { o ->
