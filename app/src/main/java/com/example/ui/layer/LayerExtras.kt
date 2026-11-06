@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -262,9 +263,15 @@ fun LayerBackupScreen(
             Callout(text, null, if (ok) L.GreenSoft else L.RedSoft, if (ok) L.GreenText else L.RedText, Modifier.padding(horizontal = 20.dp))
         }
         LayerCard(radius = 20.dp, padding = 0.dp) {
-            LRow("ساخت فایل پشتیبان", "همهٔ حساب‌ها، تراکنش‌ها، اقساط و اهداف، با رمز", onClick = { if (!busy) mode = "create" })
-            LRow("بازگردانی از پشتیبان", "داده‌های فعلی با محتوای فایل جایگزین می‌شود", onClick = { if (!busy) mode = "restore" })
-            LRow("خروجی اکسل (CSV)", "فهرست همهٔ تراکنش‌ها برای اکسل یا گوگل‌شیت", divider = false, onClick = { if (!busy) onExportCsv() })
+            // فاصلهٔ داخلی از دو طرف تا متن‌ها به لبهٔ کادر نچسبند (مثل گروه‌های تنظیمات)
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                LRow("ساخت فایل پشتیبان", "همهٔ حساب‌ها، تراکنش‌ها، اقساط و اهداف، با رمز", onClick = { if (!busy) mode = "create" },
+                    trailing = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.Chevron, modifier = Modifier.size(18.dp)) })
+                LRow("بازگردانی از پشتیبان", "داده‌های فعلی با محتوای فایل جایگزین می‌شود", onClick = { if (!busy) mode = "restore" },
+                    trailing = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.Chevron, modifier = Modifier.size(18.dp)) })
+                LRow("خروجی اکسل (CSV)", "فهرست همهٔ تراکنش‌ها برای اکسل یا گوگل‌شیت", divider = false, onClick = { if (!busy) onExportCsv() },
+                    trailing = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.Chevron, modifier = Modifier.size(18.dp)) })
+            }
         }
         Text(
             "فایل پشتیبان رمزگذاری می‌شود و بدون رمز باز نمی‌شود؛ رمز را جایی یادداشت کنید، تراز آن را نگه نمی‌دارد. " +
