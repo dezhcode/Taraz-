@@ -1,6 +1,7 @@
 package com.example.ui.layer
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,6 +53,7 @@ import com.example.data.BankSender
 import com.example.data.Category
 import com.example.data.Transaction
 import com.example.data.isCash
+import com.example.data.isTransfer
 import com.example.ui.CardNumberTransformation
 import com.example.utils.JalaliDate
 
@@ -67,15 +69,20 @@ private fun BankChip(card: BankCard, color: Color, w: Int = 54, h: Int = 36) {
     val logo = remember(card.bankName, card.cardNumber, card.accountType) {
         if (card.isCash) null else BankLogos.assetFor(card.bankName, card.cardNumber)
     }
-    Box(
-        Modifier.width(w.dp).height(h.dp).clip(RoundedCornerShape(8.dp)).background(if (card.isCash) L.GreenSoft else color),
-        contentAlignment = if (card.isCash || logo != null) Alignment.Center else Alignment.BottomStart
-    ) {
-        if (card.isCash) Icon(Icons.Default.Payments, null, tint = L.GreenText, modifier = Modifier.size(20.dp))
-        else if (logo != null) Box(
-            Modifier.size((h - 8).dp).clip(RoundedCornerShape(8.dp)).background(Color.White).padding(3.dp),
+    // لوگو خودش زمینهٔ سفید دارد؛ پس پشتش دیگر قاب رنگی نمی‌آید
+    if (logo != null) {
+        Box(
+            Modifier.width(w.dp).height(h.dp).clip(RoundedCornerShape(8.dp)).background(Color.White)
+                .border(1.dp, L.Line, RoundedCornerShape(8.dp)).padding(4.dp),
             contentAlignment = Alignment.Center
         ) { BankLogo(logo, Modifier.fillMaxSize(), card.bankName) }
+        return
+    }
+    Box(
+        Modifier.width(w.dp).height(h.dp).clip(RoundedCornerShape(8.dp)).background(if (card.isCash) L.GreenSoft else color),
+        contentAlignment = if (card.isCash) Alignment.Center else Alignment.BottomStart
+    ) {
+        if (card.isCash) Icon(Icons.Default.Payments, null, tint = L.GreenText, modifier = Modifier.size(20.dp))
         else Text(card.bankName.removePrefix("بانک ").take(6), style = lt(12.sp, FontWeight.Bold, Color.White), modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp), maxLines = 1)
     }
 }
@@ -276,7 +283,7 @@ fun LayerAccountDetailScreen(
                             Text(tx.title, style = lt(14.sp, FontWeight.Medium), maxLines = 1)
                             Text("${weekdayName(tx.date)} ${timeOfDay(tx.date)} · ${tx.category}", style = lt(12.sp, color = L.Muted), maxLines = 1)
                         }
-                        Text(signedMoney(tx.amount, tx.isExpense), style = lt(14.sp, FontWeight.SemiBold, if (tx.isExpense) L.Ink else L.Green))
+                        Text(if (tx.isTransfer) money(tx.amount) else signedMoney(tx.amount, tx.isExpense), style = lt(14.sp, FontWeight.SemiBold, txColor(tx, L.Muted)))
                     }
                     if (i < minOf(mine.size, 4) - 1) Box(Modifier.padding(horizontal = 14.dp).fillMaxWidth().height(1.dp).background(L.Line))
                 }

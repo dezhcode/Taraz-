@@ -244,7 +244,7 @@ fun LayerTransactionsScreen(
             dayTx.forEachIndexed { i, tx ->
                 TimelineRow(
                     label = timeOfDay(tx.date),
-                    node = { SolidNode(if (tx.isTransfer) L.Primary else L.Ink) },
+                    node = { SolidNode(txColor(tx, L.Primary)) },
                     lastRow = i == dayTx.lastIndex,
                     labelWidth = 42.dp
                 ) {

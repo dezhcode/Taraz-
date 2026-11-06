@@ -186,7 +186,7 @@ fun LayerRecurringScreen(
                             Text(r.title, style = lt(14.sp, FontWeight.SemiBold, if (r.enabled) L.Ink else L.Muted), maxLines = 1)
                             Text("روز ${fa(r.dayOfMonth)} هر ماه · ${r.category} · ${r.bankName}", style = lt(12.sp, color = L.Muted), maxLines = 1)
                         }
-                        Text(signedMoney(r.amount, r.isExpense), style = lt(14.sp, FontWeight.SemiBold, if (r.isExpense) L.Ink else L.Green))
+                        Text(signedMoney(r.amount, r.isExpense), style = lt(14.sp, FontWeight.SemiBold, if (r.isExpense) L.RedText else L.Green))
                         LSwitch(r.enabled, "فعال بودن ${r.title}") { onToggle(r, it) }
                         Box(
                             Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).clickable { onDelete(r) }.semantics { contentDescription = "حذف ${r.title}" },

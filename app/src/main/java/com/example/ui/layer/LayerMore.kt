@@ -494,7 +494,8 @@ fun LayerCategoriesScreen(
     onBack: () -> Unit,
     onAdd: () -> Unit,
     onDelete: (Category) -> Unit,
-    onSetBudget: (Category, Long) -> Unit
+    onSetBudget: (Category, Long) -> Unit,
+    onEdit: (Category) -> Unit = {}
 ) {
     var askDelete by remember { mutableStateOf<Category?>(null) }
     var editBudget by remember { mutableStateOf<Category?>(null) }
@@ -506,7 +507,7 @@ fun LayerCategoriesScreen(
         bottomBar = { BigButton("دستهٔ جدید", onClick = onAdd) }
     ) {
         Text(
-            "روی هر دستهٔ هزینه بزنید تا برایش بودجهٔ ماهانه بگذارید.",
+            "روی هر دسته بزنید تا نام، آیکن، رنگ یا بودجهٔ ماهانه‌اش را عوض کنید.",
             style = lt(12.sp, color = L.Muted), modifier = Modifier.padding(horizontal = 24.dp)
         )
         listOf(false to "هزینه‌ها", true to "درآمدها").forEach { (income, label) ->
@@ -518,7 +519,7 @@ fun LayerCategoriesScreen(
                         val col = CategoryIcons.colorOf(c.colorHex)
                         val used = spent[c.name] ?: 0L
                         Row(
-                            Modifier.fillMaxWidth().clickable(enabled = !c.isIncome) { editBudget = c }.padding(horizontal = 14.dp, vertical = 9.dp),
+                            Modifier.fillMaxWidth().clickable { onEdit(c) }.padding(horizontal = 14.dp, vertical = 9.dp),
                             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             IconWell(CategoryIcons.vectorFor(c.iconKey), size = 38.dp, bg = col, fg = Color.White, iconSize = 20.dp, radius = 12.dp)
@@ -564,19 +565,34 @@ fun LayerCategoriesScreen(
 @Composable
 fun LayerAddCategoryScreen(
     onBack: () -> Unit,
-    onSave: (name: String, iconKey: String, colorHex: String, isIncome: Boolean) -> Unit
+    onSave: (name: String, iconKey: String, colorHex: String, isIncome: Boolean, monthlyBudget: Long) -> Unit,
+    existing: Category? = null,
+    existingNames: List<String> = emptyList(),
+    onDelete: (() -> Unit)? = null
 ) {
-    var name by remember { mutableStateOf("") }
-    var income by remember { mutableStateOf(false) }
-    var iconKey by remember { mutableStateOf(CategoryIcons.keys.first()) }
-    var colorHex by remember { mutableStateOf(CategoryIcons.palette.first()) }
+    var name by remember(existing?.id) { mutableStateOf(existing?.name.orEmpty()) }
+    var income by remember(existing?.id) { mutableStateOf(existing?.isIncome ?: false) }
+    var iconKey by remember(existing?.id) { mutableStateOf(existing?.iconKey ?: CategoryIcons.keys.first()) }
+    var colorHex by remember(existing?.id) { mutableStateOf(existing?.colorHex ?: CategoryIcons.palette.first()) }
+    var budgetText by remember(existing?.id) { mutableStateOf(existing?.monthlyBudget?.takeIf { it > 0 }?.let { money(it) }.orEmpty()) }
+    var askDelete by remember { mutableStateOf(false) }
     val col = CategoryIcons.colorOf(colorHex)
+    val taken = existingNames.any { it.equals(name.trim(), ignoreCase = true) && !it.equals(existing?.name, ignoreCase = true) }
 
     LayerScreen(
-        title = "دستهٔ جدید",
-        subtitle = "نام، آیکن و رنگ را انتخاب کنید",
+        title = if (existing == null) "دستهٔ جدید" else "ویرایش «${existing.name}»",
+        subtitle = if (existing == null) "نام، آیکن و رنگ را انتخاب کنید" else "تراکنش‌های این دسته هم با نام تازه نمایش داده می‌شوند",
         onBack = onBack,
-        bottomBar = { BigButton("ساخت دسته", enabled = name.isNotBlank()) { onSave(name.trim(), iconKey, colorHex, income) } }
+        bottomBar = {
+            BigButton(if (existing == null) "ساخت دسته" else "ذخیره", enabled = name.isNotBlank() && !taken) {
+                onSave(name.trim(), iconKey, colorHex, income, parseAmount(budgetText))
+            }
+            if (onDelete != null) {
+                Box(Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(12.dp)).clickable { askDelete = true }, contentAlignment = Alignment.Center) {
+                    Text("حذف این دسته", style = lt(14.sp, FontWeight.SemiBold, L.RedText))
+                }
+            }
+        }
     ) {
         LayerCard(radius = 20.dp, padding = 14.dp) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -590,7 +606,14 @@ fun LayerAddCategoryScreen(
         }
         Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             LSegmented(listOf("هزینه", "درآمد"), if (income) 1 else 0, { income = it == 1 })
-            LField(name, { name = it }, "نام دسته", placeholder = "مثلاً قبض برق")
+            LField(name, { name = it }, "نام دسته", placeholder = "مثلاً قبض برق", hint = if (taken) "دسته‌ای با این نام دارید." else null)
+            if (!income) {
+                LField(
+                    budgetText, { budgetText = groupedInput(it) }, "بودجهٔ ماهانه (اختیاری، تومان)", placeholder = "۰",
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    hint = "با رسیدن به ۸۰٪ در خانه هشدار می‌بینید."
+                )
+            }
             Text("آیکن", style = lt(13.sp, FontWeight.SemiBold))
             CategoryIcons.keys.chunked(8).forEach { row ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -617,6 +640,14 @@ fun LayerAddCategoryScreen(
                     }
                 }
             }
+        }
+    }
+    if (askDelete && existing != null && onDelete != null) {
+        LayerSheet(
+            title = "حذف دستهٔ «${existing.name}»", onDismiss = { askDelete = false }, topGap = 300.dp,
+            bottomBar = { BigButton("بله، حذف شود", background = L.RedText) { askDelete = false; onDelete() } }
+        ) {
+            Text("تراکنش‌هایی که با این دسته ثبت شده‌اند باقی می‌مانند.", style = lt(13.sp, color = L.Muted, lineHeight = 23.sp))
         }
     }
 }

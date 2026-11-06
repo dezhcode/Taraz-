@@ -51,6 +51,15 @@ class FinanceRepository(private val db: AppDatabase) {
 
     suspend fun deleteCategory(id: Int) = categoryDao.deleteCategory(id)
 
+    /** Saves an edited category; a new name is carried onto its transactions and recurring items. */
+    suspend fun updateCategory(old: Category, updated: Category) = db.withTransaction {
+        categoryDao.insertCategory(updated)
+        if (old.name != updated.name) {
+            transactionDao.renameCategory(old.name, updated.name)
+            recurringDao.renameCategory(old.name, updated.name)
+        }
+    }
+
     // ─── Transactions ───
 
     /** Records [transaction] and moves its account's balance. Returns the new row id. */

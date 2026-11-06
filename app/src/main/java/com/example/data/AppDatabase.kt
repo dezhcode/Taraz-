@@ -34,6 +34,9 @@ interface TransactionDao {
     @Query("UPDATE transactions SET bankName = :newName WHERE bankName = :oldName")
     suspend fun renameAccount(oldName: String, newName: String)
 
+    @Query("UPDATE transactions SET category = :newName WHERE category = :oldName")
+    suspend fun renameCategory(oldName: String, newName: String)
+
     @Query("SELECT * FROM transactions WHERE bankName = :bankName AND date >= :from AND date < :to")
     suspend fun inRangeForAccount(bankName: String, from: Long, to: Long): List<Transaction>
 

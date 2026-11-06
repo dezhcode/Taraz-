@@ -82,12 +82,23 @@ object PriceService {
     private const val UA = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Mobile Safari/537.36 Taraz/2.0"
     private const val PREFS = "taraz_prices"
 
-    private fun get(url: String): String {
-        val req = Request.Builder().url(url).header("User-Agent", UA).header("Accept", "application/json").build()
-        client.newCall(req).execute().use { r ->
+    private fun get(url: String, referer: String? = null): String {
+        val b = Request.Builder().url(url).header("User-Agent", UA).header("Accept", "application/json, text/plain, */*")
+        if (referer != null) b.header("Referer", referer)
+        client.newCall(b.build()).execute().use { r ->
             if (!r.isSuccessful) throw java.io.IOException("HTTP ${r.code}")
-            return r.body?.string() ?: throw java.io.IOException("empty")
+            return r.body?.string() ?: throw java.io.IOException("پاسخ خالی")
         }
+    }
+
+    /** پیام کوتاه خطا برای نمایش: «HTTP 403»، «مهلت تمام شد»، «بدون اینترنت»… */
+    private fun reason(e: Throwable): String = when (e) {
+        is java.net.SocketTimeoutException -> "مهلت تمام شد"
+        is java.net.UnknownHostException -> "سایت پیدا نشد"
+        is javax.net.ssl.SSLException -> "خطای اتصال امن"
+        is java.net.ConnectException -> "وصل نشد"
+        is org.json.JSONException -> "پاسخ نامعتبر"
+        else -> e.message?.take(40) ?: e.javaClass.simpleName
     }
 
     private fun num(v: Any?): Double? = when (v) {
@@ -117,46 +128,127 @@ object PriceService {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("quotes", o.toString()).apply()
     }
 
+    /** CoinGecko ids for the international fallback. */
+    private val GECKO = mapOf(
+        "btc" to "bitcoin", "eth" to "ethereum", "usdt" to "tether", "ton" to "the-open-network", "trx" to "tron",
+        "sol" to "solana", "bnb" to "binancecoin", "xrp" to "ripple", "doge" to "dogecoin", "ltc" to "litecoin",
+        "ada" to "cardano", "shib" to "shiba-inu", "not" to "notcoin", "paxg" to "pax-gold"
+    )
+
     /**
      * Fetches prices for [codes]. Returns every known quote (fresh ones merged
-     * over the cache) and the names of the sources that failed, if any.
+     * over the cache) and, for each source that failed, why.
+     *
+     * Each kind of price has more than one source, because Iranian sites
+     * (tgju, Nobitex, Wallex, Bitpin, TSETMC) often refuse foreign IPs — a VPN
+     * makes them fail — while international ones (Coinbase, CoinGecko) are
+     * the reverse. Crypto and fiat from abroad are converted with the tether
+     * rate; gold from abroad is worked out from the world ounce price.
      */
     suspend fun refresh(context: Context, codes: Set<String>): Pair<Map<String, PriceQuote>, List<String>> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val fresh = mutableMapOf<String, PriceQuote>()
-        val failed = mutableListOf<String>()
+        val errors = linkedMapOf<String, String>()
 
+        // ── ۱. ارز و طلا از tgju
         val tgjuCodes = codes.filter { it in PriceCatalog.TGJU }
-        if (tgjuCodes.isNotEmpty()) {
-            val current = listOf("https://call1.tgju.org/ajax.json", "https://call2.tgju.org/ajax.json", "https://call3.tgju.org/ajax.json")
-                .firstNotNullOfOrNull { url -> runCatching { JSONObject(get(url)).getJSONObject("current") }.getOrNull() }
-            if (current == null) failed += "قیمت ارز و طلا"
-            else for (code in tgjuCodes) {
-                val item = current.optJSONObject(PriceCatalog.TGJU.getValue(code)) ?: continue
+        var tgju: JSONObject? = null
+        if (tgjuCodes.isNotEmpty() || "usdt" in codes || codes.any { PriceCatalog.find(it)?.kind == AssetKind.CRYPTO }) {
+            for (url in listOf("https://call1.tgju.org/ajax.json", "https://call2.tgju.org/ajax.json", "https://call3.tgju.org/ajax.json")) {
+                try { tgju = JSONObject(get(url, referer = "https://www.tgju.org/")).getJSONObject("current"); break }
+                catch (e: Exception) { errors["tgju"] = reason(e) }
+            }
+            if (tgju != null) errors.remove("tgju")
+        }
+        tgju?.let { cur ->
+            for (code in tgjuCodes) {
+                val item = cur.optJSONObject(PriceCatalog.TGJU.getValue(code)) ?: continue
                 val rial = num(item.opt("p")) ?: continue
                 val dp = num(item.opt("dp"))?.let { if (item.optString("dt") == "low") -it else it }
                 fresh[code] = PriceQuote((rial / 10).toLong(), dp, now, "tgju")
             }
         }
 
+        // ── ۲. رمزارز به تومان از نوبیتکس
         val cryptoCodes = codes.filter { PriceCatalog.find(it)?.kind == AssetKind.CRYPTO }.toMutableSet()
-        if ("usd" in codes && "usd" !in fresh) cryptoCodes += "usdt"
-        if (cryptoCodes.isNotEmpty()) {
+        cryptoCodes += "usdt" // نرخ تتر برای تبدیل قیمت‌های خارجی به تومان هم لازم است
+        try {
+            val src = URLEncoder.encode(cryptoCodes.joinToString(","), "UTF-8")
+            val stats = JSONObject(get("https://api.nobitex.ir/market/stats?srcCurrency=$src&dstCurrency=rls")).getJSONObject("stats")
+            for (code in cryptoCodes) {
+                val st = stats.optJSONObject("$code-rls") ?: continue
+                val rial = num(st.opt("latest"))?.takeIf { it > 0 } ?: continue
+                fresh[code] = PriceQuote((rial / 10).toLong(), num(st.opt("dayChange")), now, "nobitex")
+            }
+        } catch (e: Exception) { errors["نوبیتکس"] = reason(e) }
+
+        // ── ۳. نرخ تتر از صرافی‌های دیگر اگر نوبیتکس جواب نداد
+        if ("usdt" !in fresh) {
             try {
-                val src = URLEncoder.encode(cryptoCodes.joinToString(","), "UTF-8")
-                val stats = JSONObject(get("https://api.nobitex.ir/market/stats?srcCurrency=$src&dstCurrency=rls")).getJSONObject("stats")
-                for (code in cryptoCodes) {
-                    val s = stats.optJSONObject("$code-rls") ?: continue
-                    val rial = num(s.opt("latest")) ?: continue
-                    fresh[code] = PriceQuote((rial / 10).toLong(), num(s.opt("dayChange")), now, "nobitex")
+                val sym = JSONObject(get("https://api.wallex.ir/v1/markets")).getJSONObject("result").getJSONObject("symbols")
+                val stats = sym.getJSONObject("USDTTMN").getJSONObject("stats")
+                num(stats.opt("lastPrice"))?.takeIf { it > 0 }?.let {
+                    fresh["usdt"] = PriceQuote(it.toLong(), num(stats.opt("24h_ch")), now, "wallex")
                 }
-                // No market dollar today: tether is the closest free-market rate.
-                if ("usd" in codes && "usd" !in fresh) fresh["usdt"]?.let { fresh["usd"] = it.copy(source = "nobitex-usdt") }
-            } catch (e: Exception) {
-                failed += "قیمت رمزارز"
+            } catch (e: Exception) { errors["والکس"] = reason(e) }
+        }
+        if ("usdt" !in fresh) {
+            try {
+                val arr = JSONObject(get("https://api.bitpin.ir/v1/mkt/markets/")).getJSONArray("results")
+                for (i in 0 until arr.length()) {
+                    val m = arr.getJSONObject(i)
+                    if (m.optString("code") == "USDT_IRT") {
+                        num(m.opt("price"))?.takeIf { it > 0 }?.let { fresh["usdt"] = PriceQuote(it.toLong(), null, now, "bitpin") }
+                        break
+                    }
+                }
+            } catch (e: Exception) { errors["بیت‌پین"] = reason(e) }
+        }
+        // دلار: tgju، وگرنه تتر
+        if ("usd" in codes && "usd" !in fresh) fresh["usdt"]?.let { fresh["usd"] = it.copy(source = it.source + "-usdt") }
+        val usdToman = (fresh["usd"] ?: fresh["usdt"])?.price?.toDouble()
+
+        // ── ۴. منبع‌های خارجی (با فیلترشکن کار می‌کنند): قیمت دلاری × نرخ تتر
+        val needCrypto = codes.filter { PriceCatalog.find(it)?.kind == AssetKind.CRYPTO && it !in fresh }
+        val needFiat = codes.filter { PriceCatalog.find(it)?.kind == AssetKind.CURRENCY && it !in fresh && it != "usd" }
+        val needGold = codes.filter { it in setOf("gold18", "gold24", "mesghal") && it !in fresh }
+        if (usdToman != null && (needCrypto.isNotEmpty() || needFiat.isNotEmpty() || needGold.isNotEmpty())) {
+            // واحد در برابر یک دلار
+            var rates: JSONObject? = null
+            try { rates = JSONObject(get("https://api.coinbase.com/v2/exchange-rates?currency=USD")).getJSONObject("data").getJSONObject("rates") }
+            catch (e: Exception) { errors["Coinbase"] = reason(e) }
+            var gecko: JSONObject? = null
+            if (needCrypto.isNotEmpty() || needGold.isNotEmpty()) {
+                try {
+                    val ids = (needCrypto.mapNotNull { GECKO[it] } + "pax-gold").distinct().joinToString(",")
+                    gecko = JSONObject(get("https://api.coingecko.com/api/v3/simple/price?ids=$ids&vs_currencies=usd&include_24hr_change=true"))
+                } catch (e: Exception) { errors["CoinGecko"] = reason(e) }
+            }
+            fun usdPriceOf(code: String): Pair<Double, Double?>? {
+                gecko?.optJSONObject(GECKO[code] ?: "")?.let { o -> num(o.opt("usd"))?.takeIf { it > 0 }?.let { return it to num(o.opt("usd_24h_change")) } }
+                rates?.let { r -> num(r.opt(code.uppercase()))?.takeIf { it > 0 }?.let { return (1.0 / it) to null } }
+                return null
+            }
+            for (code in needCrypto) usdPriceOf(code)?.let { (usd, ch) ->
+                fresh[code] = PriceQuote((usd * usdToman).toLong(), ch, now, "intl")
+            }
+            for (code in needFiat) rates?.let { r ->
+                num(r.opt(code.uppercase()))?.takeIf { it > 0 }?.let { perUsd -> fresh[code] = PriceQuote((usdToman / perUsd).toLong(), null, now, "intl") }
+            }
+            usdPriceOf("paxg")?.let { (ounceUsd, ch) ->
+                val gram24 = ounceUsd / 31.1035 * usdToman
+                for (code in needGold) {
+                    val v = when (code) {
+                        "gold24" -> gram24
+                        "gold18" -> gram24 * 0.75
+                        else -> gram24 * 0.705 * 4.6083 // مثقال آب‌شده
+                    }
+                    fresh[code] = PriceQuote(v.toLong(), ch, now, "intl-gold")
+                }
             }
         }
 
+        // ── ۵. صندوق‌های بورسی از سایت بورس
         for (code in codes.filter { PriceCatalog.isFund(it) }) {
             try {
                 val info = JSONObject(get("https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceInfo/${PriceCatalog.fundInsCode(code)}"))
@@ -164,10 +256,12 @@ object PriceService {
                 val last = num(info.opt("pDrCotVal"))?.takeIf { it > 0 } ?: num(info.opt("pClosing")) ?: continue
                 val yesterday = num(info.opt("priceYesterday"))?.takeIf { it > 0 }
                 fresh[code] = PriceQuote((last / 10).toLong(), yesterday?.let { (last - it) * 100 / it }, now, "tsetmc")
-            } catch (e: Exception) {
-                if ("قیمت صندوق‌ها" !in failed) failed += "قیمت صندوق‌ها"
-            }
+            } catch (e: Exception) { errors["بورس"] = reason(e) }
         }
+
+        // فقط خطاهایی را نشان بده که واقعاً قیمتی را بی‌جواب گذاشته‌اند
+        val missing = codes.filter { it !in fresh }
+        val failed = if (missing.isEmpty()) emptyList() else errors.map { (src, why) -> "$src: $why" }
 
         val merged = cached(context) + fresh
         if (fresh.isNotEmpty()) save(context, merged)

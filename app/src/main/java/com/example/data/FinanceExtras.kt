@@ -141,6 +141,9 @@ interface RecurringDao {
     @Query("UPDATE recurring_transactions SET bankName = :newName WHERE bankName = :oldName")
     suspend fun renameAccount(oldName: String, newName: String)
 
+    @Query("UPDATE recurring_transactions SET category = :newName WHERE category = :oldName")
+    suspend fun renameCategory(oldName: String, newName: String)
+
     @Query("UPDATE recurring_transactions SET enabled = 0 WHERE bankName = :name")
     suspend fun disableForAccount(name: String)
 }

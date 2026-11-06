@@ -399,6 +399,27 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
      * category is stored as text, so old rows keep their label and only the
      * chooser loses the entry.
      */
+    /** ویرایش دسته: نام (تراکنش‌ها هم با آن عوض می‌شوند)، آیکن، رنگ، نوع و بودجهٔ ماهانه */
+    fun updateCategory(old: Category, name: String, iconKey: String, colorHex: String, isIncome: Boolean, monthlyBudget: Long) {
+        val clean = name.trim()
+        if (clean.isBlank()) return
+        viewModelScope.launch {
+            if (categories.value.any { it.id != old.id && it.name.equals(clean, ignoreCase = true) }) return@launch
+            repository.updateCategory(
+                old,
+                old.copy(name = clean, iconKey = iconKey, colorHex = colorHex, isIncome = isIncome, monthlyBudget = if (isIncome) 0 else monthlyBudget.coerceAtLeast(0))
+            )
+        }
+    }
+
+    /** بودجهٔ دسته‌ای که همین الان ساخته شد (وقتی از جدول برگشت) */
+    fun setBudgetForNewCategory(name: String, budget: Long) {
+        viewModelScope.launch {
+            val created = categories.filter { list -> list.any { it.name == name.trim() } }.first().first { it.name == name.trim() }
+            repository.insertCategory(created.copy(monthlyBudget = budget))
+        }
+    }
+
     /** بودجهٔ ماهانهٔ یک دسته (تومان)؛ صفر یعنی بدون بودجه */
     fun setCategoryBudget(category: Category, amount: Long) {
         viewModelScope.launch { repository.insertCategory(category.copy(monthlyBudget = amount.coerceAtLeast(0))) }
@@ -530,7 +551,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 _prices.value = quotes
                 _priceErrors.value = failed
             } catch (e: Exception) {
-                _priceErrors.value = listOf("اتصال به اینترنت")
+                _priceErrors.value = listOf("خطا: ${e.message ?: e.javaClass.simpleName}")
             } finally {
                 _pricesRefreshing.value = false
             }

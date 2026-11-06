@@ -155,6 +155,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 val activeSubScreen: String? = subStack.lastOrNull()
                 var selectedAccountId by remember { mutableStateOf<Int?>(null) }
                 var selectedLoanId by remember { mutableStateOf<Int?>(null) }
+                var editingCategoryId by remember { mutableStateOf<Int?>(null) }
                 // اشخاص: صفحهٔ شخص، شیت افزودن/ویرایش، شیت ثبت قرض
                 var selectedPersonId by remember { mutableStateOf<Int?>(null) }
                 var personSheetFor by remember { mutableStateOf<com.example.data.Person?>(null) }
@@ -398,19 +399,30 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         categories = categories,
                                         transactions = transactions,
                                         onBack = { closeSub() },
-                                        onAdd = { openSub("add_category") },
+                                        onAdd = { editingCategoryId = null; openSub("add_category") },
+                                        onEdit = { editingCategoryId = it.id; openSub("add_category") },
                                         onDelete = { viewModel.deleteCategory(it.id) },
                                         onSetBudget = { c, amount -> viewModel.setCategoryBudget(c, amount) }
                                     )
                                 }
 
                                 "add_category" -> {
+                                    val editing = categories.firstOrNull { it.id == editingCategoryId }
                                     com.example.ui.layer.LayerAddCategoryScreen(
-                                        onBack = { closeSub() },
-                                        onSave = { name, icon, color, income ->
-                                            viewModel.addCategory(name, icon, color, income)
+                                        existing = editing,
+                                        existingNames = categories.map { it.name },
+                                        onBack = { editingCategoryId = null; closeSub() },
+                                        onSave = { name, icon, color, income, budget ->
+                                            if (editing != null) viewModel.updateCategory(editing, name, icon, color, income, budget)
+                                            else {
+                                                viewModel.addCategory(name, icon, color, income)
+                                                // بودجهٔ دستهٔ تازه بعد از ساخته شدن ذخیره می‌شود
+                                                if (budget > 0) viewModel.setBudgetForNewCategory(name, budget)
+                                            }
+                                            editingCategoryId = null
                                             closeSub()
-                                        }
+                                        },
+                                        onDelete = editing?.let { e -> { viewModel.deleteCategory(e.id); editingCategoryId = null; closeSub() } }
                                     )
                                 }
 

@@ -291,7 +291,7 @@ fun LayerHomeScreen(
                                     Text(item.title.ifBlank { "تراکنش بانکی" }, style = lt(14.sp, FontWeight.Medium))
                                     Text("از پیامک ${item.card} · هنوز ثبت نشده", style = lt(12.sp, FontWeight.SemiBold, L.AmberText))
                                 }
-                                Text(signedMoney(item.amount, item.isExpense), style = lt(14.sp, FontWeight.SemiBold))
+                                Text(signedMoney(item.amount, item.isExpense), style = lt(14.sp, FontWeight.SemiBold, if (item.isExpense) L.RedText else L.Green))
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 PrimaryButton("ثبت کن", Modifier.weight(1f).height(40.dp)) { onApproveSms(item) }
@@ -301,7 +301,7 @@ fun LayerHomeScreen(
                     }
                     is Transaction -> TimelineRow(
                         label = label,
-                        node = { SolidNode(if (item.isTransfer) L.Primary else L.Ink) },
+                        node = { SolidNode(txColor(item, L.Primary)) },
                         lastRow = last
                     ) {
                         TransactionCard(item, cards, categories) { onTransactionClick(item) }
@@ -531,6 +531,13 @@ internal fun HollowNode(ring: Color, filled: Boolean = false, size: Dp = 10.dp) 
     )
 }
 
+/** رنگ هر تراکنش: ورودی سبز، خروجی قرمز، انتقال [transferColor] */
+internal fun txColor(tx: Transaction, transferColor: Color): Color = when {
+    tx.isTransfer -> transferColor
+    tx.isExpense -> L.RedText
+    else -> L.Green
+}
+
 @Composable
 internal fun TransactionCard(
     tx: Transaction,
@@ -555,7 +562,7 @@ internal fun TransactionCard(
         }
         Text(
             if (tx.isTransfer) money(tx.amount) else signedMoney(tx.amount, tx.isExpense),
-            style = lt(14.sp, FontWeight.SemiBold, if (tx.isTransfer) L.Muted else if (tx.isExpense) L.Ink else L.Green)
+            style = lt(14.sp, FontWeight.SemiBold, txColor(tx, L.Muted))
         )
     }
 }
