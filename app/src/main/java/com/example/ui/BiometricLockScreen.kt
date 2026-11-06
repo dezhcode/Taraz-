@@ -122,17 +122,11 @@ fun BiometricLockScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Box(
-                Modifier.size(56.dp).clip(RoundedCornerShape(18.dp)).background(L.Primary),
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    painter = painterResource(id = com.example.R.drawable.logo_taraz_mark),
-                    contentDescription = null,
-                    colorFilter = ColorFilter.tint(Color.White),
-                    modifier = Modifier.size(34.dp)
-                )
-            }
+            Image(
+                painter = painterResource(id = com.example.R.drawable.logo_taraz_app),
+                contentDescription = null,
+                modifier = Modifier.size(56.dp)
+            )
             Text("تراز قفل است", style = lt(24.sp, FontWeight.Bold), modifier = Modifier.padding(top = 10.dp))
             Text(
                 "برای دیدن حساب‌ها و اقساطتان، هویت‌تان را تأیید کنید.",

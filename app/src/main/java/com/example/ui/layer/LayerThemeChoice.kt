@@ -71,14 +71,11 @@ fun LayerThemeChooser(onDone: () -> Unit) {
             .padding(horizontal = 24.dp).padding(bottom = 24.dp)
     ) {
         Column(Modifier.padding(top = 56.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.size(56.dp).clip(RoundedCornerShape(18.dp)).background(L.Primary), contentAlignment = Alignment.Center) {
-                Image(
-                    painter = painterResource(id = com.example.R.drawable.logo_taraz_mark),
-                    contentDescription = "تراز",
-                    colorFilter = ColorFilter.tint(Color.White),
-                    modifier = Modifier.size(34.dp)
-                )
-            }
+            Image(
+                painter = painterResource(id = com.example.R.drawable.logo_taraz_app),
+                contentDescription = "تراز",
+                modifier = Modifier.size(56.dp)
+            )
             Text("تراز را چطور ببینید؟", style = lt(26.sp, FontWeight.Bold), modifier = Modifier.padding(top = 8.dp))
             Text(
                 "روشن برای روز و تیره برای شب و چشم راحت‌تر. بعداً از «تنظیمات › ظاهر» هم عوضش می‌کنید.",

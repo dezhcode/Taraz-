@@ -134,14 +134,11 @@ fun AuthScreen(
                 if (s == 1) {
                     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState())) {
                         Column(Modifier.padding(top = 56.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                            Box(Modifier.size(64.dp).clip(RoundedCornerShape(20.dp)).background(L.Primary), contentAlignment = Alignment.Center) {
-                                Image(
-                                    painter = painterResource(id = R.drawable.logo_taraz_mark),
-                                    contentDescription = "تراز",
-                                    colorFilter = ColorFilter.tint(Color.White),
-                                    modifier = Modifier.size(40.dp).testTag("auth_logo")
-                                )
-                            }
+                            Image(
+                                painter = painterResource(id = R.drawable.logo_taraz_app),
+                                contentDescription = "تراز",
+                                modifier = Modifier.size(64.dp).testTag("auth_logo")
+                            )
                             Text("به تراز خوش آمدید", style = lt(26.sp, FontWeight.Bold), modifier = Modifier.padding(top = 8.dp))
                             Text("حساب‌ها، اقساط و خرج روزانه‌تان را یک‌جا ببینید.", style = lt(14.sp, color = L.Muted, lineHeight = 26.sp))
                         }
@@ -289,9 +286,7 @@ private fun OnboardingPager(onFinish: () -> Unit, onLogin: () -> Unit) {
 
     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp).padding(bottom = 28.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(L.Primary), contentAlignment = Alignment.Center) {
-                Image(painterResource(id = R.drawable.logo_taraz_mark), null, colorFilter = ColorFilter.tint(Color.White), modifier = Modifier.size(28.dp))
-            }
+            Image(painterResource(id = R.drawable.logo_taraz_app), null, modifier = Modifier.size(44.dp))
             Spacer(Modifier.weight(1f))
             Box(Modifier.height(40.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onFinish).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
                 Text("رد شدن", style = lt(14.sp, FontWeight.SemiBold, L.PrimaryText))
