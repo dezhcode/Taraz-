@@ -82,54 +82,6 @@ class SmsRepositoryImpl(
         bankSenderDao.deleteSenderByNumber(senderNumber)
     }
 
-    override suspend fun processIncomingSms(sender: String, body: String): ParsedTransactionModel? = withContext(Dispatchers.IO) {
-        // 1. Check if the sender is registered and enabled
-        val bankSender = bankSenderDao.getSenderByNumber(sender)
-        if (bankSender == null || !bankSender.isEnabled) {
-            Log.i("SmsRepositoryImpl", "Sender $sender is not registered or disabled. Skipping incoming SMS.")
-            return@withContext null
-        }
-
-        // 2. Duplicate detection using MD5 hash of message body
-        val hash = md5(body)
-        if (pendingTransactionDao.isDuplicate(hash)) {
-            Log.i("SmsRepositoryImpl", "Duplicate SMS message detected. Skipping.")
-            return@withContext null
-        }
-
-        // 3. Try parsing the incoming transaction
-        val parsed = parser.parse(body, bankSender.bankName)
-        if (parsed != null && parsed.amount > 0) {
-            val finalAmount = parsed.amount / 10L
-            val finalBalance = parsed.balance / 10L
-            val finalParsed = parsed.copy(amount = finalAmount, balance = finalBalance)
-            val isExpense = finalParsed.transactionType != "deposit"
-            val pendingTx = PendingTransaction(
-                senderNumber = sender,
-                amount = finalAmount,
-                date = finalParsed.date,
-                isExpense = isExpense,
-                card = finalParsed.cardNumber,
-                title = "تراکنش پیامکی ${bankSender.bankName}",
-                smsBody = body,
-                smsBodyHash = hash,
-                status = "در انتظار بررسی"
-            )
-            pendingTransactionDao.insertPendingTransaction(pendingTx)
-            finalParsed
-        } else {
-            // If parsing failed, save it in unknown_sms so the user can review/train
-            unknownSmsDao.insertUnknownSms(
-                UnknownSms(
-                    senderNumber = sender,
-                    smsBody = body,
-                    timestamp = System.currentTimeMillis()
-                )
-            )
-            null
-        }
-    }
-
     private fun mapToDomain(entity: BankSender): BankSenderModel {
         return BankSenderModel(
             id = entity.id,
@@ -177,7 +129,7 @@ class SmsRepositoryImpl(
                         val parsed = parser.parse(body, bankName)
                         if (parsed != null && parsed.balance > 0) {
                             val db = com.example.data.AppDatabase.getDatabase(context, kotlinx.coroutines.CoroutineScope(Dispatchers.IO))
-                            db.bankCardDao().updateBalance(bankName, parsed.balance / 10L)
+                            db.bankCardDao().updateBalance(bankName, com.example.data.SmsIngest.toToman(parsed.balance, body))
                         }
                     }
                 }

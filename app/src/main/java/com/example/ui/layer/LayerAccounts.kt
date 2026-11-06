@@ -378,28 +378,38 @@ fun LayerAddAccountSheet(
     }
 }
 
-/** ویرایش حساب: موجودی و شمارهٔ کارت (نام ثابت می‌ماند چون تراکنش‌ها با آن به حساب وصل‌اند) */
+/** ویرایش حساب: نام (تراکنش‌ها هم با آن منتقل می‌شوند)، موجودی، شمارهٔ کارت و صاحب کارت */
 @Composable
 fun LayerEditAccountSheet(
     card: BankCard,
+    existingNames: List<String>,
     onDismiss: () -> Unit,
-    onSave: (BankCard) -> Unit
+    onSave: (BankCard, String) -> Unit
 ) {
+    var name by remember { mutableStateOf(card.bankName) }
+    val cleanName = name.trim()
+    val nameTaken = !cleanName.equals(card.bankName, ignoreCase = true) &&
+        existingNames.any { it.equals(cleanName, ignoreCase = true) }
     var balanceText by remember { mutableStateOf(money(card.balance)) }
     var holder by remember { mutableStateOf(card.cardHolderName) }
     var number by remember { mutableStateOf(card.cardNumber) }
     val digits = number.filter { it.isDigit() }
-    val canSave = !(card.accountType == AccountType.BANK && digits.isNotEmpty() && digits.length != 16)
+    val canSave = cleanName.isNotEmpty() && !nameTaken &&
+        !(card.accountType == AccountType.BANK && digits.isNotEmpty() && digits.length != 16)
 
     LayerSheet(
         title = "ویرایش ${card.bankName}",
         onDismiss = onDismiss,
         bottomBar = {
             BigButton("ذخیره", enabled = canSave) {
-                onSave(card.copy(balance = parseAmount(balanceText), cardHolderName = holder.trim().ifEmpty { card.cardHolderName }, cardNumber = if (card.isCash) "" else digits))
+                onSave(card.copy(balance = parseAmount(balanceText), cardHolderName = holder.trim().ifEmpty { card.cardHolderName }, cardNumber = if (card.isCash) "" else digits), cleanName)
             }
         }
     ) {
+        LField(
+            value = name, onChange = { name = it }, label = "نام حساب",
+            hint = if (nameTaken) "حساب دیگری با این نام دارید." else "تراکنش‌های این حساب هم با نام تازه نمایش داده می‌شوند."
+        )
         LField(
             value = balanceText, onChange = { balanceText = groupedInput(it) }, label = "موجودی (تومان)",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

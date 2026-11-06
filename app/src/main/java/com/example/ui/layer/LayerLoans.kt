@@ -268,6 +268,8 @@ fun LayerPaySheet(
     var pickOpen by remember { mutableStateOf(false) }
     val fromCard = cards.firstOrNull { it.bankName == from }
     val remainingBefore = remainingInstallments(loan)
+    // آخرین قسط ممکن است کمتر از قسط عادی باشد؛ همان باقی‌مانده پرداخت می‌شود
+    val payAmount = minOf(loan.installmentAmount, (loan.totalAmount - loan.paidAmount).coerceAtLeast(0))
     val total = totalInstallments(loan)
     val nextDue = JalaliDate.nextDueTimestamp(loan.dueDay, System.currentTimeMillis() + DAY_MS * 2)
 
@@ -292,7 +294,7 @@ fun LayerPaySheet(
                 Column(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("قسط ${loan.loanName} · ${loan.bankName}", style = lt(12.sp, color = L.Muted))
                     Row(verticalAlignment = Alignment.Bottom) {
-                        Text(money(loan.installmentAmount), style = lt(42.sp, letterSpacing = (-1.5).sp))
+                        Text(money(payAmount), style = lt(42.sp, letterSpacing = (-1.5).sp))
                         Spacer(Modifier.width(6.dp))
                         Text("تومان", style = lt(15.sp), modifier = Modifier.padding(bottom = 8.dp))
                     }
@@ -321,7 +323,7 @@ fun LayerPaySheet(
 
                 Column(Modifier.padding(top = 6.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(L.Bg).padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("بعد از تأیید", style = lt(12.sp, FontWeight.Bold, L.Muted))
-                    if (fromCard != null) BeforeAfter("موجودی ${fromCard.bankName}", money(fromCard.balance), money(fromCard.balance - loan.installmentAmount))
+                    if (fromCard != null) BeforeAfter("موجودی ${fromCard.bankName}", money(fromCard.balance), money(fromCard.balance - payAmount))
                     BeforeAfter("اقساط باقی‌مانده", "${fa(remainingBefore)} قسط", "${fa((remainingBefore - 1).coerceAtLeast(0))} قسط")
                     Row { Text("خط زمان", style = lt(13.sp), modifier = Modifier.weight(1f)); Text("در امروز ${timeOfDay(System.currentTimeMillis())} نشان داده می‌شود", style = lt(13.sp)) }
                 }
@@ -348,7 +350,7 @@ fun LayerPaySheet(
                     Spacer(Modifier.height(12.dp))
                     Text(
                         (if (total > 0) "قسط ${fa(total - remainingBefore + 1)} از ${fa(total)} ${loan.loanName}\n" else "") +
-                            "${money(loan.installmentAmount)} تومان از ${fromCard?.let { shortAccountLabel(it) } ?: from}",
+                            "${money(payAmount)} تومان از ${fromCard?.let { shortAccountLabel(it) } ?: from}",
                         style = lt(14.sp, color = L.Muted, lineHeight = 25.sp), textAlign = TextAlign.Center
                     )
                     if (remainingBefore > 1) {

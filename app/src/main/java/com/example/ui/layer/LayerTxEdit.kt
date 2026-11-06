@@ -96,7 +96,11 @@ fun LayerTxEditSheet(
             if (askDelete) {
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(L.RedSoft).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        "این تراکنش حذف شود؟ ${money(tx.amount)} تومان ${if (tx.isExpense) "به موجودی ${tx.bankName} برمی‌گردد" else "از موجودی ${tx.bankName} کم می‌شود"}.",
+                        when {
+                            tx.isTransfer -> "این انتقال حذف شود؟ هر دو طرف آن پاک می‌شوند و موجودی هر دو حساب به حالت قبل برمی‌گردد."
+                            tx.loanId != null -> "این پرداخت قسط حذف شود؟ ${money(tx.amount)} تومان به موجودی ${tx.bankName} برمی‌گردد و از پرداخت‌شدهٔ وام هم کم می‌شود."
+                            else -> "این تراکنش حذف شود؟ ${money(tx.amount)} تومان ${if (tx.isExpense) "به موجودی ${tx.bankName} برمی‌گردد" else "از موجودی ${tx.bankName} کم می‌شود"}."
+                        },
                         style = lt(13.sp, color = L.RedInk, lineHeight = 22.sp)
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

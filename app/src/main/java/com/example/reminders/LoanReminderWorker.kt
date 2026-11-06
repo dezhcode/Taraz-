@@ -37,9 +37,33 @@ class LoanReminderWorker(
             for (loan in loans) {
                 if (!loan.reminderEnabled || loan.isSettled) continue
 
+                val payments = database.loanPaymentDao().forLoan(loan.id)
+                val paidKeys = payments.map { it.monthKey }.toSet()
+
+                // Overdue: this month's day has passed and it is still unpaid. Only for
+                // loans paid through Taraz, whose history tells us what is paid.
+                val today = JalaliDate.today()
+                val thisKey = today.monthKey()
+                val thisDue = JalaliDate.dueTimestampFor(thisKey, loan.dueDay)
+                val lateDays = -JalaliDate.daysUntil(thisDue)
+                if (payments.isNotEmpty() && thisKey !in paidKeys && lateDays in OVERDUE_ON_DAYS) {
+                    val lateKey = "loan_${loan.id}_${thisKey}_late_$lateDays"
+                    if (!prefs.getBoolean(lateKey, false)) {
+                        NotificationHelper.showNotification(
+                            context = applicationContext,
+                            title = "قسط ${loan.loanName} عقب افتاده",
+                            message = "${NotificationHelper.formatAmount(loan.installmentAmount)} تومان — سررسید ${JalaliDate.fromTimestamp(thisDue).formatLong()} گذشته است.",
+                            notificationId = NOTIFICATION_ID_BASE + loan.id
+                        )
+                        prefs.edit().putBoolean(lateKey, true).apply()
+                    }
+                }
+
                 val dueAt = JalaliDate.nextDueTimestamp(loan.dueDay)
                 val daysLeft = JalaliDate.daysUntil(dueAt)
                 if (daysLeft !in REMIND_ON_DAYS) continue
+                // Already paid for that month (on time or ahead): nothing to remind.
+                if (JalaliDate.fromTimestamp(dueAt).monthKey() in paidKeys) continue
 
                 // One notification per loan per day, so a reschedule or a retry
                 // cannot produce duplicates.
@@ -75,6 +99,8 @@ class LoanReminderWorker(
     companion object {
         /** Warn three days ahead, the day before, and on the day itself. */
         private val REMIND_ON_DAYS = listOf(0, 1, 3)
+        /** Days after a missed due day to say it is late. */
+        private val OVERDUE_ON_DAYS = listOf(1, 3)
         private const val NOTIFICATION_ID_BASE = 8000
     }
 }

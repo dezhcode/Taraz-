@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.BankCard
 import com.example.data.Category
+import com.example.data.SmsIngest
 import com.example.data.PendingTransaction
 import com.example.sms.permission.SmsPermissionHelper
 import com.example.sms.presentation.SmsParserViewModel
@@ -258,9 +259,8 @@ fun LayerSmsReviewScreen(
     var category by remember(current.id) { mutableStateOf(guess) }
     var title by remember(current.id) { mutableStateOf(current.title.ifBlank { "تراکنش بانکی" }) }
     var explain by remember(current.id) { mutableStateOf("") }
-    val account = remember(current.id, cards) {
-        cards.firstOrNull { it.bankName.contains(current.card) || current.card.contains(it.bankName) }?.bankName ?: current.card
-    }
+    val senders by viewModel.bankSenders.collectAsState()
+    val account = remember(current.id, cards, senders) { SmsIngest.accountFor(current, cards, senders) }
 
     LaunchedEffect(proposal) {
         proposal?.let { category = it.category; title = it.title }

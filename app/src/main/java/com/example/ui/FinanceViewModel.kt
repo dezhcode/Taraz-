@@ -80,13 +80,7 @@ data class QuadrupleCoach(
 class FinanceViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = AppDatabase.getDatabase(application, viewModelScope)
-    private val repository = FinanceRepository(
-        db.transactionDao(),
-        db.bankCardDao(),
-        db.loanDao(),
-        db.goalDao(),
-        db.categoryDao()
-    )
+    private val repository = FinanceRepository(db)
 
     private val aiRepository: AiRepository = AiRepositoryImpl(application)
 
@@ -847,7 +841,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun lockApp() {
-        if (_biometricEnabled.value) {
+        if (_biometricEnabled.value && _currentScreen.value == Screen.MAIN) {
             _isAppLocked.value = true
         }
     }
@@ -1022,55 +1016,13 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME
                 )
             )
-            if (_alertsEnabled.value) {
-                val type = if (isExpense) "هزینه" else "درآمد"
-                com.example.utils.NotificationHelper.showNotification(
-                    getApplication(),
-                    "ثبت $type جدید در تراز",
-                    "تراکنش '$title' به مبلغ ${formatNumber(amount)} تومان با موفقیت در پایگاه داده ذخیره شد."
-                )
-            }
         }
     }
 
+    /** Both halves share one id and are typed TRANSFER, so neither lands in income or spending. */
     fun transferBetweenCards(fromCardName: String, toCardName: String, amount: Long) {
-        viewModelScope.launch {
-            // Both halves share one id so the pair can always be found again —
-            // and both are typed TRANSFER so neither lands in income or spending.
-            val groupId = java.util.UUID.randomUUID().toString()
-
-            // 1. Withdrawal transaction from source card
-            repository.insertTransaction(
-                Transaction(
-                    title = "انتقال به $toCardName",
-                    amount = amount,
-                    category = "انتقال",
-                    isExpense = true,
-                    bankName = fromCardName,
-                    type = TransactionType.TRANSFER,
-                    transferGroupId = groupId
-                )
-            )
-            // 2. Deposit transaction to destination card
-            repository.insertTransaction(
-                Transaction(
-                    title = "انتقال از $fromCardName",
-                    amount = amount,
-                    category = "انتقال",
-                    isExpense = false,
-                    bankName = toCardName,
-                    type = TransactionType.TRANSFER,
-                    transferGroupId = groupId
-                )
-            )
-            if (_alertsEnabled.value) {
-                com.example.utils.NotificationHelper.showNotification(
-                    getApplication(),
-                    "انتقال وجه موفقیت‌آمیز",
-                    "مبلغ ${formatNumber(amount)} تومان از کارت $fromCardName به کارت $toCardName با موفقیت انتقال یافت."
-                )
-            }
-        }
+        if (amount <= 0 || fromCardName == toCardName) return
+        viewModelScope.launch { repository.insertTransfer(fromCardName, toCardName, amount) }
     }
 
     fun deleteTransaction(transaction: Transaction) {
@@ -1080,18 +1032,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun updateTransaction(oldTx: Transaction, updatedTx: Transaction) {
-        viewModelScope.launch {
-            repository.deleteTransaction(oldTx)
-            repository.insertTransaction(updatedTx)
-            if (_alertsEnabled.value) {
-                val type = if (updatedTx.isExpense) "هزینه" else "درآمد"
-                com.example.utils.NotificationHelper.showNotification(
-                    getApplication(),
-                    "ویرایش $type در تراز",
-                    "تراکنش '${updatedTx.title}' با موفقیت بروزرسانی شد."
-                )
-            }
-        }
+        viewModelScope.launch { repository.updateTransaction(updatedTx.copy(id = oldTx.id)) }
     }
 
     // Card management
@@ -1120,18 +1061,6 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     accountType = accountType
                 )
             )
-            if (_alertsEnabled.value) {
-                val label = when (accountType) {
-                    AccountType.CASH -> "حساب نقدی"
-                    AccountType.OTHER -> "حساب"
-                    else -> "کارت بانک"
-                }
-                com.example.utils.NotificationHelper.showNotification(
-                    getApplication(),
-                    "حساب جدید ثبت شد",
-                    "$label $clean با موجودی اولیه ${formatNumber(balance)} تومان اضافه شد."
-                )
-            }
         }
     }
 
@@ -1141,10 +1070,26 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun deleteCard(cardId: Int) {
+    /**
+     * Saves an edited account: balance, card number and holder first, then the
+     * new name (which carries its transactions along). [onResult] gets false
+     * when the new name belongs to another account; the other edits are kept.
+     */
+    fun saveAccount(card: BankCard, newName: String, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
-            repository.deleteCard(cardId)
+            repository.insertCard(card)
+            onResult(repository.renameAccount(card, newName))
         }
+    }
+
+    /** Removes the account; its transactions stay, labelled as belonging to a deleted account. */
+    fun deleteCard(cardId: Int) {
+        viewModelScope.launch { repository.deleteAccount(cardId) }
+    }
+
+    /** Renames an account together with its transactions. [onResult] gets false if the name is taken. */
+    fun renameCard(card: BankCard, newName: String, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch { onResult(repository.renameAccount(card, newName)) }
     }
 
     // Loan management
@@ -1188,13 +1133,6 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             )
             // Pick up a reminder that may already be within the warning window.
             com.example.reminders.ReminderScheduler.runLoanCheckNow(getApplication())
-            if (_alertsEnabled.value) {
-                com.example.utils.NotificationHelper.showNotification(
-                    getApplication(),
-                    "ثبت قرارداد تسهیلات و اقساط",
-                    "وام $loanName بانک $bankName به مبلغ کل ${formatNumber(totalAmount)} تومان در سررسیدهای منظم ثبت شد."
-                )
-            }
         }
     }
 
@@ -1219,109 +1157,6 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     learningStatus = "نیاز به آموزش"
                 )
             )
-        }
-    }
-
-    fun autoImportBankSms(bankName: String) {
-        viewModelScope.launch {
-            val senderNumber = if (bankName.contains("ملی") || bankName.contains("Melli")) "1000250" else "1000670"
-            val displayBankName = if (bankName.contains("ملی") || bankName.contains("Melli")) "بانک ملی" else "بانک رسالت"
-
-            // 1. Ensure the sender is registered in BankSender
-            val existingSender = db.bankSenderDao().getSenderByNumber(senderNumber)
-            if (existingSender == null) {
-                db.bankSenderDao().insertSender(
-                    BankSender(
-                        bankName = displayBankName,
-                        senderNumber = senderNumber,
-                        isEnabled = true,
-                        learningStatus = "آموزش دیده"
-                    )
-                )
-            } else if (!existingSender.isEnabled) {
-                db.bankSenderDao().insertSender(existingSender.copy(isEnabled = true))
-            }
-
-            // 2. Generate sample messages to showcase immediate integration
-            val samples = if (bankName.contains("ملی") || bankName.contains("Melli")) {
-                listOf(
-                    """
-                    بانك ملي ايران
-                    برداشت:5,000,000-
-                    حساب:70008
-                    مانده:84,184,943
-                    0411-20:35
-                    """.trimIndent(),
-                    """
-                    بانك ملي ايران
-                    كارت: 3142
-                    خريد: 1,100,000
-                    مانده: 189,222,743
-                    تاريخ: 1405/04/10
-                    ساعت: 18:07:05
-                    """.trimIndent(),
-                    """
-                    بانك ملي ايران
-                    قسط:93,615,172-
-                    حساب:70008
-                    مانده:865,433
-                    0311-21:19
-                    """.trimIndent()
-                )
-            } else {
-                listOf(
-                    """
-                    10.13328262.1
-                    -1,060,000
-                    04/11_12:36
-                    مانده: 430,097,482
-                    """.trimIndent(),
-                    """
-                    10.13328262.1
-                    +5,500,000
-                    04/12_10:15
-                    مانده: 435,597,482
-                    """.trimIndent()
-                )
-            }
-
-            val specificParser = com.example.sms.data.parser.BankSpecificParser()
-            for (smsBody in samples) {
-                val parsed = specificParser.parse(smsBody, displayBankName)
-                if (parsed != null) {
-                    val hash = java.util.UUID.randomUUID().toString().take(8)
-                    val isExpense = parsed.transactionType != "deposit"
-                    
-                    db.pendingTransactionDao().insertPendingTransaction(
-                        PendingTransaction(
-                            senderNumber = senderNumber,
-                            amount = parsed.amount,
-                            date = parsed.date,
-                            isExpense = isExpense,
-                            card = parsed.cardNumber,
-                            title = "تراکنش پیامکی $displayBankName",
-                            smsBody = smsBody,
-                            smsBodyHash = hash,
-                            status = "در انتظار بررسی"
-                        )
-                    )
-
-                    // Also, update the user's card for this bank to update its balance automatically
-                    val currentCards = cards.value
-                    val existingCard = currentCards.find { it.bankName.contains(displayBankName) || displayBankName.contains(it.bankName) }
-                    if (existingCard != null && parsed.balance > 0) {
-                        repository.insertCard(existingCard.copy(balance = parsed.balance))
-                    }
-                }
-            }
-
-            if (_alertsEnabled.value) {
-                com.example.utils.NotificationHelper.showNotification(
-                    getApplication(),
-                    "اتصال خودکار پیامک $displayBankName",
-                    "اتصال برقرار شد و تراکنش‌های پیامکی جدید با موفقیت همگام‌سازی شدند."
-                )
-            }
         }
     }
 
@@ -1408,26 +1243,13 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             _learningError.value = null
             _learningSmsParserProposal.value = null
 
-            var sampleMessages = fetchSmsFromDevice(sender.senderNumber, rangeDays)
+            val sampleMessages = fetchSmsFromDevice(sender.senderNumber, rangeDays)
             
             if (sampleMessages.isEmpty()) {
-                Log.i("FinanceViewModel", "No real messages found or permissions missing. Using pre-configured mock/sample templates for ${sender.bankName}.")
-                sampleMessages = when {
-                    sender.bankName.contains("ملی") || sender.senderNumber.lowercase().contains("melli") -> listOf(
-                        "بانک ملی\nبرداشت از حساب 0102\nمبلغ: 25,339,753 ریال\nکارت: 3142\nمانده: 279,488,680 ریال\n1405/04/09 14:01:06",
-                        "بانک ملی\nواریز به حساب 0102\nمبلغ: 50,000,000 ریال\nکارت: 3142\nمانده: 329,488,680 ریال\n1405/04/10 09:12:30",
-                        "بانک ملی\nکارت به کارت از 3142\nمبلغ: 10,000,000 ریال\nمانده: 319,488,680 ریال\n1405/04/11 18:22:15"
-                    )
-                    sender.bankName.contains("ملت") || sender.senderNumber.lowercase().contains("mellat") -> listOf(
-                        "بانک ملت\nبرداشت خرید کارتخوان\nمبلغ: 3,500,000 ریال\nکارت: 8876\nمانده: 176,500,000 ریال\n1405/04/09 18:45",
-                        "بانک ملت\nواریز سود سپرده\nمبلغ: 1,200,000 ریال\nکارت: 8876\nمانده: 177,700,000 ریال\n1405/04/10 08:00",
-                        "بانک ملت\nبرداشت انتقال کارت به کارت\nمبلغ: 12,000,000 ریال\nکارت: 8876\nمانده: 165,700,000 ریال\n1405/04/11 13:14"
-                    )
-                    else -> listOf(
-                        "بانک ${sender.bankName}\nبرداشت خرید\nمبلغ: 1,500,000 ریال\nمانده: 45,000,000 ریال\n1405/04/09 12:00",
-                        "بانک ${sender.bankName}\nواریز حواله ساتنا\nمبلغ: 20,000,000 ریال\nمانده: 65,000,000 ریال\n1405/04/10 10:30"
-                    )
-                }
+                // No made-up samples: a format learned from invented SMS is wrong from the start.
+                _isLearningLoading.value = false
+                _learningError.value = "در این بازه پیامکی از ${sender.bankName} پیدا نشد. بازهٔ طولانی‌تری انتخاب کنید یا دسترسی خواندن پیامک را بدهید."
+                return@launch
             }
 
             _learningSmsList.value = sampleMessages
@@ -1461,26 +1283,34 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         _learningError.value = null
     }
 
+    /**
+     * Records an SMS the user approved. [finalCard] is the account chosen on the
+     * review screen; null means «work it out» (see [SmsIngest.accountFor]). When
+     * that account does not exist yet it is created with the balance the SMS
+     * reports, so after this transaction it matches the bank exactly.
+     */
     fun approvePendingTransaction(
         pendingTx: PendingTransaction,
         finalTitle: String,
         finalCategory: String,
         finalAmount: Long,
-        finalCard: String,
+        finalCard: String?,
         isExpense: Boolean
     ) {
         viewModelScope.launch {
-            val existingCard = db.bankCardDao().getCardByBankName(finalCard)
-            if (existingCard == null) {
-                db.bankCardDao().insertCard(
+            val name = finalCard?.trim()?.takeIf { it.isNotEmpty() }
+                ?: SmsIngest.accountFor(pendingTx, repository.allCardsNow(), smsParserRepository.getAllSenders())
+            if (repository.getCardByName(name) == null) {
+                val delta = if (isExpense) -finalAmount else finalAmount
+                repository.insertCard(
                     BankCard(
-                        bankName = finalCard,
-                        cardNumber = "**** ****",
-                        balance = if (isExpense) 0L else finalAmount
+                        bankName = name,
+                        cardNumber = "",
+                        balance = if (pendingTx.balance > 0) pendingTx.balance - delta else 0L,
+                        accountType = AccountType.BANK
                     )
                 )
             }
-
             repository.insertTransaction(
                 Transaction(
                     title = finalTitle,
@@ -1488,26 +1318,43 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     category = finalCategory,
                     date = pendingTx.date,
                     isExpense = isExpense,
-                    bankName = finalCard
+                    bankName = name,
+                    type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME
                 )
             )
-
-            smsParserRepository.deletePendingTransaction(pendingTx.id)
-
-            if (_alertsEnabled.value) {
-                com.example.utils.NotificationHelper.showNotification(
-                    getApplication(),
-                    "ثبت تراکنش بانکی با موفقیت انجام شد",
-                    "تراکنش '$finalTitle' به مبلغ ${formatNumber(finalAmount)} تومان تایید و ثبت گردید."
-                )
-            }
+            // Kept as approved (not deleted) so the same SMS is never offered again.
+            smsParserRepository.setPendingStatus(pendingTx.id, PendingStatus.APPROVED)
+            checkBalanceAgainstSms(name, pendingTx.balance)
         }
     }
 
-    fun rejectPendingTransaction(id: Int) {
+    /** موجودی یک حساب در تراز با «مانده»ٔ آخرین پیامک بانک فرق دارد */
+    data class BalanceMismatch(val account: String, val inApp: Long, val inSms: Long)
+
+    private val _balanceMismatch = MutableStateFlow<BalanceMismatch?>(null)
+    val balanceMismatch: StateFlow<BalanceMismatch?> = _balanceMismatch.asStateFlow()
+
+    private suspend fun checkBalanceAgainstSms(account: String, smsBalance: Long) {
+        if (smsBalance <= 0) return
+        val card = repository.getCardByName(account) ?: return
+        if (card.balance != smsBalance) _balanceMismatch.value = BalanceMismatch(account, card.balance, smsBalance)
+    }
+
+    /** موجودی حساب را برابر عدد پیامک بانک می‌کند */
+    fun acceptSmsBalance() {
+        val m = _balanceMismatch.value ?: return
+        _balanceMismatch.value = null
         viewModelScope.launch {
-            smsParserRepository.deletePendingTransaction(id)
+            repository.getCardByName(m.account)?.let { repository.insertCard(it.copy(balance = m.inSms)) }
         }
+    }
+
+    fun dismissBalanceMismatch() {
+        _balanceMismatch.value = null
+    }
+
+    fun rejectPendingTransaction(id: Int) {
+        viewModelScope.launch { smsParserRepository.setPendingStatus(id, PendingStatus.REJECTED) }
     }
 
     fun ignoreUnknownSms(id: Int) {
@@ -1543,7 +1390,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 onSuccess = { updatedParser ->
                     smsParserRepository.saveParser(updatedParser)
                     smsParserRepository.deleteUnknownSms(unknownSms.id)
-                    smsParserRepository.processIncomingSms(unknownSms.senderNumber, unknownSms.smsBody)
+                    SmsIngest.process(db, unknownSms.senderNumber, unknownSms.smsBody, unknownSms.timestamp)
                 },
                 onFailure = { error ->
                     _learningError.value = error.message ?: "خطای ناشناخته در یادگیری قالب"
@@ -1606,6 +1453,28 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         return Pair(fullText, null)
     }
 
+    /**
+     * The account an assistant action should use. Never a name that does not
+     * exist (it used to default to «ملی», so the money went nowhere): an exact
+     * match, then a partial one, then the only account, then the first bank
+     * account. With no accounts at all the action stops with a clear message.
+     */
+    private suspend fun accountForAssistant(requested: String?): String {
+        val all = repository.allCardsNow()
+        if (all.isEmpty()) throw IllegalStateException("هنوز حسابی نساخته‌اید؛ اول یک حساب اضافه کنید.")
+        val want = requested?.trim().orEmpty()
+        if (want.isNotEmpty()) {
+            all.firstOrNull { it.bankName.equals(want, ignoreCase = true) }?.let { return it.bankName }
+            val core = want.removePrefix("بانک").trim()
+            if (core.isNotEmpty()) {
+                all.filter { it.bankName.contains(core, ignoreCase = true) || core.contains(it.bankName.removePrefix("بانک").trim(), ignoreCase = true) }
+                    .takeIf { it.size == 1 }?.let { return it.first().bankName }
+            }
+        }
+        if (all.size == 1) return all.first().bankName
+        return (all.firstOrNull { it.accountType == AccountType.BANK } ?: all.first()).bankName
+    }
+
     fun executeProposedAction(messageId: String) {
         viewModelScope.launch {
             val messagesList = _chatMessages.value
@@ -1619,93 +1488,82 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             try {
                 when (action.type) {
                     "add_transaction" -> {
-                        val tx = Transaction(
-                            title = action.txTitle ?: "تراکنش هوشمند",
-                            amount = action.txAmount ?: 0L,
-                            category = action.txCategory ?: "متفرقه",
-                            isExpense = action.txIsExpense ?: true,
-                            bankName = action.txBankName ?: "ملی"
+                        val isExpense = action.txIsExpense ?: true
+                        repository.insertTransaction(
+                            Transaction(
+                                title = action.txTitle ?: "تراکنش",
+                                amount = action.txAmount?.takeIf { it > 0 } ?: throw IllegalStateException("مبلغ تراکنش مشخص نیست."),
+                                category = action.txCategory ?: if (isExpense) "سایر" else "درآمد دیگر",
+                                isExpense = isExpense,
+                                bankName = accountForAssistant(action.txBankName),
+                                type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME
+                            )
                         )
-                        repository.insertTransaction(tx)
                     }
                     "delete_transaction" -> {
-                        val id = action.txId ?: return@launch
-                        val fullTx = transactions.value.find { it.id == id } ?: Transaction(
-                            id = id,
-                            title = action.txTitle ?: "",
-                            amount = action.txAmount ?: 0L,
-                            category = action.txCategory ?: "",
-                            isExpense = action.txIsExpense ?: true,
-                            bankName = action.txBankName ?: "ملی"
-                        )
-                        repository.deleteTransaction(fullTx)
+                        // Only a transaction that really exists: deleting a made-up one
+                        // used to "give back" money to an account that never spent it.
+                        val id = action.txId ?: throw IllegalStateException("شمارهٔ تراکنش مشخص نیست.")
+                        val tx = transactions.value.find { it.id == id } ?: throw IllegalStateException("این تراکنش پیدا نشد؛ شاید قبلاً حذف شده.")
+                        repository.deleteTransaction(tx)
                     }
                     "edit_transaction" -> {
-                        val id = action.txId ?: return@launch
-                        val oldTx = transactions.value.find { it.id == id }
-                        if (oldTx != null) {
-                            repository.deleteTransaction(oldTx)
-                        }
-                        val newTx = Transaction(
-                            id = id,
-                            title = action.txTitle ?: (oldTx?.title ?: "ویرایش"),
-                            amount = action.txAmount ?: (oldTx?.amount ?: 0L),
-                            category = action.txCategory ?: (oldTx?.category ?: "متفرقه"),
-                            isExpense = action.txIsExpense ?: (oldTx?.isExpense ?: true),
-                            bankName = action.txBankName ?: (oldTx?.bankName ?: "ملی")
+                        val id = action.txId ?: throw IllegalStateException("شمارهٔ تراکنش مشخص نیست.")
+                        val old = transactions.value.find { it.id == id } ?: throw IllegalStateException("این تراکنش پیدا نشد؛ شاید قبلاً حذف شده.")
+                        repository.updateTransaction(
+                            old.copy(
+                                title = action.txTitle ?: old.title,
+                                amount = action.txAmount?.takeIf { it > 0 } ?: old.amount,
+                                category = action.txCategory ?: old.category,
+                                isExpense = if (old.isTransfer) old.isExpense else action.txIsExpense ?: old.isExpense,
+                                bankName = action.txBankName?.let { accountForAssistant(it) } ?: old.bankName
+                            )
                         )
-                        repository.insertTransaction(newTx)
                     }
                     "add_loan" -> {
-                        val loan = Loan(
-                            bankName = action.loanBankName ?: "ملی",
-                            loanName = action.loanName ?: "وام",
-                            totalAmount = action.loanTotalAmount ?: 0L,
-                            paidAmount = action.loanPaidAmount ?: 0L,
-                            installmentAmount = action.loanInstallmentAmount ?: 0L,
-                            dueDate = action.loanDueDate ?: "۱ام هر ماه",
-                            dueDay = parseDueDay(action.loanDueDate)
+                        val day = parseDueDay(action.loanDueDate)
+                        repository.insertLoan(
+                            Loan(
+                                bankName = action.loanBankName ?: "بانک",
+                                loanName = action.loanName ?: "وام",
+                                totalAmount = action.loanTotalAmount?.takeIf { it > 0 } ?: throw IllegalStateException("مبلغ کل وام مشخص نیست."),
+                                paidAmount = (action.loanPaidAmount ?: 0L).coerceAtLeast(0L),
+                                installmentAmount = action.loanInstallmentAmount ?: 0L,
+                                dueDate = "روز ${com.example.utils.JalaliDate.toPersianDigits(day)} هر ماه",
+                                dueDay = day
+                            )
                         )
-                        repository.insertLoan(loan)
+                        com.example.reminders.ReminderScheduler.runLoanCheckNow(getApplication())
                     }
                     "delete_loan" -> {
-                        val id = action.loanId ?: return@launch
+                        val id = action.loanId ?: throw IllegalStateException("شمارهٔ وام مشخص نیست.")
+                        if (loans.value.none { it.id == id }) throw IllegalStateException("این وام پیدا نشد.")
                         repository.deleteLoan(id)
                     }
                     "edit_loan" -> {
-                        val id = action.loanId ?: return@launch
-                        val oldLoan = loans.value.find { it.id == id }
-                        val newLoan = Loan(
-                            id = id,
-                            bankName = action.loanBankName ?: (oldLoan?.bankName ?: "ملی"),
-                            loanName = action.loanName ?: (oldLoan?.loanName ?: "وام"),
-                            totalAmount = action.loanTotalAmount ?: (oldLoan?.totalAmount ?: 0L),
-                            paidAmount = action.loanPaidAmount ?: (oldLoan?.paidAmount ?: 0L),
-                            installmentAmount = action.loanInstallmentAmount ?: (oldLoan?.installmentAmount ?: 0L),
-                            dueDate = action.loanDueDate ?: (oldLoan?.dueDate ?: "۱ام هر ماه"),
-                            dueDay = action.loanDueDate?.let { parseDueDay(it) } ?: (oldLoan?.dueDay ?: 1)
+                        val id = action.loanId ?: throw IllegalStateException("شمارهٔ وام مشخص نیست.")
+                        val old = loans.value.find { it.id == id } ?: throw IllegalStateException("این وام پیدا نشد.")
+                        val day = action.loanDueDate?.let { parseDueDay(it) } ?: old.dueDay
+                        repository.insertLoan(
+                            old.copy(
+                                bankName = action.loanBankName ?: old.bankName,
+                                loanName = action.loanName ?: old.loanName,
+                                totalAmount = action.loanTotalAmount?.takeIf { it > 0 } ?: old.totalAmount,
+                                paidAmount = action.loanPaidAmount ?: old.paidAmount,
+                                installmentAmount = action.loanInstallmentAmount ?: old.installmentAmount,
+                                dueDate = "روز ${com.example.utils.JalaliDate.toPersianDigits(day)} هر ماه",
+                                dueDay = day
+                            )
                         )
-                        repository.insertLoan(newLoan)
                     }
                     "pay_installment" -> {
-                        val id = action.loanId ?: return@launch
-                        val loan = loans.value.find { it.id == id }
-                        if (loan != null) {
-                            val updatedPaid = (loan.paidAmount + (action.loanInstallmentAmount ?: loan.installmentAmount)).coerceAtMost(loan.totalAmount)
-                            repository.insertLoan(loan.copy(paidAmount = updatedPaid))
-                            repository.insertTransaction(
-                                Transaction(
-                                    title = "پرداخت قسط ${loan.loanName}",
-                                    amount = action.loanInstallmentAmount ?: loan.installmentAmount,
-                                    category = "قسط",
-                                    isExpense = true,
-                                    bankName = loan.bankName
-                                )
-                            )
-                        }
+                        val id = action.loanId ?: throw IllegalStateException("شمارهٔ وام مشخص نیست.")
+                        val loan = loans.value.find { it.id == id } ?: throw IllegalStateException("این وام پیدا نشد.")
+                        repository.payInstallment(loan.id, accountForAssistant(loan.bankName), action.loanInstallmentAmount)
+                            ?: throw IllegalStateException("این وام تسویه شده و قسطی نمانده.")
                     }
                 }
-                
+
                 // Update message state
                 val updatedAction = action.copy(isPending = false, isApproved = true)
                 val updatedMessage = message.copy(actionProposed = updatedAction)
@@ -1768,12 +1626,6 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             val updated = list + cancelMsg
             saveChatHistory(updated)
             updated
-        }
-    }
-
-    fun simulateIncomingSms(senderNumber: String, body: String) {
-        viewModelScope.launch {
-            smsParserRepository.processIncomingSms(senderNumber, body)
         }
     }
 
@@ -2065,31 +1917,12 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
     fun payInstallment(loan: Loan) = payInstallmentFrom(loan, loan.bankName)
 
-    /** پرداخت قسط با ثبت هزینه روی حسابی که کاربر انتخاب کرده */
+    /**
+     * پرداخت قسط از حسابی که کاربر انتخاب کرده. اگر کمتر از یک قسط از وام مانده باشد
+     * فقط همان باقی‌مانده پرداخت می‌شود؛ پرداخت در سابقهٔ اقساط هم ثبت می‌شود.
+     */
     fun payInstallmentFrom(loan: Loan, fromBank: String) {
-        viewModelScope.launch {
-            val updatedPaid = (loan.paidAmount + loan.installmentAmount).coerceAtMost(loan.totalAmount)
-            repository.insertLoan(loan.copy(paidAmount = updatedPaid))
-
-            // Automatically record an expense transaction representing this payment
-            repository.insertTransaction(
-                Transaction(
-                    title = "پرداخت قسط ${loan.loanName}",
-                    amount = loan.installmentAmount,
-                    category = "قسط",
-                    isExpense = true,
-                    bankName = fromBank
-                )
-            )
-
-            if (_alertsEnabled.value) {
-                com.example.utils.NotificationHelper.showNotification(
-                    getApplication(),
-                    "تسویه قسط تسهیلات",
-                    "قسط به مبلغ ${formatNumber(loan.installmentAmount)} تومان برای '${loan.loanName}' با موفقیت پرداخت و ثبت گردید."
-                )
-            }
-        }
+        viewModelScope.launch { repository.payInstallment(loan.id, fromBank) }
     }
 
     // ─── صوت: دیکته، پخش صوتی و گفت‌وگوی زنده ───
@@ -2193,7 +2026,16 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     fun resetAllData() {
         viewModelScope.launch {
             repository.clearAll()
-            sharedPrefs.edit().remove("chat_history_json").apply()
+            // Everything that described the user's money goes; login, theme and lock stay.
+            sharedPrefs.edit().apply {
+                remove("chat_history_json")
+                remove("daily_budget")
+                sharedPrefs.all.keys.filter { it.startsWith("loan_") }.forEach { remove(it) }
+            }.apply()
+            securePrefs.edit().remove("chat_history_json").apply()
+            _dailyBudget.value = 0L
+            _selectedPendingTx.value = null
+            _showSmsAssistantSheet.value = false
             _aiMemoryMessages.value = emptyList()
             _chatMessages.value = listOf(
                 ChatMessage(

@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,6 +47,26 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     ) { /* Declining is fine: reminders stay off until enabled in settings. */ }
 
     @OptIn(ExperimentalMaterial3Api::class)
+    /** When the app last went to the background; 0 while it is in front. */
+    private var backgroundedAt = 0L
+
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations) backgroundedAt = System.currentTimeMillis()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Lock again after the app has been away, not only on a cold start; a short
+        // grace period covers a quick look at another app or a system dialog.
+        if (backgroundedAt > 0 && System.currentTimeMillis() - backgroundedAt > LOCK_GRACE_MS) viewModel.lockApp()
+        backgroundedAt = 0L
+    }
+
+    private companion object {
+        const val LOCK_GRACE_MS = 30_000L
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -417,7 +438,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                                 val cat = categories.firstOrNull { c ->
                                                                     c.isIncome == !p.isExpense && p.title.contains(c.name)
                                                                 }?.name ?: if (p.isExpense) "سایر" else "درآمد"
-                                                                viewModel.approvePendingTransaction(p, p.title.ifBlank { "تراکنش بانکی" }, cat, p.amount, p.card, p.isExpense)
+                                                                viewModel.approvePendingTransaction(p, p.title.ifBlank { "تراکنش بانکی" }, cat, p.amount, null, p.isExpense)
                                                             },
                                                             onDismissSms = { p -> viewModel.rejectPendingTransaction(p.id) },
                                                             onReviewSms = { p ->
@@ -601,9 +622,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             accountToEdit?.let { card ->
                                 com.example.ui.layer.LayerEditAccountSheet(
                                     card = card,
+                                    existingNames = cards.filter { it.id != card.id }.map { it.bankName },
                                     onDismiss = { accountToEdit = null },
-                                    onSave = {
-                                        viewModel.updateCard(it)
+                                    onSave = { updated, newName ->
+                                        viewModel.saveAccount(updated, newName)
                                         accountToEdit = null
                                     }
                                 )
@@ -629,6 +651,26 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     cards = cards,
                                     onBack = { viewModel.setSmsAssistantSheetOpen(false) }
                                 )
+                            }
+
+                            // موجودی با پیامک بانک نمی‌خواند
+                            val mismatch by viewModel.balanceMismatch.collectAsStateWithLifecycle()
+                            mismatch?.let { m ->
+                                com.example.ui.layer.LayerSheet(
+                                    title = "موجودی ${m.account} با پیامک بانک فرق دارد",
+                                    onDismiss = { viewModel.dismissBalanceMismatch() },
+                                    closeLabel = "فعلاً نه",
+                                    bottomBar = {
+                                        com.example.ui.layer.BigButton("موجودی را ${com.example.ui.layer.money(m.inSms)} کن") { viewModel.acceptSmsBalance() }
+                                    }
+                                ) {
+                                    androidx.compose.material3.Text(
+                                        "در تراز: ${com.example.ui.layer.money(m.inApp)} تومان\n" +
+                                            "طبق پیامک بانک: ${com.example.ui.layer.money(m.inSms)} تومان\n\n" +
+                                            "معمولاً یعنی تراکنشی بیرون از تراز ثبت نشده یا موجودی اول درست وارد نشده بود.",
+                                        style = com.example.ui.layer.lt(14.sp, lineHeight = 24.sp)
+                                    )
+                                }
                             }
                         }
                     }

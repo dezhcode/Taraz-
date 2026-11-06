@@ -23,7 +23,9 @@ data class Transaction(
     /** Nature: one of [TransactionType]. A transfer has a direction too. */
     val type: String = TransactionType.EXPENSE,
     /** Ties the two halves of a transfer together. Null for everything else. */
-    val transferGroupId: String? = null
+    val transferGroupId: String? = null,
+    /** Set on an instalment payment, so deleting or editing it corrects the loan too. */
+    val loanId: Int? = null
 )
 
 /**
@@ -61,7 +63,9 @@ data class Category(
     val iconKey: String = "other",
     val colorHex: String = "#0B7A57",
     val isIncome: Boolean = false,
-    val sortOrder: Int = 0
+    val sortOrder: Int = 0,
+    /** Monthly spending cap in toman; 0 means no budget for this category. */
+    val monthlyBudget: Long = 0
 )
 
 /**

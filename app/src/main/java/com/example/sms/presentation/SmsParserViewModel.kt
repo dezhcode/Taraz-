@@ -158,7 +158,7 @@ class SmsParserViewModel(application: Application) : AndroidViewModel(applicatio
     fun deletePendingTransaction(id: Int) {
         viewModelScope.launch {
             try {
-                db.pendingTransactionDao().deletePendingTransaction(id)
+                db.pendingTransactionDao().setStatus(id, com.example.data.PendingStatus.REJECTED)
             } catch (e: Exception) {
                 Log.e("SmsParserViewModel", "Error deleting pending transaction", e)
             }

@@ -36,8 +36,21 @@ data class PendingTransaction(
     val title: String,
     val smsBody: String,
     val smsBodyHash: String,
-    val status: String = "در انتظار بررسی" // "در انتظار بررسی", "تایید شده"
+    val status: String = PendingStatus.PENDING,
+    /** «مانده» read from the SMS, in toman; 0 when the SMS has none. */
+    val balance: Long = 0
 )
+
+/**
+ * Approved and rejected SMS stay in the table with their status, so the same
+ * message (same hash) is never offered twice — deleting them used to let a
+ * rescan bring an already-recorded SMS back.
+ */
+object PendingStatus {
+    const val PENDING = "در انتظار بررسی"
+    const val APPROVED = "تایید شده"
+    const val REJECTED = "رد شده"
+}
 
 @Entity(tableName = "unknown_sms")
 data class UnknownSms(

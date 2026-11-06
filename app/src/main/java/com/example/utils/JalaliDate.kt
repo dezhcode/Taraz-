@@ -179,6 +179,32 @@ data class JalaliDate(
             return toTimestamp(nextYear, nextMonth, nextMonthDay)
         }
 
+        /** year*100+month after [key] (140512 → 140601). */
+        fun nextMonthKey(key: Int): Int {
+            val y = key / 100; val m = key % 100
+            return if (m == 12) (y + 1) * 100 + 1 else y * 100 + m + 1
+        }
+
+        /** Midnight of the instalment day in the month [key] (day clamped to the month's length). */
+        fun dueTimestampFor(key: Int, dueDay: Int): Long {
+            val y = key / 100; val m = key % 100
+            return toTimestamp(y, m, dueDay.coerceIn(1, 31).coerceAtMost(daysInMonth(y, m)))
+        }
+
+        /**
+         * Which month's instalment a payment made at [at] settles, given the
+         * months already paid ([paidKeys]).
+         *
+         * The month we are in comes first while it is unpaid — before its due day
+         * that is paying on time, after it that is a late payment. Once it is
+         * paid, a further payment goes to the next unpaid month (paying ahead).
+         */
+        fun settledMonthKey(dueDay: Int, at: Long, paidKeys: Set<Int>): Int {
+            var key = fromTimestamp(at).monthKey()
+            while (key in paidKeys) key = nextMonthKey(key)
+            return key
+        }
+
         /** Whole days from today until [timestamp]; 0 means today, negative is past. */
         fun daysUntil(timestamp: Long, from: Long = System.currentTimeMillis()): Int {
             val start = dayRange(from).first

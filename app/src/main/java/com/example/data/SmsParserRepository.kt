@@ -32,6 +32,7 @@ class SmsParserRepository(
     }
 
     suspend fun deletePendingTransaction(id: Int) = pendingTransactionDao.deletePendingTransaction(id)
+    suspend fun setPendingStatus(id: Int, status: String) = pendingTransactionDao.setStatus(id, status)
     suspend fun ignoreUnknownSms(id: Int) = unknownSmsDao.ignoreUnknownSms(id)
     suspend fun deleteUnknownSms(id: Int) = unknownSmsDao.deleteUnknownSms(id)
 
@@ -146,123 +147,6 @@ class SmsParserRepository(
     }
 
     // Offline parsing of incoming messages
-    suspend fun processIncomingSms(senderNumber: String, body: String): Boolean {
-        val sender = bankSenderDao.getSenderByNumber(senderNumber)
-        if (sender == null || !sender.isEnabled) {
-            return false
-        }
-
-        val hash = md5(body)
-        if (pendingTransactionDao.isDuplicate(hash)) {
-            Log.i("SmsParserRepository", "SMS duplicate detected. Skipping processing.")
-            return true
-        }
-
-        val parser = bankSmsParserDao.getLatestParserForSender(senderNumber)
-        if (parser == null) {
-            // No parser learned yet. Move to unknown
-            unknownSmsDao.insertUnknownSms(
-                UnknownSms(
-                    senderNumber = senderNumber,
-                    smsBody = body,
-                    timestamp = System.currentTimeMillis()
-                )
-            )
-            return false
-        }
-
-        val extracted = parseLocalSms(body, parser)
-        if (extracted != null) {
-            val amount = extracted["amount"]?.replace(",", "")?.replace("٫", "")?.toLongOrNull() ?: 0L
-            val card = extracted["card"] ?: "نامشخص"
-            val type = extracted["type"] ?: "purchase"
-            val isExpense = type != "deposit" && type != "salary"
-
-            val pTx = PendingTransaction(
-                senderNumber = senderNumber,
-                amount = amount,
-                date = System.currentTimeMillis(),
-                isExpense = isExpense,
-                card = card,
-                title = "تراکنش پیامکی ${sender.bankName}",
-                smsBody = body,
-                smsBodyHash = hash,
-                status = "در انتظار بررسی"
-            )
-            pendingTransactionDao.insertPendingTransaction(pTx)
-            return true
-        } else {
-            // Move to Unknown format database
-            unknownSmsDao.insertUnknownSms(
-                UnknownSms(
-                    senderNumber = senderNumber,
-                    smsBody = body,
-                    timestamp = System.currentTimeMillis()
-                )
-            )
-            return false
-        }
-    }
-
-    private fun parseLocalSms(body: String, parser: BankSmsParser): Map<String, String>? {
-        try {
-            val templatesArray = JSONArray(parser.templatesJson)
-            for (i in 0 until templatesArray.length()) {
-                val template = templatesArray.getJSONObject(i)
-                val regexStr = template.getString("regex")
-                val type = template.optString("type", "purchase")
-                val fieldsObj = template.getJSONObject("fields")
-
-                val pattern = java.util.regex.Pattern.compile(regexStr, java.util.regex.Pattern.CASE_INSENSITIVE)
-                val matcher = pattern.matcher(body)
-                if (matcher.find()) {
-                    val result = mutableMapOf<String, String>()
-                    result["type"] = type
-
-                    val keys = fieldsObj.keys()
-                    while (keys.hasNext()) {
-                        val fieldName = keys.next()
-                        val groupKey = fieldsObj.getString(fieldName)
-                        try {
-                            val index = groupKey.toIntOrNull()
-                            val value = if (index != null) {
-                                matcher.group(index)
-                            } else {
-                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                                    matcher.group(groupKey)
-                                } else {
-                                    null
-                                }
-                            }
-                            if (value != null) {
-                                result[fieldName] = value
-                            }
-                        } catch (e: Exception) {
-                            try {
-                                val value = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                                    matcher.group(fieldName)
-                                } else {
-                                    null
-                                }
-                                if (value != null) {
-                                    result[fieldName] = value
-                                }
-                            } catch (ex: Exception) {
-                                // Field not found
-                            }
-                        }
-                    }
-                    if (result.containsKey("amount")) {
-                        return result
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("SmsParserRepository", "Error executing local regex parsing", e)
-        }
-        return null
-    }
-
     private fun parseAiResponseToParser(
         sender: BankSender,
         jsonText: String,
@@ -405,5 +289,67 @@ class SmsParserRepository(
         val md = MessageDigest.getInstance("MD5")
         val byteArray = md.digest(input.toByteArray())
         return byteArray.joinToString("") { "%02x".format(Locale.US, it) }
+    }
+
+    companion object {
+        /** Runs a learned format's templates over [body]; null when none matches. */
+        fun parseLocalSms(body: String, parser: BankSmsParser): Map<String, String>? {
+            try {
+                val templatesArray = JSONArray(parser.templatesJson)
+                for (i in 0 until templatesArray.length()) {
+                    val template = templatesArray.getJSONObject(i)
+                    val regexStr = template.getString("regex")
+                    val type = template.optString("type", "purchase")
+                    val fieldsObj = template.getJSONObject("fields")
+
+                    val pattern = java.util.regex.Pattern.compile(regexStr, java.util.regex.Pattern.CASE_INSENSITIVE)
+                    val matcher = pattern.matcher(body)
+                    if (matcher.find()) {
+                        val result = mutableMapOf<String, String>()
+                        result["type"] = type
+
+                        val keys = fieldsObj.keys()
+                        while (keys.hasNext()) {
+                            val fieldName = keys.next()
+                            val groupKey = fieldsObj.getString(fieldName)
+                            try {
+                                val index = groupKey.toIntOrNull()
+                                val value = if (index != null) {
+                                    matcher.group(index)
+                                } else {
+                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                        matcher.group(groupKey)
+                                    } else {
+                                        null
+                                    }
+                                }
+                                if (value != null) {
+                                    result[fieldName] = value
+                                }
+                            } catch (e: Exception) {
+                                try {
+                                    val value = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                        matcher.group(fieldName)
+                                    } else {
+                                        null
+                                    }
+                                    if (value != null) {
+                                        result[fieldName] = value
+                                    }
+                                } catch (ex: Exception) {
+                                    // Field not found
+                                }
+                            }
+                        }
+                        if (result.containsKey("amount")) {
+                            return result
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("SmsParserRepository", "Error executing local regex parsing", e)
+            }
+            return null
+        }
     }
 }

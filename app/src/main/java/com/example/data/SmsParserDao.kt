@@ -65,6 +65,9 @@ interface PendingTransactionDao {
     @Query("DELETE FROM pending_transactions WHERE id = :id")
     suspend fun deletePendingTransaction(id: Int)
 
+    @Query("UPDATE pending_transactions SET status = :status WHERE id = :id")
+    suspend fun setStatus(id: Int, status: String)
+
     @Query("SELECT EXISTS(SELECT 1 FROM pending_transactions WHERE smsBodyHash = :hash LIMIT 1)")
     suspend fun isDuplicate(hash: String): Boolean
 }
