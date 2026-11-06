@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master", "ccr-5f01d8c3-19cpg7" ]
   pull_request:
     branches: [ "main", "master" ]
   workflow_dispatch:
