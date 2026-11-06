@@ -87,7 +87,10 @@ fun LayerHomeScreen(
     onDismissSms: (PendingTransaction) -> Unit,
     onReviewSms: (PendingTransaction) -> Unit,
     onTransactionClick: (Transaction) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    activeGoal: com.example.data.FinancialGoal? = null,
+    onOpenGoals: () -> Unit = {},
+    onOpenCategories: () -> Unit = {}
 ) {
     val now = System.currentTimeMillis()
     val todayStart = startOfDay(now)
@@ -167,6 +170,42 @@ fun LayerHomeScreen(
                 titleColor = if (over) L.RedText else L.AmberInk,
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp).clickable(onClick = onOpenReports)
             )
+        }
+
+        // ── اهداف پس‌انداز و دسته‌بندی‌ها
+        Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                Modifier.weight(1f).cardSurface(18.dp).clickable(onClick = onOpenGoals).padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("اهداف پس‌انداز", style = lt(13.sp, FontWeight.Bold), modifier = Modifier.weight(1f))
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.Chevron, modifier = Modifier.size(16.dp))
+                }
+                if (activeGoal != null && activeGoal.targetAmount > 0) {
+                    val frac = (activeGoal.currentAmount.toFloat() / activeGoal.targetAmount).coerceIn(0f, 1f)
+                    Text(activeGoal.title, style = lt(12.sp, color = L.Muted), maxLines = 1)
+                    LProgress(frac, L.Primary, height = 6.dp)
+                    Text("${fa((frac * 100).toInt())}٪ · ${millions(activeGoal.currentAmount)} از ${millions(activeGoal.targetAmount)}", style = lt(11.sp, color = L.Muted), maxLines = 1)
+                } else {
+                    Text("هدفی بگذارید؛ مثلاً سفر یا صندوق اضطراری.", style = lt(12.sp, color = L.Muted, lineHeight = 20.sp))
+                }
+            }
+            Column(
+                Modifier.weight(1f).cardSurface(18.dp).clickable(onClick = onOpenCategories).padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("دسته‌بندی‌ها", style = lt(13.sp, FontWeight.Bold), modifier = Modifier.weight(1f))
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.Chevron, modifier = Modifier.size(16.dp))
+                }
+                val withBudget = categories.count { it.monthlyBudget > 0 }
+                Text("${fa(categories.size)} دسته", style = lt(12.sp, color = L.Muted))
+                Text(
+                    if (withBudget > 0) "${fa(withBudget)} دسته با بودجهٔ ماهانه" else "برای هر دسته بودجهٔ ماهانه بگذارید",
+                    style = lt(11.sp, color = L.Muted, lineHeight = 19.sp)
+                )
+            }
         }
 
         // ── خط زمان

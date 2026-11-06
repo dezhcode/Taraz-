@@ -355,15 +355,11 @@ fun LayerSettingsScreen(
     darkMode: Boolean,
     onDarkModeChange: (Boolean) -> Unit,
     smsBankCount: Int,
-    categoryCount: Int,
     onBack: () -> Unit,
     onBiometricChange: (Boolean) -> Unit,
     onAlertsChange: (Boolean) -> Unit,
     onTestLock: () -> Unit,
     onOpenSms: () -> Unit,
-    onOpenCategories: () -> Unit,
-    onOpenGoals: () -> Unit,
-    onOpenRecurring: () -> Unit,
     onOpenBackup: () -> Unit,
     onTestServer: ((Boolean, String) -> Unit) -> Unit,
     onLogout: () -> Unit,
@@ -407,9 +403,6 @@ fun LayerSettingsScreen(
         }
         SettingsGroup("داده‌ها") {
             NavRow("پیامک‌های بانکی", if (smsBankCount > 0) "${fa(smsBankCount)} بانک روشن" else "خاموش", onClick = onOpenSms)
-            NavRow("دسته‌بندی‌ها", "${fa(categoryCount)} دسته", onClick = onOpenCategories)
-            NavRow("اهداف پس‌انداز", null, onClick = onOpenGoals)
-            NavRow("تراکنش‌های تکراری", "اجاره، حقوق، اشتراک", onClick = onOpenRecurring)
             NavRow("پشتیبان و خروجی اکسل", null, divider = false, onClick = onOpenBackup)
         }
         SettingsGroup("دستیار") {

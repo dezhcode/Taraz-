@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
@@ -58,7 +59,9 @@ fun LayerTransactionsScreen(
     selectedDay: Long,
     onSelectDay: (Long) -> Unit,
     onTransactionClick: (Transaction) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    recurringCount: Int = 0,
+    onOpenRecurring: () -> Unit = {}
 ) {
     val todayStart = startOfDay(System.currentTimeMillis())
     val selected = startOfDay(selectedDay)
@@ -103,6 +106,24 @@ fun LayerTransactionsScreen(
                 Spacer(Modifier.width(6.dp))
                 Text(if (searching) "بستن" else "جستجو", style = lt(14.sp, FontWeight.Bold, L.PrimaryText))
             }
+        }
+
+        // تراکنش‌های تکراری (اجاره، حقوق، اشتراک‌ها)
+        Row(
+            Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp).fillMaxWidth().cardSurface(16.dp)
+                .clickable(onClick = onOpenRecurring).padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(Icons.Default.Autorenew, null, tint = L.PrimaryText, modifier = Modifier.size(20.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("تراکنش‌های تکراری", style = lt(14.sp, FontWeight.SemiBold))
+                Text(
+                    if (recurringCount > 0) "${fa(recurringCount)} مورد فعال · هر ماه خودکار ثبت می‌شوند" else "اجاره، حقوق، اشتراک‌ها؛ یک بار بنویسید",
+                    style = lt(12.sp, color = L.Muted)
+                )
+            }
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.Chevron, modifier = Modifier.size(18.dp))
         }
 
         if (searching) {

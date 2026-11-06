@@ -362,15 +362,11 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                             com.example.ui.layer.ThemePrefs.save(context, it)
                                         },
                                         smsBankCount = bankSenders.count { it.isEnabled },
-                                        categoryCount = categories.size,
                                         onBack = { closeSub() },
                                         onBiometricChange = { viewModel.setBiometricEnabled(it) },
                                         onAlertsChange = { viewModel.setAlertsEnabled(it) },
                                         onTestLock = { viewModel.lockApp() },
                                         onOpenSms = { openSub("sms_setup") },
-                                        onOpenCategories = { openSub("categories") },
-                                        onOpenGoals = { openSub("goals") },
-                                        onOpenRecurring = { openSub("recurring") },
                                         onOpenBackup = { openSub("backup") },
                                         onTestServer = { cb -> viewModel.testAiServerConnection(cb) },
                                         onLogout = {
@@ -625,7 +621,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             onReviewSms = { p ->
                                                                 viewModel.setSmsAssistantSheetOpen(true)
                                                             },
-                                                            onTransactionClick = { tx -> selectedTransactionForEdit = tx }
+                                                            onTransactionClick = { tx -> selectedTransactionForEdit = tx },
+                                                            activeGoal = activeGoal,
+                                                            onOpenGoals = { openSub("goals") },
+                                                            onOpenCategories = { openSub("categories") }
                                                         )
                                                     }
 
@@ -637,7 +636,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             dailyBudget = dailyBudget,
                                                             selectedDay = txSelectedDay,
                                                             onSelectDay = { txSelectedDay = it },
-                                                            onTransactionClick = { tx -> selectedTransactionForEdit = tx }
+                                                            onTransactionClick = { tx -> selectedTransactionForEdit = tx },
+                                                            recurringCount = recurringItems.count { it.enabled },
+                                                            onOpenRecurring = { openSub("recurring") }
                                                         )
                                                     }
 
