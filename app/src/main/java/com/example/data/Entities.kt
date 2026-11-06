@@ -121,7 +121,9 @@ data class FinancialGoal(
     val targetAmount: Long,
     val currentAmount: Long,
     val isCompleted: Boolean = false,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    /** When the user wants to reach it; null = no deadline. */
+    val deadline: Long? = null
 )
 
 data class FinancialHealthResult(

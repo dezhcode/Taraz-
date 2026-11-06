@@ -108,7 +108,9 @@ fun LayerAccountsScreen(
     onOpenAccount: (BankCard) -> Unit,
     onAdd: () -> Unit,
     onTransfer: () -> Unit,
-    holderName: String = ""
+    holderName: String = "",
+    assetsTotal: Long = 0,
+    onOpenAssets: () -> Unit = {}
 ) {
     // چشم سراسری: همهٔ مبلغ‌های این صفحه را با هم پنهان می‌کند
     var hideAmounts by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
@@ -140,6 +142,24 @@ fun LayerAccountsScreen(
                 Text("تومان", style = lt(14.sp), modifier = Modifier.padding(bottom = 6.dp))
             }
         }
+        // دارایی‌ها (ارز، طلا، رمزارز، صندوق) با قیمت روز
+        Row(
+            Modifier.padding(horizontal = 20.dp).fillMaxWidth().cardSurface(18.dp).clickable(onClick = onOpenAssets)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("دارایی‌ها", style = lt(14.sp, FontWeight.SemiBold))
+                Text(
+                    if (assetsTotal > 0) "دلار، طلا، رمزارز و صندوق · با قیمت روز" else "دلار، طلا، رمزارز یا صندوق اضافه کنید",
+                    style = lt(12.sp, color = L.Muted)
+                )
+            }
+            if (assetsTotal > 0) Text(if (hideAmounts) "••••" else money(assetsTotal), style = lt(15.sp, FontWeight.Bold))
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = L.Chevron, modifier = Modifier.size(18.dp))
+        }
+
         // کارت‌ها با طرح دوتکه، ورق‌خوردنی
         BankCardPager(cards = cards, holderName = holderName, hideBalance = hideAmounts, onOpen = onOpenAccount)
 

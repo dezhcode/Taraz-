@@ -88,7 +88,9 @@ data class Debt(
     val personId: Int? = null,
     val isRepayment: Boolean = false,
     /** The account transaction recorded with this line, if money moved through an account. */
-    val transactionId: Int? = null
+    val transactionId: Int? = null,
+    /** When the money should come back (or be paid back); drives a reminder. */
+    val dueDate: Long? = null
 ) {
     /** Effect on the balance with the person: positive means they owe me. */
     val signedAmount: Long get() = if (settled) 0L else if (owedToMe) amount else -amount

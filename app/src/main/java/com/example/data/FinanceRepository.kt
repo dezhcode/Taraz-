@@ -25,6 +25,7 @@ class FinanceRepository(private val db: AppDatabase) {
     private val recurringDao = db.recurringDao()
     private val debtDao = db.debtDao()
     private val personDao = db.personDao()
+    private val assetDao = db.assetDao()
 
     val allTransactions: Flow<List<Transaction>> = transactionDao.getAllTransactions()
     val allCards: Flow<List<BankCard>> = bankCardDao.getAllCards()
@@ -36,6 +37,11 @@ class FinanceRepository(private val db: AppDatabase) {
     val allRecurring: Flow<List<RecurringTransaction>> = recurringDao.getAll()
     val allDebts: Flow<List<Debt>> = debtDao.getAll()
     val allPersons: Flow<List<Person>> = personDao.getAll()
+    val allAssets: Flow<List<Asset>> = assetDao.getAll()
+
+    suspend fun saveAsset(asset: Asset) = assetDao.insert(asset)
+
+    suspend fun deleteAsset(id: Int) = assetDao.delete(id)
 
     private fun signed(tx: Transaction): Long = if (tx.isExpense) -tx.amount else tx.amount
 

@@ -482,6 +482,66 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { repository.deletePersonEntry(debt) }
     }
 
+    // ─── دارایی‌ها با قیمت روز ───
+
+    val assets: StateFlow<List<Asset>> = repository.allAssets
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _prices = MutableStateFlow<Map<String, PriceQuote>>(PriceService.cached(application))
+    val prices: StateFlow<Map<String, PriceQuote>> = _prices.asStateFlow()
+
+    private val _pricesRefreshing = MutableStateFlow(false)
+    val pricesRefreshing: StateFlow<Boolean> = _pricesRefreshing.asStateFlow()
+
+    /** منبع‌هایی که در آخرین به‌روزرسانی جواب ندادند (برای نمایش به کاربر) */
+    private val _priceErrors = MutableStateFlow<List<String>>(emptyList())
+    val priceErrors: StateFlow<List<String>> = _priceErrors.asStateFlow()
+
+    /** قیمت هر واحد: قیمت دستی کاربر، وگرنه قیمت روز */
+    fun unitPrice(asset: Asset): Long = if (asset.manualPrice > 0) asset.manualPrice else _prices.value[asset.code]?.price ?: 0L
+
+    /** قیمت‌های روز را می‌گیرد؛ بی [force] اگر کمتر از ۱۰ دقیقه از آخرین بار گذشته کاری نمی‌کند */
+    fun refreshPrices(force: Boolean = false) {
+        if (_pricesRefreshing.value) return
+        val codes = assets.value.filter { it.manualPrice <= 0 }.map { it.code }.toSet() + setOf("usd", "gold18", "coin_emami", "btc", "usdt")
+        val newest = codes.mapNotNull { _prices.value[it]?.at }.minOrNull() ?: 0L
+        if (!force && System.currentTimeMillis() - newest < 10 * 60 * 1000L) return
+        viewModelScope.launch {
+            _pricesRefreshing.value = true
+            try {
+                val (quotes, failed) = PriceService.refresh(getApplication(), codes)
+                _prices.value = quotes
+                _priceErrors.value = failed
+            } catch (e: Exception) {
+                _priceErrors.value = listOf("اتصال به اینترنت")
+            } finally {
+                _pricesRefreshing.value = false
+            }
+        }
+    }
+
+    fun saveAsset(asset: Asset) {
+        if (asset.quantity <= 0) return
+        viewModelScope.launch {
+            repository.saveAsset(asset)
+            refreshPrices(force = asset.manualPrice <= 0 && _prices.value[asset.code] == null)
+        }
+    }
+
+    fun deleteAsset(id: Int) {
+        viewModelScope.launch { repository.deleteAsset(id) }
+    }
+
+    fun searchFunds(query: String, onResult: (List<FundMatch>, String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                onResult(PriceService.searchFunds(query), null)
+            } catch (e: Exception) {
+                onResult(emptyList(), "جست‌وجو انجام نشد؛ اینترنت را بررسی کنید یا قیمت را دستی وارد کنید.")
+            }
+        }
+    }
+
     // ─── پشتیبان و خروجی ───
 
     /** فایل پشتیبان رمزدار؛ [onDone] با بایت‌های فایل یا پیام خطا صدا زده می‌شود */

@@ -129,6 +129,16 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 val debts by viewModel.debts.collectAsStateWithLifecycle()
                 val persons by viewModel.persons.collectAsStateWithLifecycle()
                 val personBalances by viewModel.personBalances.collectAsStateWithLifecycle()
+                val assets by viewModel.assets.collectAsStateWithLifecycle()
+                val prices by viewModel.prices.collectAsStateWithLifecycle()
+                val pricesRefreshing by viewModel.pricesRefreshing.collectAsStateWithLifecycle()
+                val priceErrors by viewModel.priceErrors.collectAsStateWithLifecycle()
+                val assetsTotal = assets.sumOf { a ->
+                    val u = if (a.manualPrice > 0) a.manualPrice else prices[a.code]?.price ?: 0L
+                    kotlin.math.round(u * a.quantity).toLong()
+                }
+                var assetSheetFor by remember { mutableStateOf<com.example.data.Asset?>(null) }
+                var isAssetSheetOpen by remember { mutableStateOf(false) }
 
                 // Overlays states
                 var isAddTransactionOpen by remember { mutableStateOf(false) }
@@ -271,7 +281,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         onOpenAccount = { selectedAccountId = it.id; openSub("account_detail") },
                                         onAdd = { isAddCardOpen = true },
                                         onTransfer = { isTransferOpen = true },
-                                        holderName = userProfile?.name.orEmpty()
+                                        holderName = userProfile?.name.orEmpty(),
+                                        assetsTotal = assetsTotal,
+                                        onOpenAssets = { openSub("assets") }
                                     )
                                 }
 
@@ -414,6 +426,23 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         onAdd = { t, a, c, e, b, d -> viewModel.addRecurring(t, a, c, e, b, d) },
                                         onToggle = { r, on -> viewModel.setRecurringEnabled(r, on) },
                                         onDelete = { viewModel.deleteRecurring(it.id) }
+                                    )
+                                }
+
+                                "assets" -> {
+                                    com.example.ui.layer.LayerAssetsScreen(
+                                        assets = assets,
+                                        prices = prices,
+                                        refreshing = pricesRefreshing,
+                                        errors = priceErrors,
+                                        accountsTotal = totalBalance,
+                                        debtsTotal = loans.filter { !it.isSettled }.sumOf { (it.totalAmount - it.paidAmount).coerceAtLeast(0) } +
+                                            personBalances.values.filter { it < 0 }.sumOf { -it },
+                                        hideAmounts = false,
+                                        onBack = { closeSub() },
+                                        onRefresh = { force -> viewModel.refreshPrices(force) },
+                                        onAdd = { assetSheetFor = null; isAssetSheetOpen = true },
+                                        onOpen = { assetSheetFor = it; isAssetSheetOpen = true }
                                     )
                                 }
 
@@ -784,6 +813,17 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         viewModel.transferBetweenCards(fromCardName, toCardName, amount)
                                         isTransferOpen = false
                                     }
+                                )
+                            }
+
+                            if (isAssetSheetOpen) {
+                                com.example.ui.layer.AssetSheet(
+                                    existing = assetSheetFor,
+                                    prices = prices,
+                                    onDismiss = { isAssetSheetOpen = false },
+                                    onSearchFunds = { q, cb -> viewModel.searchFunds(q, cb) },
+                                    onSave = { viewModel.saveAsset(it) },
+                                    onDelete = { viewModel.deleteAsset(it.id) }
                                 )
                             }
 

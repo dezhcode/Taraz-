@@ -137,9 +137,10 @@ interface GoalDao {
         LoanPayment::class,
         RecurringTransaction::class,
         Debt::class,
-        Person::class
+        Person::class,
+        Asset::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -156,6 +157,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun recurringDao(): RecurringDao
     abstract fun debtDao(): DebtDao
     abstract fun personDao(): PersonDao
+    abstract fun assetDao(): AssetDao
 
     companion object {
         @Volatile
@@ -214,6 +216,19 @@ abstract class AppDatabase : RoomDatabase() {
                     "SELECT TRIM(person), 'سایر', '', '', MIN(createdAt) FROM debts GROUP BY TRIM(person)"
                 )
                 db.execSQL("UPDATE debts SET personId = (SELECT id FROM persons WHERE persons.name = TRIM(debts.person))")
+            }
+        }
+
+        /** v10: holdings with live prices, a deadline for savings goals, a due date for loans to people. */
+        val MIGRATION_9_10 = object : androidx.room.migration.Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE financial_goals ADD COLUMN deadline INTEGER")
+                db.execSQL("ALTER TABLE debts ADD COLUMN dueDate INTEGER")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS assets (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, code TEXT NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL, " +
+                    "quantity REAL NOT NULL, buyPrice INTEGER NOT NULL, manualPrice INTEGER NOT NULL, note TEXT NOT NULL, createdAt INTEGER NOT NULL)"
+                )
             }
         }
 
@@ -356,7 +371,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "fidar_finance_database"
                 )
                 .addCallback(AppDatabaseCallback(scope))
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                 // Only the first test builds (v1-3) have no migration. Every later
                 // version must have one: a destructive fallback wiped users' money
                 // records silently whenever a migration was forgotten.

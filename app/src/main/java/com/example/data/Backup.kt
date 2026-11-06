@@ -86,6 +86,7 @@ object Backup {
         root.put("goals", JSONArray(db.goalDao().getAllGoals().first().map { g ->
             JSONObject().put("id", g.id).put("title", g.title).put("targetAmount", g.targetAmount)
                 .put("currentAmount", g.currentAmount).put("isCompleted", g.isCompleted).put("createdAt", g.createdAt)
+                .put("deadline", g.deadline ?: JSONObject.NULL)
         }))
         root.put("categories", JSONArray(db.categoryDao().getAllCategories().first().map { c ->
             JSONObject().put("id", c.id).put("name", c.name).put("iconKey", c.iconKey).put("colorHex", c.colorHex)
@@ -104,6 +105,11 @@ object Backup {
             JSONObject().put("id", d.id).put("person", d.person).put("amount", d.amount).put("owedToMe", d.owedToMe)
                 .put("note", d.note).put("createdAt", d.createdAt).put("settled", d.settled).put("settledAt", d.settledAt ?: JSONObject.NULL)
                 .put("personId", d.personId ?: JSONObject.NULL).put("isRepayment", d.isRepayment).put("transactionId", d.transactionId ?: JSONObject.NULL)
+                .put("dueDate", d.dueDate ?: JSONObject.NULL)
+        }))
+        root.put("assets", JSONArray(db.assetDao().getAllNow().map { a ->
+            JSONObject().put("id", a.id).put("code", a.code).put("name", a.name).put("kind", a.kind).put("quantity", a.quantity)
+                .put("buyPrice", a.buyPrice).put("manualPrice", a.manualPrice).put("note", a.note).put("createdAt", a.createdAt)
         }))
         root.put("persons", JSONArray(db.personDao().getAll().first().map { p ->
             JSONObject().put("id", p.id).put("name", p.name).put("relation", p.relation).put("phone", p.phone)
@@ -158,7 +164,7 @@ object Backup {
             root.optJSONArray("goals").each { o ->
                 db.goalDao().insertGoal(
                     FinancialGoal(o.getInt("id"), o.getString("title"), o.getLong("targetAmount"), o.getLong("currentAmount"),
-                        o.optBoolean("isCompleted"), o.optLong("createdAt", System.currentTimeMillis()))
+                        o.optBoolean("isCompleted"), o.optLong("createdAt", System.currentTimeMillis()), o.optLongOrNull("deadline"))
                 )
             }
             val cats = mutableListOf<Category>()
@@ -184,7 +190,13 @@ object Backup {
                 db.debtDao().insert(
                     Debt(o.getInt("id"), o.getString("person"), o.getLong("amount"), o.getBoolean("owedToMe"), o.optString("note"),
                         o.optLong("createdAt", System.currentTimeMillis()), o.optBoolean("settled"), o.optLongOrNull("settledAt"),
-                        o.optIntOrNull("personId"), o.optBoolean("isRepayment"), o.optIntOrNull("transactionId"))
+                        o.optIntOrNull("personId"), o.optBoolean("isRepayment"), o.optIntOrNull("transactionId"), o.optLongOrNull("dueDate"))
+                )
+            }
+            root.optJSONArray("assets").each { o ->
+                db.assetDao().insert(
+                    Asset(o.getInt("id"), o.getString("code"), o.getString("name"), o.getString("kind"), o.getDouble("quantity"),
+                        o.optLong("buyPrice"), o.optLong("manualPrice"), o.optString("note"), o.optLong("createdAt", System.currentTimeMillis()))
                 )
             }
             root.optJSONArray("persons").each { o ->
