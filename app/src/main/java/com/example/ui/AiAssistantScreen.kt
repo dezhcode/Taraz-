@@ -5,6 +5,10 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import com.example.ui.layer.edgeGlass
+import androidx.compose.foundation.shape.AbsoluteRoundedCornerShape
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.verticalScroll
@@ -81,11 +85,10 @@ fun AiAssistantScreen(
     onOpenChat: () -> Unit = {},
     onApproveAction: (String) -> Unit = {},
     onCancelAction: (String) -> Unit = {},
-    // ─── ورودی صوتی ───
+    // ─── صدا به متن ───
     isDictating: Boolean = false,
     dictationAmplitude: Float = 0f,
     onToggleDictation: ((onText: (String) -> Unit) -> Unit)? = null,
-    onStartLiveVoice: (() -> Unit)? = null,
     onMicPermissionDenied: () -> Unit = {},
     onNewChat: (() -> Unit)? = null
 ) {
@@ -101,12 +104,11 @@ fun AiAssistantScreen(
 
     val L = com.example.ui.layer.L
     var textInput by remember { mutableStateOf("") }
-    var isFocused by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // عملی که پس از گرفتن مجوز میکروفون اجرا می‌شود (دیکته یا گفت‌وگوی زنده)
+    // گرفتن مجوز میکروفون، بعد شروع شنیدن
     var pendingMicAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     val micPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -114,7 +116,8 @@ fun AiAssistantScreen(
         if (granted) pendingMicAction?.invoke() else onMicPermissionDenied()
         pendingMicAction = null
     }
-    fun withMicPermission(action: () -> Unit) {
+    val startDictation: () -> Unit = {
+        val action = { onToggleDictation?.invoke { recognized -> textInput = recognized }; Unit }
         val granted = ContextCompat.checkSelfPermission(
             context, android.Manifest.permission.RECORD_AUDIO
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -122,9 +125,6 @@ fun AiAssistantScreen(
             pendingMicAction = action
             micPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
         }
-    }
-    val startDictation: () -> Unit = {
-        withMicPermission { onToggleDictation?.invoke { recognized -> textInput = recognized } }
     }
 
     val presets = listOf(
@@ -139,7 +139,7 @@ fun AiAssistantScreen(
 
     // با آمدن پیام تازه به پایین گفتگو برو
     LaunchedEffect(visible.size, isLoading) {
-        if (visible.isNotEmpty()) coroutineScope.launch { listState.animateScrollToItem(visible.size - 1) }
+        if (visible.isNotEmpty()) coroutineScope.launch { listState.animateScrollToItem(visible.size) }
     }
 
     fun send(text: String) {
@@ -148,104 +148,103 @@ fun AiAssistantScreen(
         textInput = ""
     }
 
+    // جای خالی زیر گفتگو تا آخرین پیام زیر قرص شناور نماند
+    val composerSpace = 112.dp
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(L.Bg)
-            .statusBarsPadding()
     ) {
         // ── سرصفحه
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp),
+                .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Box(
-                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(L.Primary),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
-            }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                Text("دستیار تراز", style = com.example.ui.layer.lt(20.sp, FontWeight.Bold))
+                Text("دستیار", style = com.example.ui.layer.lt(22.sp, FontWeight.Bold))
                 Text(
-                    if (isLoading) "در حال نوشتن پاسخ…" else "هر تغییری قبل از ثبت، از شما تأیید می‌گیرد",
-                    style = com.example.ui.layer.lt(12.sp, color = if (isLoading) L.PrimaryText else L.Muted),
+                    "هر تغییری قبل از ثبت، از شما تأیید می‌گیرد",
+                    style = com.example.ui.layer.lt(12.sp, color = L.Muted),
                     maxLines = 1
                 )
             }
             if (onNewChat != null && !empty) {
-                Row(
+                Box(
                     modifier = Modifier
-                        .height(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(14.dp))
                         .background(L.Surface)
                         .clickable(enabled = !isLoading) { onNewChat() }
-                        .padding(horizontal = 12.dp)
+                        .semantics { contentDescription = "گفتگوی تازه" }
                         .testTag("ai_new_chat"),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null, tint = L.PrimaryText, modifier = Modifier.size(18.dp))
-                    Text("گفتگوی تازه", style = com.example.ui.layer.lt(13.sp, FontWeight.Bold, L.PrimaryText))
+                    Icon(Icons.Default.Edit, contentDescription = null, tint = L.PrimaryText, modifier = Modifier.size(20.dp))
                 }
             }
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(L.Line))
 
-        // ── گفتگو
+        // ── گفتگو، با قرص نوشتن شناور روی آن
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            if (empty) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 24.dp, vertical = 28.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        Modifier.size(64.dp).clip(RoundedCornerShape(20.dp)).background(L.PrimarySoft),
-                        contentAlignment = Alignment.Center
-                    ) { Icon(Icons.Default.AutoAwesome, null, tint = L.PrimaryText, modifier = Modifier.size(30.dp)) }
-                    Text("از حساب‌وکتابتان بپرسید", style = com.example.ui.layer.lt(18.sp, FontWeight.Bold))
-                    Text(
-                        "خرج‌ها، قسط‌ها، بدهی و طلب، یا یک پیشنهاد. می‌توانید بنویسید یا با میکروفون بگویید.",
-                        style = com.example.ui.layer.lt(13.sp, color = L.Muted, lineHeight = 23.sp),
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    presets.forEach { p ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(L.Surface)
-                                .clickable { send(p) }
-                                .padding(horizontal = 16.dp, vertical = 14.dp)
-                                .testTag("preset_prompt_${p.hashCode()}"),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(p, style = com.example.ui.layer.lt(14.sp, FontWeight.Medium), modifier = Modifier.weight(1f))
-                            Icon(Icons.AutoMirrored.Filled.Send, null, tint = L.PrimaryText, modifier = Modifier.size(18.dp))
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .edgeGlass(top = 14.dp, bottom = composerSpace - 16.dp, solidTop = 0f, solidBottom = 0.1f)
+            ) {
+                if (empty) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = composerSpace),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            Modifier.size(64.dp).clip(RoundedCornerShape(20.dp)).background(L.PrimarySoft),
+                            contentAlignment = Alignment.Center
+                        ) { Icon(Icons.Default.AutoAwesome, null, tint = L.PrimaryText, modifier = Modifier.size(30.dp)) }
+                        Text("از حساب‌وکتابتان بپرسید", style = com.example.ui.layer.lt(18.sp, FontWeight.Bold))
+                        Text(
+                            "خرج‌ها، قسط‌ها، بدهی و طلب، یا یک پیشنهاد. می‌توانید بنویسید یا با میکروفون بگویید.",
+                            style = com.example.ui.layer.lt(13.sp, color = L.Muted, lineHeight = 23.sp),
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        presets.forEach { p ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(L.Surface)
+                                    .clickable { send(p) }
+                                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                                    .testTag("preset_prompt_${p.hashCode()}"),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(p, style = com.example.ui.layer.lt(14.sp, FontWeight.Medium), modifier = Modifier.weight(1f))
+                                Icon(Icons.Default.ArrowUpward, null, tint = L.PrimaryText, modifier = Modifier.size(18.dp))
+                            }
                         }
                     }
-                }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp)
-                ) {
-                    items(visible, key = { it.id }) { msg ->
-                        if (msg.status == "pending") AiTypingIndicator()
-                        else ChatBubble(message = msg, onApprove = onApproveAction, onCancel = onCancelAction)
-                    }
-                    if (isLoading && visible.none { it.status == "pending" }) {
-                        item { AiTypingIndicator() }
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = composerSpace)
+                    ) {
+                        items(visible, key = { it.id }) { msg ->
+                            if (msg.status == "pending") ThinkingLines()
+                            else ChatBubble(message = msg, onApprove = onApproveAction, onCancel = onCancelAction)
+                        }
+                        if (isLoading && visible.none { it.status == "pending" }) {
+                            item { ThinkingLines() }
+                        }
                     }
                 }
             }
@@ -282,67 +281,37 @@ fun AiAssistantScreen(
                     }
                 }
             }
-        }
 
-        // ── پیشنهادهای کوتاه (وقتی گفتگو شروع شده)
-        if (!empty) {
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(presets) { p ->
-                    Box(
-                        modifier = Modifier
-                            .height(36.dp)
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(L.Surface)
-                            .border(1.dp, L.Line, RoundedCornerShape(18.dp))
-                            .clickable(enabled = !isLoading) { send(p) }
-                            .padding(horizontal = 14.dp)
-                            .testTag("preset_prompt_${p.hashCode()}"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(p, style = com.example.ui.layer.lt(13.sp, FontWeight.Medium, L.PrimaryText), maxLines = 1)
-                    }
-                }
-            }
-        }
-
-        // ── نوار نوشتن: ارسال سمت راست، بعد فیلد، بعد میکروفون‌ها
-        val canSend = textInput.isNotBlank() && !isLoading
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(L.Surface)
-                .imePadding()
-                .navigationBarsPadding()
-                .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = if (isFocused) 10.dp else 12.dp),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .background(if (canSend) L.Primary else L.PrimaryDisabled)
-                    .clickable(enabled = canSend) { send(textInput) }
-                    .semantics { contentDescription = "ارسال پیام" }
-                    .testTag("ai_chat_send_button"),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
-            }
-
+            // ── قرص یک‌تکهٔ شناور: ارسال سمت راست، میکروفون سمت چپ
+            val canSend = textInput.isNotBlank() && !isLoading
             Row(
                 modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = 52.dp)
-                    .clip(RoundedCornerShape(26.dp))
-                    .background(L.Chip)
-                    .padding(start = 6.dp, end = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .align(Alignment.BottomCenter)
+                    .imePadding()
+                    .navigationBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, bottom = 20.dp)
+                    .fillMaxWidth()
+                    .heightIn(min = 64.dp)
+                    .shadow(16.dp, com.example.ui.layer.PillShape, ambientColor = Color(0x1F0E1116), spotColor = Color(0x1F0E1116))
+                    .clip(RoundedCornerShape(32.dp))
+                    .background(if (isDictating) L.RedSoft else L.Surface)
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(if (canSend) L.Primary else L.PrimaryDisabled)
+                        .clickable(enabled = canSend) { send(textInput) }
+                        .semantics { contentDescription = "ارسال پیام" }
+                        .testTag("ai_chat_send_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.ArrowUpward, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                }
+
                 TextField(
                     value = textInput,
                     onValueChange = { textInput = it },
@@ -354,7 +323,7 @@ fun AiAssistantScreen(
                                 isDictating -> "در حال شنیدن… صحبت کنید"
                                 else -> "بپرسید یا بگویید چه ثبت کنم"
                             },
-                            style = com.example.ui.layer.lt(14.sp, color = L.Faint),
+                            style = com.example.ui.layer.lt(15.sp, color = if (isDictating) L.RedText else L.Faint),
                             maxLines = 1
                         )
                     },
@@ -376,20 +345,19 @@ fun AiAssistantScreen(
                     textStyle = com.example.ui.layer.lt(15.sp),
                     modifier = Modifier
                         .weight(1f)
-                        .onFocusChanged { isFocused = it.isFocused }
                         .testTag("ai_chat_text_input")
                 )
 
                 // صدا → متن
                 if (onToggleDictation != null) {
-                    val micPulse = if (isDictating) 1f + dictationAmplitude.coerceIn(0f, 1f) * 0.2f else 1f
+                    val micPulse = if (isDictating) 1f + dictationAmplitude.coerceIn(0f, 1f) * 0.15f else 1f
                     Box(
                         modifier = Modifier
-                            .size((40 * micPulse).dp)
+                            .size((48 * micPulse).dp)
                             .clip(CircleShape)
                             .background(if (isDictating) L.Red else Color.Transparent)
                             .clickable(enabled = !isLoading, onClick = startDictation)
-                            .semantics { contentDescription = if (isDictating) "توقف شنیدن" else "گفتن به جای نوشتن" }
+                            .semantics { contentDescription = if (isDictating) "پایان شنیدن" else "گفتن به جای نوشتن" }
                             .testTag("ai_chat_mic_button"),
                         contentAlignment = Alignment.Center
                     ) {
@@ -399,21 +367,44 @@ fun AiAssistantScreen(
                         )
                     }
                 }
-                // گفت‌وگوی زنده
-                if (onStartLiveVoice != null) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .clickable(enabled = !isLoading && !isDictating) { withMicPermission { onStartLiveVoice() } }
-                            .semantics { contentDescription = "گفت‌وگوی زنده" }
-                            .testTag("ai_chat_live_voice_button"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.GraphicEq, null, tint = L.PrimaryText, modifier = Modifier.size(22.dp))
-                    }
-                }
             }
+        }
+    }
+}
+
+/** «در حال فکر»: دو خط کم‌رنگ با برق متحرک، درست جایی که پاسخ می‌آید */
+@Composable
+fun ThinkingLines() {
+    val L = com.example.ui.layer.L
+    val t = rememberInfiniteTransition(label = "thinking")
+    val x by t.animateFloat(
+        initialValue = -1f, targetValue = 2f,
+        animationSpec = infiniteRepeatable(tween(1400, easing = LinearEasing), RepeatMode.Restart),
+        label = "shine"
+    )
+    val base = L.Rail
+    val shine = L.Chip
+    Column(
+        Modifier.padding(vertical = 6.dp).semantics { contentDescription = "دستیار در حال فکر کردن" }.testTag("ai_thinking"),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        listOf(240.dp, 170.dp).forEach { w ->
+            Box(
+                Modifier
+                    .width(w)
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(5.dp))
+                    .drawBehind {
+                        val sw = size.width
+                        drawRect(
+                            Brush.linearGradient(
+                                colors = listOf(base, shine, base),
+                                start = androidx.compose.ui.geometry.Offset(sw * (x - 0.5f), 0f),
+                                end = androidx.compose.ui.geometry.Offset(sw * (x + 0.5f), 0f)
+                            )
+                        )
+                    }
+            )
         }
     }
 }
@@ -428,12 +419,12 @@ fun ChatBubble(
     val isUser = message.sender == "user"
 
     if (isUser) {
-        // پرسش کاربر: حباب آبی سمت راست
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+        // پرسش کاربر: حباب آبی سمت راست صفحه، گوشهٔ تیز بالا-راست
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Absolute.Right) {
             Box(
                 modifier = Modifier
                     .widthIn(max = 300.dp)
-                    .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 20.dp))
+                    .clip(AbsoluteRoundedCornerShape(topLeft = 20.dp, topRight = 6.dp, bottomRight = 20.dp, bottomLeft = 20.dp))
                     .background(L.Primary)
                     .padding(horizontal = 16.dp, vertical = 11.dp)
                     .testTag("chat_bubble_${message.id}")
@@ -445,28 +436,18 @@ fun ChatBubble(
             }
         }
     } else {
-        // پاسخ دستیار: کارت سفید با نشان کوچک
-        Row(
-            Modifier.fillMaxWidth().testTag("chat_bubble_${message.id}"),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.Top
+        // پاسخ دستیار: تمام‌عرض، بدون حباب
+        Column(
+            modifier = Modifier.fillMaxWidth().testTag("chat_bubble_${message.id}"),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Box(
-                Modifier.size(30.dp).clip(RoundedCornerShape(10.dp)).background(L.PrimarySoft),
-                contentAlignment = Alignment.Center
-            ) { Icon(Icons.Default.AutoAwesome, null, tint = L.PrimaryText, modifier = Modifier.size(16.dp)) }
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 20.dp))
-                    .background(L.Surface)
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                RichMarkdownContent(text = persianDigits(message.text), isUser = false)
-                message.actionProposed?.let { action ->
-                    ProposedActionCard(messageId = message.id, action = action, onApprove = onApprove, onCancel = onCancel)
-                }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Default.AutoAwesome, null, tint = L.Primary, modifier = Modifier.size(16.dp))
+                Text("دستیار تراز", style = com.example.ui.layer.lt(12.sp, color = L.Muted))
+            }
+            RichMarkdownContent(text = persianDigits(message.text), isUser = false)
+            message.actionProposed?.let { action ->
+                ProposedActionCard(messageId = message.id, action = action, onApprove = onApprove, onCancel = onCancel)
             }
         }
     }

@@ -105,7 +105,6 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 val biometricEnabled by viewModel.biometricEnabled.collectAsStateWithLifecycle()
                 val alertsEnabled by viewModel.alertsEnabled.collectAsStateWithLifecycle()
                 val aiServerUrl by viewModel.aiServerUrl.collectAsStateWithLifecycle()
-                val liveVoiceState by viewModel.liveVoiceState.collectAsStateWithLifecycle()
                 val isDictating by viewModel.isDictating.collectAsStateWithLifecycle()
                 val dictationAmplitude by viewModel.dictationAmplitude.collectAsStateWithLifecycle()
 
@@ -909,19 +908,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                      },
                                      sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
                                      dragHandle = { BottomSheetDefaults.DragHandle() },
-                                     containerColor = BackgroundLight
+                                     containerColor = com.example.ui.layer.L.Bg
                                  ) {
                                      Box(modifier = Modifier.fillMaxHeight(0.88f)) {
-                                         if (liveVoiceState.isActive) {
-                                             LiveVoiceOverlayScreen(
-                                                 liveState = liveVoiceState,
-                                                 realtimeWebView = viewModel.liveVoiceWebView,
-                                                 onSelectVoice = { viewModel.selectLiveVoicePreset(it) },
-                                                 onToggleMute = { viewModel.toggleLiveVoiceMute() },
-                                                 onSendSpokenPrompt = { viewModel.sendLiveVoiceText(it) },
-                                                 onEndCall = { viewModel.endLiveVoiceCall() }
-                                             )
-                                         } else {
+                                         run {
                                              AiAssistantScreen(
                                                  messages = chatMessages, toastMessage = chatErrorToast, onDismissToast = { viewModel.clearChatErrorToast() },
                                                  isLoading = isAiLoading,
@@ -934,7 +924,6 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                  isDictating = isDictating,
                                                  dictationAmplitude = dictationAmplitude,
                                                  onToggleDictation = { onText -> viewModel.toggleVoiceDictation(onText) },
-                                                 onStartLiveVoice = { viewModel.startLiveVoiceCall() },
                                                  onMicPermissionDenied = { viewModel.reportMicPermissionDenied() },
                                                  onNewChat = { viewModel.resetVisibleChat() }
                                              )
