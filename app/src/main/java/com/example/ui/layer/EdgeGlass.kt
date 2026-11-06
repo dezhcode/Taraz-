@@ -46,10 +46,16 @@ fun Modifier.edgeGlass(
 ): Modifier {
     val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val content = rememberGraphicsLayer()
-    val b1 = rememberGraphicsLayer()
-    val b2 = rememberGraphicsLayer()
-    val b3 = rememberGraphicsLayer()
-    val b4 = rememberGraphicsLayer()
+    // هر نوار لایه‌های خودش را لازم دارد: لایه‌ها نگه داشته و بعداً رسم می‌شوند، پس اگر
+    // نوار پایین همان لایه‌های نوار بالا را دوباره ضبط کند، بالای صفحه محتوای پایین را نشان می‌دهد.
+    val t1 = rememberGraphicsLayer()
+    val t2 = rememberGraphicsLayer()
+    val t3 = rememberGraphicsLayer()
+    val t4 = rememberGraphicsLayer()
+    val d1 = rememberGraphicsLayer()
+    val d2 = rememberGraphicsLayer()
+    val d3 = rememberGraphicsLayer()
+    val d4 = rememberGraphicsLayer()
     val bg = L.Bg
     return this.drawWithContent {
         val topPx = top.toPx()
@@ -60,11 +66,10 @@ fun Modifier.edgeGlass(
                 this@drawWithContent.drawContent()
             }
             drawLayer(content)
-            val layers = listOf(b1, b2, b3, b4)
-            if (topPx > 0f) glassBand(content, layers, 0f, glassTop.toPx().coerceAtMost(size.height), fromTop = true)
+            if (topPx > 0f) glassBand(content, listOf(t1, t2, t3, t4), 0f, glassTop.toPx().coerceAtMost(size.height), fromTop = true)
             if (bottomPx > 0f) {
                 val h = glassBottom.toPx().coerceAtMost(size.height)
-                glassBand(content, layers, size.height - h, h, fromTop = false)
+                glassBand(content, listOf(d1, d2, d3, d4), size.height - h, h, fromTop = false)
             }
         } else {
             drawContent()
