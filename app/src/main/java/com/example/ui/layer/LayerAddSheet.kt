@@ -108,7 +108,7 @@ fun LayerAddSheet(
                 .navigationBarsPadding()
                 .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 20.dp)
         ) {
-            Box(Modifier.align(Alignment.CenterHorizontally).width(40.dp).height(5.dp).clip(PillShape).background(Color(0xFFD5D9E0)))
+            Box(Modifier.align(Alignment.CenterHorizontally).width(40.dp).height(5.dp).clip(PillShape).background(L.Handle))
 
             Row(Modifier.fillMaxWidth().padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.clip(PillShape).background(L.Chip).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -236,7 +236,7 @@ fun LayerAddSheet(
                 } else {
                     Column(Modifier.padding(top = 10.dp).fillMaxWidth().clip(ItemShape).background(L.Chip).padding(horizontal = 14.dp, vertical = 4.dp)) {
                         TransferRow("از", cards, account) { account = it }
-                        Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFE2E5EA)))
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(L.Line))
                         TransferRow("به", cards.filter { it.bankName != account }, transferTo) { transferTo = it }
                     }
                 }

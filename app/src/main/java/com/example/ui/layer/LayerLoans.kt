@@ -283,7 +283,7 @@ fun LayerPaySheet(
                 .navigationBarsPadding()
                 .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp)
         ) {
-            Box(Modifier.align(Alignment.CenterHorizontally).width(40.dp).height(5.dp).clip(PillShape).background(Color(0xFFD5D9E0)))
+            Box(Modifier.align(Alignment.CenterHorizontally).width(40.dp).height(5.dp).clip(PillShape).background(L.Handle))
             if (!done) {
                 Column(Modifier.padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("تأیید پرداخت قسط", style = lt(20.sp, FontWeight.Bold))

@@ -116,7 +116,7 @@ fun LiveVoiceOverlayScreen(
         label = "orb_color"
     )
     val haloOuter = if (busy) L.AmberSoft else L.NavSelected
-    val haloInner = if (busy) Color(0xFFFCE3BC) else Color(0xFFD3DCFF)
+    val haloInner = if (busy) L.AmberHalo else L.Halo
 
     val phaseTitle = when (liveState.phase) {
         LiveVoicePhase.CONNECTING -> "در حال اتصال…"

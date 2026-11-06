@@ -94,16 +94,16 @@ fun LayerTxEditSheet(
                 saved = true
             }
             if (askDelete) {
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFFFFF1F1)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(L.RedSoft).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
                         "این تراکنش حذف شود؟ ${money(tx.amount)} تومان ${if (tx.isExpense) "به موجودی ${tx.bankName} برمی‌گردد" else "از موجودی ${tx.bankName} کم می‌شود"}.",
-                        style = lt(13.sp, color = Color(0xFF7A1D22), lineHeight = 22.sp)
+                        style = lt(13.sp, color = L.RedInk, lineHeight = 22.sp)
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(12.dp)).background(L.RedText).clickable(onClick = onDelete), contentAlignment = Alignment.Center) {
                             Text("بله، حذف شود", style = lt(14.sp, FontWeight.Bold, Color.White))
                         }
-                        Box(Modifier.height(44.dp).clip(RoundedCornerShape(12.dp)).background(Color.White).clickable { askDelete = false }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                        Box(Modifier.height(44.dp).clip(RoundedCornerShape(12.dp)).background(L.Surface).clickable { askDelete = false }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
                             Text("انصراف", style = lt(14.sp, FontWeight.SemiBold))
                         }
                     }

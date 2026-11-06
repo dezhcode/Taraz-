@@ -1,39 +1,67 @@
 package com.example.ui.theme
 
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import com.example.ui.layer.L
+import com.example.ui.layer.LayerTheme
 
-private val LightColorScheme = lightColorScheme(
-    primary = EmeraldPrimary,
-    onPrimary = SurfaceWhite,
-    secondary = NavySecondary,
-    onSecondary = SurfaceWhite,
-    tertiary = AlertOrange,
-    onTertiary = SurfaceWhite,
-    background = BackgroundLight,
-    onBackground = NavySecondary,
-    surface = SurfaceWhite,
-    onSurface = NavySecondary,
-    surfaceVariant = IceSlate,
-    onSurfaceVariant = NavySecondary,
-    error = ErrorRed,
-    onError = SurfaceWhite
-)
-
+/**
+ * تم برنامه: رنگ‌های Material از توکن‌های طرح نهایی ساخته می‌شوند؛
+ * حالت روشن/تیره را [LayerTheme.dark] تعیین می‌کند (انتخاب کاربر، نه تنظیم گوشی).
+ */
 @Composable
 fun MyApplicationTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    // Only Light Theme for Fintech App
-    val colorScheme = LightColorScheme
+    val dark = LayerTheme.dark
+    val colorScheme = if (dark) {
+        darkColorScheme(
+            primary = L.Primary,
+            onPrimary = androidx.compose.ui.graphics.Color.White,
+            secondary = L.PrimaryText,
+            onSecondary = L.Bg,
+            tertiary = L.Amber,
+            background = L.Bg,
+            onBackground = L.Ink,
+            surface = L.Surface,
+            onSurface = L.Ink,
+            surfaceVariant = L.Chip,
+            onSurfaceVariant = L.Muted,
+            surfaceContainer = L.Surface,
+            surfaceContainerHigh = L.Surface,
+            surfaceContainerHighest = L.Chip,
+            surfaceContainerLow = L.Surface,
+            outline = L.Rail,
+            outlineVariant = L.Line,
+            error = L.Red,
+            onError = androidx.compose.ui.graphics.Color.White
+        )
+    } else {
+        lightColorScheme(
+            primary = L.Primary,
+            onPrimary = androidx.compose.ui.graphics.Color.White,
+            secondary = L.Ink,
+            onSecondary = androidx.compose.ui.graphics.Color.White,
+            tertiary = L.Amber,
+            onTertiary = androidx.compose.ui.graphics.Color.White,
+            background = L.Bg,
+            onBackground = L.Ink,
+            surface = L.Surface,
+            onSurface = L.Ink,
+            surfaceVariant = L.Chip,
+            onSurfaceVariant = L.Ink,
+            surfaceContainer = L.Surface,
+            surfaceContainerHigh = L.Surface,
+            surfaceContainerHighest = L.Chip,
+            surfaceContainerLow = L.Surface,
+            outline = L.Rail,
+            outlineVariant = L.Line,
+            error = L.Red,
+            onError = androidx.compose.ui.graphics.Color.White
+        )
+    }
 
     MaterialTheme(
         colorScheme = colorScheme,

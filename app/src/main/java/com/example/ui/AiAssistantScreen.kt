@@ -387,7 +387,7 @@ fun AiAssistantScreen(
                             .weight(1f)
                             .height(52.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .background(Color.White)
+                            .background(SurfaceWhite)
                             .border(1.dp, com.example.ui.layer.L.Line, RoundedCornerShape(16.dp))
                             .padding(start = 14.dp, end = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -507,7 +507,7 @@ fun ChatBubble(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(18.dp))
-                .background(Color.White)
+                .background(SurfaceWhite)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
                 .testTag("chat_bubble_${message.id}"),
             verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -589,7 +589,7 @@ fun ProposedActionCard(
 
     Card(
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
         border = BorderStroke(1.dp, com.example.ui.layer.L.Line),
         modifier = Modifier
             .fillMaxWidth()
@@ -850,7 +850,7 @@ fun RenderTable(lines: List<String>, isUser: Boolean) {
             .fillMaxWidth()
             .padding(vertical = 8.dp),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         border = BorderStroke(1.dp, IceSlate)
     ) {
@@ -862,7 +862,7 @@ fun RenderTable(lines: List<String>, isUser: Boolean) {
                 } else if (rowIndex % 2 == 0) {
                     IceSlate.copy(alpha = 0.3f)
                 } else {
-                    Color.White
+                    SurfaceWhite
                 }
                 
                 Row(
@@ -966,7 +966,7 @@ fun RenderHighlightCard(text: String, isUser: Boolean = false) {
             .fillMaxWidth()
             .padding(vertical = 6.dp),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         border = BorderStroke(1.dp, IceSlate)
     ) {
@@ -1135,7 +1135,7 @@ fun AiTypingIndicator() {
 
     Card(
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
         border = BorderStroke(1.dp, EmeraldPrimary.copy(alpha = 0.25f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = Modifier

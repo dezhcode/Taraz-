@@ -112,7 +112,7 @@ fun LayerAccountsScreen(
                         else StatusPill("ثبت دستی", L.Chip, L.Muted)
                     }
                     Text(money(card.balance), style = lt(15.sp, FontWeight.SemiBold))
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = Color(0xFF8E95A2), modifier = Modifier.size(18.dp))
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = L.Chevron, modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -222,10 +222,10 @@ fun LayerAccountDetailScreen(
         // حذف
         Column(Modifier.padding(horizontal = 20.dp)) {
             if (askDelete) {
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color(0xFFFFF1F1)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(L.RedSoft).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
                         "این حساب از تراز حذف می‌شود، ولی تراکنش‌هایی که با آن ثبت کرده‌اید باقی می‌مانند.",
-                        style = lt(13.sp, color = Color(0xFF7A1D22), lineHeight = 23.sp)
+                        style = lt(13.sp, color = L.RedInk, lineHeight = 23.sp)
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(
@@ -233,7 +233,7 @@ fun LayerAccountDetailScreen(
                             contentAlignment = Alignment.Center
                         ) { Text("بله، حذف شود", style = lt(14.sp, FontWeight.Bold, Color.White)) }
                         Box(
-                            Modifier.height(44.dp).clip(RoundedCornerShape(12.dp)).background(Color.White).clickable { askDelete = false }.padding(horizontal = 16.dp),
+                            Modifier.height(44.dp).clip(RoundedCornerShape(12.dp)).background(L.Surface).clickable { askDelete = false }.padding(horizontal = 16.dp),
                             contentAlignment = Alignment.Center
                         ) { Text("انصراف", style = lt(14.sp, FontWeight.SemiBold)) }
                     }

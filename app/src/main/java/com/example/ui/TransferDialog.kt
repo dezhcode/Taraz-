@@ -68,7 +68,7 @@ fun TransferDialog(
                 .border(1.dp, IceSlate, RoundedCornerShape(28.dp))
                 .testTag("transfer_dialog_surface"),
             shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
             elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
         ) {
             Column(
@@ -180,7 +180,7 @@ fun TransferDialog(
                                     .clickable { fromCard = card },
                                 shape = RoundedCornerShape(14.dp),
                                 border = if (isSelected) BorderStroke(3.dp, EmeraldPrimary) else BorderStroke(1.dp, IceSlate),
-                                colors = CardDefaults.cardColors(containerColor = Color.White)
+                                colors = CardDefaults.cardColors(containerColor = SurfaceWhite)
                             ) {
                                 Box(
                                     modifier = Modifier
@@ -272,7 +272,7 @@ fun TransferDialog(
                                     .clickable { toCard = card },
                                 shape = RoundedCornerShape(14.dp),
                                 border = if (isSelected) BorderStroke(3.dp, Color(0xFF2563EB)) else BorderStroke(1.dp, IceSlate),
-                                colors = CardDefaults.cardColors(containerColor = Color.White)
+                                colors = CardDefaults.cardColors(containerColor = SurfaceWhite)
                             ) {
                                 Box(
                                     modifier = Modifier

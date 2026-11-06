@@ -265,7 +265,7 @@ fun LayerReportsScreen(
     }
 }
 
-private val Color6 = androidx.compose.ui.graphics.Color(0xFFC6CEE6)
+private val Color6 get() = L.BarSoft
 
 @Composable
 private fun MonthStepper(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {

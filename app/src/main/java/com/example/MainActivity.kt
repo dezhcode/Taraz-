@@ -55,6 +55,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         requestNotificationPermissionIfNeeded()
         com.example.reminders.ReminderScheduler.scheduleDailyLoanCheck(this)
 
+        // انتخاب روشن/تیرهٔ کاربر قبل از اولین رسم اعمال می‌شود تا صفحه چشمک نزند
+        com.example.ui.layer.ThemePrefs.load(this)?.let { com.example.ui.layer.LayerTheme.dark = it }
+
         setContent {
             // Force Fidar Design System Light Theme and custom styling
             MyApplicationTheme {
@@ -158,11 +161,27 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                     }
                 }
 
+                // نوار وضعیت: آیکن‌های تیره روی زمینهٔ روشن و برعکس
+                val isDark = com.example.ui.layer.LayerTheme.dark
+                LaunchedEffect(isDark) {
+                    val transparent = android.graphics.Color.TRANSPARENT
+                    val style = if (isDark) androidx.activity.SystemBarStyle.dark(transparent)
+                    else androidx.activity.SystemBarStyle.light(transparent, transparent)
+                    this@MainActivity.enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+                }
+                var themeChosen by remember { mutableStateOf(com.example.ui.layer.ThemePrefs.load(context) != null) }
+
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = com.example.ui.layer.L.Bg
                 ) {
-                    if (isAppLocked) {
+                    if (!themeChosen) {
+                        // اولین اجرا: روشن یا تیره؟
+                        com.example.ui.layer.LayerThemeChooser(onDone = {
+                            com.example.ui.layer.ThemePrefs.save(context, com.example.ui.layer.LayerTheme.dark)
+                            themeChosen = true
+                        })
+                    } else if (isAppLocked) {
                         BiometricLockScreen(
                             onUnlockSuccess = { viewModel.unlockApp() },
                             onLockUnavailable = { viewModel.disableLockUnavailableOnDevice() }
@@ -252,6 +271,11 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         profile = userProfile,
                                         biometricEnabled = biometricEnabled,
                                         alertsEnabled = alertsEnabled,
+                                        darkMode = com.example.ui.layer.LayerTheme.dark,
+                                        onDarkModeChange = {
+                                            com.example.ui.layer.LayerTheme.dark = it
+                                            com.example.ui.layer.ThemePrefs.save(context, it)
+                                        },
                                         smsBankCount = bankSenders.count { it.isEnabled },
                                         categoryCount = categories.size,
                                         onBack = { closeSub() },

@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,49 +28,65 @@ import java.util.Calendar
 import java.util.Locale
 
 /**
- * طرح «لایه + روزشمار» — توکن‌های رنگ و کمک‌تابع‌های مشترک.
- * رنگ‌ها دقیقاً از بوم طراحی برداشته شده‌اند.
+ * طرح نهایی «تراز» — توکن‌های رنگ در دو حالت روشن و تیره.
+ * هر توکن یک getter است که به [LayerTheme.dark] نگاه می‌کند؛ با عوض شدن حالت،
+ * همهٔ صفحه‌ها خودشان دوباره رسم می‌شوند.
  */
+object LayerTheme {
+    /** حالت تیره روشن است؟ (state کامپوز؛ خواندنش در کامپوزیشن ردگیری می‌شود) */
+    var dark by androidx.compose.runtime.mutableStateOf(false)
+}
+
 object L {
-    val Bg = Color(0xFFF5F6F8)
-    val Surface = Color(0xFFFFFFFF)
-    val Ink = Color(0xFF0E1116)
-    val Muted = Color(0xFF5D6573)
-    val Faint = Color(0xFF6E7684)
-    val Line = Color(0xFFECEEF2)
-    val Rail = Color(0xFFDDE2EA)
-    val Chip = Color(0xFFF1F3F6)
-    val ChipPressed = Color(0xFFEEF1F5)
-
-    val Primary = Color(0xFF2250F4)
-    val PrimaryText = Color(0xFF1D44D8)
-    val PrimarySoft = Color(0xFFEEF2FF)
-    val PrimaryTint = Color(0xFFF1F4FF)
-    val NavSelected = Color(0xFFE8EDFF)
-    val OnPrimarySoft = Color(0xFFDCE4FF)
-    val PrimaryDisabled = Color(0xFFAEBDF7)
-    val BarIdle = Color(0xFFBCC8F2)
-
-    val Amber = Color(0xFFF59E0B)
-    val AmberRing = Color(0xFFF5B14C)
-    val AmberText = Color(0xFFB45309)
-    val AmberSoft = Color(0xFFFEF3E2)
-    val Green = Color(0xFF0E8A5F)
-    val GreenText = Color(0xFF0B6E4B)
-    val GreenSoft = Color(0xFFE3F5EC)
-    val Red = Color(0xFFE5484D)
-    val RedText = Color(0xFFC22B33)
-    val Info = Color(0xFF1E2B5C)
-    val Scrim = Color(0xFF8E939B)
-    val Placeholder = Color(0xFFC1C6CF)
+    val Bg: Color get() = if (LayerTheme.dark) Color(0xFF0B0E13) else Color(0xFFDDE1E8)
+    val Surface: Color get() = if (LayerTheme.dark) Color(0xFF161A22) else Color(0xFFFFFFFF)
+    val Ink: Color get() = if (LayerTheme.dark) Color(0xFFECEFF4) else Color(0xFF0E1116)
+    val Muted: Color get() = if (LayerTheme.dark) Color(0xFF9AA3B2) else Color(0xFF5D6573)
+    val Faint: Color get() = if (LayerTheme.dark) Color(0xFF838C9C) else Color(0xFF6E7684)
+    val Line: Color get() = if (LayerTheme.dark) Color(0xFF252B36) else Color(0xFFECEEF2)
+    val Rail: Color get() = if (LayerTheme.dark) Color(0xFF323A48) else Color(0xFFD3D9E2)
+    val Chip: Color get() = if (LayerTheme.dark) Color(0xFF1F2430) else Color(0xFFF1F3F6)
+    val ChipPressed: Color get() = if (LayerTheme.dark) Color(0xFF262C38) else Color(0xFFEEF1F5)
+    val Primary: Color get() = if (LayerTheme.dark) Color(0xFF3D66FF) else Color(0xFF2250F4)
+    val PrimaryText: Color get() = if (LayerTheme.dark) Color(0xFF9AB0FF) else Color(0xFF1D44D8)
+    val PrimarySoft: Color get() = if (LayerTheme.dark) Color(0xFF1C2546) else Color(0xFFEEF2FF)
+    val PrimaryTint: Color get() = if (LayerTheme.dark) Color(0xFF18203A) else Color(0xFFF1F4FF)
+    val NavSelected: Color get() = if (LayerTheme.dark) Color(0xFF22305E) else Color(0xFFE8EDFF)
+    val OnPrimarySoft: Color get() = if (LayerTheme.dark) Color(0xFFDCE4FF) else Color(0xFFDCE4FF)
+    val PrimaryDisabled: Color get() = if (LayerTheme.dark) Color(0xFF2B3766) else Color(0xFFAEBDF7)
+    val BarIdle: Color get() = if (LayerTheme.dark) Color(0xFF3A4672) else Color(0xFFBCC8F2)
+    val Amber: Color get() = if (LayerTheme.dark) Color(0xFFF5A524) else Color(0xFFF59E0B)
+    val AmberRing: Color get() = if (LayerTheme.dark) Color(0xFFF5B14C) else Color(0xFFF5B14C)
+    val AmberText: Color get() = if (LayerTheme.dark) Color(0xFFF7B955) else Color(0xFFB45309)
+    val AmberSoft: Color get() = if (LayerTheme.dark) Color(0xFF33270F) else Color(0xFFFEF3E2)
+    val AmberInk: Color get() = if (LayerTheme.dark) Color(0xFFF7C77A) else Color(0xFF8A4300)
+    val AmberHalo: Color get() = if (LayerTheme.dark) Color(0xFF4A3712) else Color(0xFFFCE3BC)
+    val Green: Color get() = if (LayerTheme.dark) Color(0xFF2BB283) else Color(0xFF0E8A5F)
+    val GreenText: Color get() = if (LayerTheme.dark) Color(0xFF5BD3A6) else Color(0xFF0B6E4B)
+    val GreenSoft: Color get() = if (LayerTheme.dark) Color(0xFF10291F) else Color(0xFFE3F5EC)
+    val GreenInk: Color get() = if (LayerTheme.dark) Color(0xFF7FE0BB) else Color(0xFF0B5E40)
+    val GreenInk2: Color get() = if (LayerTheme.dark) Color(0xFF9BDDC3) else Color(0xFF1F5C45)
+    val Red: Color get() = if (LayerTheme.dark) Color(0xFFF06368) else Color(0xFFE5484D)
+    val RedText: Color get() = if (LayerTheme.dark) Color(0xFFFF8085) else Color(0xFFC22B33)
+    val RedSoft: Color get() = if (LayerTheme.dark) Color(0xFF3A1A1C) else Color(0xFFFFF1F1)
+    val RedInk: Color get() = if (LayerTheme.dark) Color(0xFFFFB3B6) else Color(0xFF7A1D22)
+    val Info: Color get() = if (LayerTheme.dark) Color(0xFFC9D4FF) else Color(0xFF1E2B5C)
+    val Scrim: Color get() = if (LayerTheme.dark) Color(0xFF000000) else Color(0xFF8E939B)
+    val Placeholder: Color get() = if (LayerTheme.dark) Color(0xFF5B6372) else Color(0xFFC1C6CF)
+    val Track: Color get() = if (LayerTheme.dark) Color(0xFF0F1218) else Color(0xFFE9ECF1)
+    val Handle: Color get() = if (LayerTheme.dark) Color(0xFF3A414E) else Color(0xFFD5D9E0)
+    val Chevron: Color get() = if (LayerTheme.dark) Color(0xFF6E7787) else Color(0xFF8E95A2)
+    val Disabled: Color get() = if (LayerTheme.dark) Color(0xFF262B35) else Color(0xFFE1E4EA)
+    val SwitchOff: Color get() = if (LayerTheme.dark) Color(0xFF3A414E) else Color(0xFFC9CED6)
+    val BarSoft: Color get() = if (LayerTheme.dark) Color(0xFF2E3A63) else Color(0xFFC6CEE6)
+    val Halo: Color get() = if (LayerTheme.dark) Color(0xFF2A3A72) else Color(0xFFD3DCFF)
+    val CardShadow: Color get() = if (LayerTheme.dark) Color(0x00000000) else Color(0x0A0E1116)
 
     /** رنگ کارت‌ها در کیف پول، به ترتیب */
     val CardColors = listOf(
         Color(0xFF2250F4), Color(0xFFB4232F), Color(0xFF0F3B66),
         Color(0xFF0E8A5F), Color(0xFF7A5AA8), Color(0xFF5C6B73)
     )
-
-    val CardShadow = Color(0x0A0E1116)
 }
 
 /** متن با فونت ایران‌یکان */

@@ -147,7 +147,7 @@ fun LSwitch(checked: Boolean, label: String, enabled: Boolean = true, onChange: 
         Modifier
             .width(48.dp).height(30.dp)
             .clip(CircleShape)
-            .background(if (checked && enabled) L.Primary else if (checked) L.PrimaryDisabled else Color(0xFFC9CED6))
+            .background(if (checked && enabled) L.Primary else if (checked) L.PrimaryDisabled else L.SwitchOff)
             .clickable(enabled = enabled) { onChange(!checked) }
             .padding(3.dp)
             .semantics {
@@ -177,7 +177,7 @@ fun BigButton(
             .fillMaxWidth()
             .height(height)
             .clip(RoundedCornerShape(16.dp))
-            .background(if (enabled) background else Color(0xFFE1E4EA))
+            .background(if (enabled) background else L.Disabled)
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -310,7 +310,7 @@ fun LRow(
 
 /** نوار پیشرفت گرد */
 @Composable
-fun LProgress(fraction: Float, color: Color = L.Primary, track: Color = Color(0xFFECEEF2), height: Dp = 8.dp, modifier: Modifier = Modifier) {
+fun LProgress(fraction: Float, color: Color = L.Primary, track: Color = L.Line, height: Dp = 8.dp, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxWidth().height(height).clip(CircleShape).background(track)) {
         Box(Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).height(height).clip(CircleShape).background(color))
     }
@@ -398,7 +398,7 @@ fun LayerSheet(
                 .imePadding()
                 .navigationBarsPadding()
         ) {
-            Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp).width(40.dp).height(5.dp).clip(CircleShape).background(Color(0xFFD5D9E0)))
+            Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp).width(40.dp).height(5.dp).clip(CircleShape).background(L.Handle))
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -433,14 +433,14 @@ fun Modifier.androidx_tapOutside(onTap: () -> Unit): Modifier =
 @Composable
 fun LSegmented(options: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
     Row(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0xFFE9ECF1)).padding(4.dp),
+        modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(L.Track).padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         options.forEachIndexed { i, label ->
             val on = i == selectedIndex
             Box(
                 Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(10.dp))
-                    .background(if (on) Color.White else Color.Transparent)
+                    .background(if (on) L.Surface else Color.Transparent)
                     .clickable { onSelect(i) }
                     .semantics { role = Role.RadioButton },
                 contentAlignment = Alignment.Center

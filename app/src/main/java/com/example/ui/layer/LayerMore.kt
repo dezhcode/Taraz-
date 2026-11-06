@@ -221,11 +221,11 @@ fun LayerGoalsScreen(
                     Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(18.dp))
                 }
                 Column(Modifier.weight(1f)) {
-                    Text(g.title, style = lt(14.sp, FontWeight.Bold, Color(0xFF0B5E40)))
-                    Text("انجام شد · ${JalaliDate.fromTimestamp(g.createdAt).formatMonthYear()}", style = lt(12.sp, color = Color(0xFF1F5C45)))
+                    Text(g.title, style = lt(14.sp, FontWeight.Bold, L.GreenInk))
+                    Text("انجام شد · ${JalaliDate.fromTimestamp(g.createdAt).formatMonthYear()}", style = lt(12.sp, color = L.GreenInk2))
                 }
                 Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).clickable { onDelete(g) }.semantics { contentDescription = "حذف هدف ${g.title}" }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.Delete, null, tint = Color(0xFF1F5C45), modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Delete, null, tint = L.GreenInk2, modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -279,6 +279,8 @@ fun LayerSettingsScreen(
     profile: UserProfile?,
     biometricEnabled: Boolean,
     alertsEnabled: Boolean,
+    darkMode: Boolean,
+    onDarkModeChange: (Boolean) -> Unit,
     smsBankCount: Int,
     categoryCount: Int,
     onBack: () -> Unit,
@@ -312,6 +314,15 @@ fun LayerSettingsScreen(
             }
         }
 
+        SettingsGroup("ظاهر") {
+            Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LSegmented(listOf("روشن", "تیره"), if (darkMode) 1 else 0, { onDarkModeChange(it == 1) })
+                Text(
+                    if (darkMode) "حالت تیره: برای شب و نور کم، چشم راحت‌تر است." else "حالت روشن: برای روز و نور زیاد.",
+                    style = lt(12.sp, color = L.Muted)
+                )
+            }
+        }
         SettingsGroup("امنیت") {
             SwitchRow("قفل با اثر انگشت", "هر بار که تراز باز می‌شود", biometricEnabled, onBiometricChange)
             NavRow("امتحان صفحهٔ قفل", null, divider = false, onClick = onTestLock)
@@ -355,7 +366,7 @@ fun LayerSettingsScreen(
             Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(L.Line))
             if (askReset) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("همهٔ حساب‌ها، تراکنش‌ها، اقساط و اهداف پاک می‌شوند و برگشتی ندارند. مطمئنید؟", style = lt(13.sp, color = Color(0xFF7A1D22), lineHeight = 23.sp))
+                    Text("همهٔ حساب‌ها، تراکنش‌ها، اقساط و اهداف پاک می‌شوند و برگشتی ندارند. مطمئنید؟", style = lt(13.sp, color = L.RedInk, lineHeight = 23.sp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(12.dp)).background(L.RedText).clickable(onClick = onResetAll), contentAlignment = Alignment.Center) {
                             Text("بله، همه پاک شود", style = lt(14.sp, FontWeight.Bold, Color.White))
@@ -398,7 +409,7 @@ private fun NavRow(title: String, value: String?, divider: Boolean = true, value
         trailing = {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (value != null) Text(value, style = lt(12.sp, FontWeight.SemiBold, valueColor))
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = Color(0xFF8E95A2), modifier = Modifier.size(18.dp))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = L.Chevron, modifier = Modifier.size(18.dp))
             }
         }
     )
@@ -505,7 +516,7 @@ fun LayerAddCategoryScreen(
                     Box(Modifier.weight(1f).height(40.dp).clickable { colorHex = hex }.semantics { role = Role.RadioButton }, contentAlignment = Alignment.Center) {
                         Box(
                             Modifier.size(32.dp).clip(CircleShape).background(CategoryIcons.colorOf(hex))
-                                .then(if (on) Modifier.border(3.dp, Color.White, CircleShape).border(5.dp, CategoryIcons.colorOf(hex), CircleShape) else Modifier),
+                                .then(if (on) Modifier.border(3.dp, L.Surface, CircleShape).border(5.dp, CategoryIcons.colorOf(hex), CircleShape) else Modifier),
                             contentAlignment = Alignment.Center
                         ) { if (on) Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(16.dp)) }
                     }

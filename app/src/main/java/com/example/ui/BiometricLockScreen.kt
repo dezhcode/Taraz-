@@ -169,7 +169,7 @@ fun BiometricLockScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
-                        .background(Color(0xFFFFF1F1))
+                        .background(L.RedSoft)
                         .padding(12.dp)
                         .testTag(if (isUnavailableOnDevice) "biometric_unavailable_message" else "biometric_error_card")
                 )

@@ -163,9 +163,9 @@ fun AuthScreen(
                             Modifier.testTag("auth_send_otp_button"), enabled = !isSendingOtp
                         ) { sendCode() }
                         Row(Modifier.padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Box(Modifier.weight(1f).height(1.dp).background(Color(0xFFE1E4EA)))
+                            Box(Modifier.weight(1f).height(1.dp).background(L.Disabled))
                             Text("یا", style = lt(12.sp, color = L.Muted))
-                            Box(Modifier.weight(1f).height(1.dp).background(Color(0xFFE1E4EA)))
+                            Box(Modifier.weight(1f).height(1.dp).background(L.Disabled))
                         }
                         SoftBigButton("ادامه بدون ورود", Modifier.testTag("auth_guest_button")) {
                             viewModel.loginAsGuest(fullName.ifBlank { "کاربر مهمان" })

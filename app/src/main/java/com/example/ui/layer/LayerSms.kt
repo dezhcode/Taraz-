@@ -128,18 +128,18 @@ fun LayerSmsSetupScreen(
                     Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(18.dp))
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("دسترسی به پیامک داده شده", style = lt(14.sp, FontWeight.Bold, Color(0xFF0B5E40)))
-                    Text("پیامک‌ها روی همین گوشی خوانده می‌شوند.", style = lt(12.sp, color = Color(0xFF1F5C45)))
+                    Text("دسترسی به پیامک داده شده", style = lt(14.sp, FontWeight.Bold, L.GreenInk))
+                    Text("پیامک‌ها روی همین گوشی خوانده می‌شوند.", style = lt(12.sp, color = L.GreenInk2))
                 }
             }
         } else {
             Callout(
                 title = "تراز اجازهٔ خواندن پیامک ندارد",
                 body = "بدون این اجازه، تراکنش‌های بانکی خودکار ثبت نمی‌شوند. پیامک‌ها فقط روی همین گوشی خوانده می‌شوند.",
-                bg = L.AmberSoft, titleColor = Color(0xFF8A4300),
+                bg = L.AmberSoft, titleColor = L.AmberInk,
                 trailing = {
                     Box(
-                        Modifier.height(40.dp).clip(RoundedCornerShape(12.dp)).background(Color.White)
+                        Modifier.height(40.dp).clip(RoundedCornerShape(12.dp)).background(L.Surface)
                             .clickable { launcher.launch(SmsPermissionHelper.REQUIRED_PERMISSIONS) }.padding(horizontal = 12.dp),
                         contentAlignment = Alignment.Center
                     ) { Text("اجازه می‌دهم", style = lt(13.sp, FontWeight.Bold, L.PrimaryText)) }
@@ -175,8 +175,8 @@ fun LayerSmsSetupScreen(
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Box(
-                            Modifier.size(24.dp).clip(RoundedCornerShape(7.dp)).background(if (s.isEnabled) L.Primary else Color.White)
-                                .border(2.dp, if (s.isEnabled) L.Primary else Color(0xFF8E95A2), RoundedCornerShape(7.dp)),
+                            Modifier.size(24.dp).clip(RoundedCornerShape(7.dp)).background(if (s.isEnabled) L.Primary else L.Surface)
+                                .border(2.dp, if (s.isEnabled) L.Primary else L.Chevron, RoundedCornerShape(7.dp)),
                             contentAlignment = Alignment.Center
                         ) { if (s.isEnabled) Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(16.dp)) }
                         Box(Modifier.width(26.dp).height(18.dp).clip(RoundedCornerShape(4.dp)).background(bankColor(s.bankName)))
@@ -194,10 +194,10 @@ fun LayerSmsSetupScreen(
             Callout(
                 title = "${fa(pending.size)} پیامک منتظر تأیید شماست",
                 body = "تا تأیید نکنید، در حساب‌ها ثبت نمی‌شوند.",
-                bg = L.AmberSoft, titleColor = Color(0xFF8A4300),
+                bg = L.AmberSoft, titleColor = L.AmberInk,
                 trailing = {
                     Box(
-                        Modifier.height(40.dp).clip(RoundedCornerShape(12.dp)).background(Color.White).clickable(onClick = onOpenReview).padding(horizontal = 12.dp),
+                        Modifier.height(40.dp).clip(RoundedCornerShape(12.dp)).background(L.Surface).clickable(onClick = onOpenReview).padding(horizontal = 12.dp),
                         contentAlignment = Alignment.Center
                     ) { Text("بررسی", style = lt(13.sp, FontWeight.Bold, L.PrimaryText)) }
                 }
@@ -210,7 +210,7 @@ fun LayerSmsSetupScreen(
                 bg = L.PrimarySoft, titleColor = L.PrimaryText,
                 trailing = {
                     Box(
-                        Modifier.height(40.dp).clip(RoundedCornerShape(12.dp)).background(Color.White).clickable(onClick = onOpenLearn).padding(horizontal = 12.dp),
+                        Modifier.height(40.dp).clip(RoundedCornerShape(12.dp)).background(L.Surface).clickable(onClick = onOpenLearn).padding(horizontal = 12.dp),
                         contentAlignment = Alignment.Center
                     ) { Text("آموزش", style = lt(13.sp, FontWeight.Bold, L.PrimaryText)) }
                 }
@@ -339,14 +339,14 @@ fun LayerSmsReviewScreen(
                 chips.forEach { c ->
                     val on = c == category
                     Box(
-                        Modifier.height(38.dp).clip(CircleShape).background(if (on) L.Primary else Color.White)
+                        Modifier.height(38.dp).clip(CircleShape).background(if (on) L.Primary else L.Surface)
                             .clickable { category = c }.padding(horizontal = 14.dp),
                         contentAlignment = Alignment.Center
                     ) { Text(c, style = lt(13.sp, if (on) FontWeight.Bold else FontWeight.Medium, if (on) Color.White else L.Ink)) }
                 }
             }
             Row(
-                Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(14.dp)).background(Color.White).padding(start = 12.dp, end = 6.dp),
+                Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(14.dp)).background(L.Surface).padding(start = 12.dp, end = 6.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Box(Modifier.weight(1f)) {
