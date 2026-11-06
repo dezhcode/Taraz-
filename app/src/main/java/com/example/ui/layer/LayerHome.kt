@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Sms
@@ -280,7 +281,7 @@ fun LayerHomeScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("همهٔ تراکنش‌ها", style = lt(14.sp, FontWeight.SemiBold, L.PrimaryText))
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = L.PrimaryText, modifier = Modifier.size(18.dp))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.PrimaryText, modifier = Modifier.size(18.dp))
             }
         }
     }
@@ -339,7 +340,7 @@ private fun WalletStack(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("مشاهدهٔ حساب‌ها", style = lt(13.sp, FontWeight.SemiBold, Color.White))
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.White, modifier = Modifier.size(16.dp))
             }
         }
     }

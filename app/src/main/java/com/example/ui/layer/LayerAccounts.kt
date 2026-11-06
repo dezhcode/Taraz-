@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -157,7 +158,7 @@ fun LayerAccountsScreen(
                 )
             }
             if (assetsTotal > 0) Text(if (hideAmounts) "••••" else money(assetsTotal), style = lt(15.sp, FontWeight.Bold))
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = L.Chevron, modifier = Modifier.size(18.dp))
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.Chevron, modifier = Modifier.size(18.dp))
         }
 
         // کارت‌ها با طرح دوتکه، ورق‌خوردنی
@@ -180,7 +181,7 @@ fun LayerAccountsScreen(
                         else StatusPill("ثبت دستی", L.Chip, L.Muted)
                     }
                     Text(if (hideAmounts) "••••" else money(card.balance), style = lt(15.sp, FontWeight.SemiBold))
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = L.Chevron, modifier = Modifier.size(18.dp))
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.Chevron, modifier = Modifier.size(18.dp))
                 }
             }
         }

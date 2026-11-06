@@ -27,7 +27,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -86,11 +85,10 @@ fun LayerAddSheet(
     personBalances: Map<Int, Long> = emptyMap(),
     onPersonMoney: (personId: Int, amount: Long, outgoing: Boolean, account: String?, note: String) -> Unit = { _, _, _, _, _ -> },
     isListening: Boolean = false,
-    onVoice: ((com.example.ui.FinanceViewModel.EntryDraft) -> Unit) -> Unit = {},
-    onReadReceipt: (android.net.Uri, (com.example.ui.FinanceViewModel.EntryDraft?, String?) -> Unit) -> Unit = { _, _ -> }
+    onVoice: ((com.example.ui.FinanceViewModel.EntryDraft) -> Unit) -> Unit = {}
 ) {
     BackHandler(onBack = onDismiss)
-    // تاریخی که از رسید یا جملهٔ «دیروز…» آمده؛ null یعنی همین الان
+    // تاریخی که از جملهٔ «دیروز…» آمده؛ null یعنی همین الان
     var dateOverride by remember { mutableStateOf<Long?>(null) }
     var helperMsg by remember { mutableStateOf<String?>(null) }
     // اگر این پول برای یک شخص بود (قرض دادن/گرفتن یا پس دادن)، در حساب همان شخص ثبت می‌شود
@@ -124,14 +122,7 @@ fun LayerAddSheet(
     val micLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
     ) { granted -> if (granted) onVoice { applyDraft(it) } else helperMsg = "برای ثبت صوتی، دسترسی میکروفون لازم است." }
-    val photoLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null) {
-            helperMsg = "در حال خواندن رسید…"
-            onReadReceipt(uri) { d, err -> if (d != null) applyDraft(d) else helperMsg = err }
-        }
-    }
+
     val suggestion = remember(transactions) { findSuggestion(transactions) }
 
     Box(Modifier.fillMaxSize().background(Color(0x990E1116)).pointerInput(Unit) { detectTapGestures { onDismiss() } }) {
@@ -225,15 +216,6 @@ fun LayerAddSheet(
                         ) {
                             Icon(Icons.Default.Mic, null, tint = if (isListening) Color.White else L.Ink, modifier = Modifier.size(18.dp))
                             Text(if (isListening) "گوش می‌دهم…" else "بگویید", style = lt(13.sp, FontWeight.SemiBold, if (isListening) Color.White else L.Ink))
-                        }
-                        if (type == EntryType.EXPENSE) {
-                            Row(
-                                Modifier.height(38.dp).clip(PillShape).background(L.Chip).clickable { photoLauncher.launch("image/*") }.padding(horizontal = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(Icons.Default.ReceiptLong, null, tint = L.Ink, modifier = Modifier.size(18.dp))
-                                Text("عکس رسید", style = lt(13.sp, FontWeight.SemiBold))
-                            }
                         }
                     }
                     helperMsg?.let {

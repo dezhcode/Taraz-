@@ -173,7 +173,7 @@ fun LayerTransactionsScreen(
                     Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).clickable { weekOffset += 1 }
                         .semantics { contentDescription = "هفتهٔ قبل" },
                     contentAlignment = Alignment.Center
-                ) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.Muted) }
+                ) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = L.Muted) }
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(L.Amber))
                     Spacer(Modifier.width(6.dp))
@@ -187,7 +187,7 @@ fun LayerTransactionsScreen(
                         .clickable(enabled = weekOffset > 0) { weekOffset -= 1 }
                         .semantics { contentDescription = "هفتهٔ بعد" },
                     contentAlignment = Alignment.Center
-                ) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = if (weekOffset > 0) L.Muted else L.Rail) }
+                ) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = if (weekOffset > 0) L.Muted else L.Rail) }
             }
         }
 

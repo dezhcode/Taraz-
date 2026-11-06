@@ -559,9 +559,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // ─── ثبت صوتی و عکس رسید ───
+    // ─── ثبت صوتی ───
 
-    /** آنچه از جملهٔ گفته‌شده یا عکس رسید فهمیده شد؛ هر فیلد ممکن است خالی باشد */
+    /** آنچه از جملهٔ گفته‌شده فهمیده شد؛ هر فیلد ممکن است خالی باشد */
     data class EntryDraft(
         val isExpense: Boolean = true,
         val amount: Long = 0,
@@ -633,59 +633,6 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         val income = listOf("حقوق", "واریز", "گرفتم", "درآمد", "دریافت").any { text.contains(it) }
         val title = text.replace(Regex("[0-9۰-۹٬,.]+"), "").replace(Regex("(میلیون|هزار|تومن|تومان)"), "").trim().take(40)
         return EntryDraft(isExpense = !income, amount = amount, title = title.ifBlank { null })
-    }
-
-    /**
-     * مبلغ و تاریخ را از عکس رسید (کارت‌خوان، فروشگاه) می‌خواند. تشخیص متن روی خود گوشی است؛
-     * رسیدها معمولاً ریالی‌اند، پس اگر «تومان/Toman» نوشته نشده باشد، تقسیم بر ۱۰ می‌شود.
-     */
-    fun readReceipt(uri: android.net.Uri, onResult: (EntryDraft?, String?) -> Unit) {
-        val ctx = getApplication<Application>()
-        val image = try {
-            com.google.mlkit.vision.common.InputImage.fromFilePath(ctx, uri)
-        } catch (e: Exception) {
-            onResult(null, "عکس باز نشد."); return
-        }
-        val recognizer = com.google.mlkit.vision.text.TextRecognition.getClient(
-            com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS
-        )
-        recognizer.process(image)
-            .addOnSuccessListener { result ->
-                val draft = parseReceiptText(result.text)
-                onResult(draft, if (draft == null) "مبلغی روی رسید پیدا نشد؛ دستی وارد کنید." else null)
-                recognizer.close()
-            }
-            .addOnFailureListener {
-                onResult(null, "خواندن رسید انجام نشد.")
-                recognizer.close()
-            }
-    }
-
-    private fun parseReceiptText(raw: String): EntryDraft? {
-        val text = SmsIngest.latinDigits(raw)
-        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
-        val numberRe = Regex("\\d{1,3}(?:[,٬]\\d{3})+|\\d{4,12}")
-        fun numbersIn(line: String) = numberRe.findAll(line).map { it.value.replace(",", "").replace("٬", "") }
-            // شمارهٔ کارت، تاریخ و ساعت مبلغ نیستند
-            .filter { it.length in 4..12 }
-            .mapNotNull { it.toLongOrNull() }
-            .toList()
-        val keys = listOf("amount", "مبلغ", "total", "جمع", "rial", "ریال", "irr", "price")
-        val keyed = lines.filter { l -> keys.any { l.lowercase().contains(it) } && !Regex("\\d{2}:\\d{2}").containsMatchIn(l) }
-            .flatMap { numbersIn(it) }
-        val all = lines.filter { !Regex("\\d{4}[/\\-.]\\d{1,2}[/\\-.]\\d{1,2}").containsMatchIn(it) && !Regex("\\d{2}:\\d{2}").containsMatchIn(it) }
-            .flatMap { numbersIn(it) }
-        val rawAmount = keyed.maxOrNull() ?: all.maxOrNull() ?: return null
-        val toman = text.contains("تومان") || text.lowercase().contains("toman")
-        val amount = if (toman) rawAmount else rawAmount / 10
-        val date = Regex("(1[34]\\d{2})[/\\-.](\\d{1,2})[/\\-.](\\d{1,2})").find(text)?.let { m ->
-            val (y, mo, d) = m.destructured
-            runCatching {
-                val mm = mo.toInt(); val dd = d.toInt()
-                if (mm in 1..12 && dd in 1..31) com.example.utils.JalaliDate.toTimestamp(y.toInt(), mm, dd) + 12 * 3_600_000L else null
-            }.getOrNull()
-        }
-        return EntryDraft(isExpense = true, amount = amount, title = "خرید با کارت", date = date)
     }
 
     // ─── پشتیبان و خروجی ───

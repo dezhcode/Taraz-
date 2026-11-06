@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -140,11 +141,11 @@ internal fun ColumnScope.LoansSection(
             Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("تقویم سررسیدها", style = lt(15.sp, FontWeight.Bold), modifier = Modifier.weight(1f))
                 Box(Modifier.size(40.dp).clip(CircleShape).clickable { monthShift -= 1; picked = null }.semantics { contentDescription = "ماه قبل" }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.Muted)
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = L.Muted)
                 }
                 Text("${JalaliDate.MONTH_NAMES[month - 1]} ${fa(year)}", style = lt(13.sp, FontWeight.SemiBold))
                 Box(Modifier.size(40.dp).clip(CircleShape).clickable { monthShift += 1; picked = null }.semantics { contentDescription = "ماه بعد" }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = L.Muted)
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.Muted)
                 }
             }
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
@@ -368,7 +369,7 @@ private fun BeforeAfter(label: String, before: String, after: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = lt(13.sp), modifier = Modifier.weight(1f))
         Text(before, style = lt(13.sp, color = L.Muted))
-        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "به", tint = L.Ink, modifier = Modifier.padding(horizontal = 6.dp).size(16.dp))
+        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "به", tint = L.Ink, modifier = Modifier.padding(horizontal = 6.dp).size(16.dp))
         Text(after, style = lt(13.sp, FontWeight.Bold))
     }
 }

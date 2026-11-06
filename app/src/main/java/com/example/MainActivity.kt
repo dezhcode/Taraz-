@@ -758,8 +758,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     isListening = isDictating,
                                     onVoice = { onDraft ->
                                         viewModel.toggleVoiceDictation { spoken -> viewModel.parseSpokenEntry(spoken, onDraft) }
-                                    },
-                                    onReadReceipt = { uri, cb -> viewModel.readReceipt(uri, cb) }
+                                    }
                                 )
                             }
 

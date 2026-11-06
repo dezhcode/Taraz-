@@ -105,8 +105,6 @@ dependencies {
   implementation(libs.androidx.lifecycle.viewmodel.compose)
   // implementation(libs.androidx.navigation.compose)
   implementation("androidx.work:work-runtime-ktx:2.9.1")
-  // خواندن مبلغ و تاریخ از عکس رسید کارت‌خوان، روی خود گوشی و بدون اینترنت
-  implementation("com.google.mlkit:text-recognition:16.0.1")
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
   implementation(libs.coil.compose)

@@ -119,8 +119,8 @@ fun LayerReportsScreen(
             subtitle = rangeText,
             trailing = {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    MonthStepper(Icons.AutoMirrored.Filled.KeyboardArrowRight, "ماه قبل", true) { offset-- }
-                    MonthStepper(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "ماه بعد", !isCurrentMonth) { offset++ }
+                    MonthStepper(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "ماه قبل", true) { offset-- }
+                    MonthStepper(Icons.AutoMirrored.Filled.KeyboardArrowRight, "ماه بعد", !isCurrentMonth) { offset++ }
                 }
             }
         )
