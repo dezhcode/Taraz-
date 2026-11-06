@@ -452,12 +452,21 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
      * یک ردیف در حساب شخص. [owedToMe]: درست یعنی طلب من بیشتر می‌شود (قرض دادم / پس دادم)،
      * نادرست یعنی کمتر (قرض گرفتم / پس گرفتم). با [account] پول روی آن حساب هم جابه‌جا می‌شود.
      */
-    fun addPersonEntry(personId: Int, amount: Long, owedToMe: Boolean, isRepayment: Boolean, account: String?, note: String) {
+    fun addPersonEntry(personId: Int, amount: Long, owedToMe: Boolean, isRepayment: Boolean, account: String?, note: String, dueDate: Long? = null) {
         if (amount <= 0) return
         viewModelScope.launch {
             val person = persons.value.firstOrNull { it.id == personId } ?: return@launch
-            repository.addPersonEntry(person, amount, owedToMe, isRepayment, account, note)
+            repository.addPersonEntry(person, amount, owedToMe, isRepayment, account, note, dueDate = dueDate)
         }
+    }
+
+    /** متن مؤدبانهٔ یادآوری برای شخصی که به من بدهکار است (برای فرستادن با پیامک یا پیام‌رسان) */
+    fun reminderText(person: Person, balance: Long): String {
+        val userName = userProfile.value?.name?.takeIf { it.isNotBlank() && it != "کاربر مهمان" }
+        val amount = com.example.utils.JalaliDate.toPersianDigits(formatNumber(balance).replace(',', '٬'))
+        return "سلام ${person.name} عزیز، وقتت بخیر.\n" +
+            "یادآوری دوستانه دربارهٔ $amount تومانی که پیش شماست. هر وقت برایت راحت بود خبرم کن.\n" +
+            "ممنونم" + (userName?.let { "\n$it" } ?: "")
     }
 
     /**
@@ -476,6 +485,14 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         if (balance == 0L) return
         // طلب دارم (مثبت) → پس گرفتم؛ بدهکارم (منفی) → پس دادم
         addPersonEntry(personId, kotlin.math.abs(balance), owedToMe = balance < 0, isRepayment = true, account = account, note = "تسویهٔ کامل")
+    }
+
+    /** تقسیم یک خرج جمعی: سهم من هزینه، سهم بقیه طلب من از آن‌ها */
+    fun splitExpense(title: String, total: Long, account: String, category: String, includeMe: Boolean, personIds: List<Int>) {
+        viewModelScope.launch {
+            val people = persons.value.filter { it.id in personIds }
+            repository.splitExpense(title.trim().ifBlank { "خرج جمعی" }, total, account, category, includeMe, people)
+        }
     }
 
     fun deletePersonEntry(debt: Debt) {
@@ -585,13 +602,14 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { repository.deleteCategory(categoryId) }
     }
 
-    fun insertGoal(title: String, targetAmount: Long, currentAmount: Long) {
+    fun insertGoal(title: String, targetAmount: Long, currentAmount: Long, deadline: Long? = null) {
         viewModelScope.launch {
             repository.insertGoal(
                 FinancialGoal(
                     title = title,
                     targetAmount = targetAmount,
-                    currentAmount = currentAmount
+                    currentAmount = currentAmount,
+                    deadline = deadline
                 )
             )
         }

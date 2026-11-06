@@ -91,11 +91,39 @@ class LoanReminderWorker(
                 prefs.edit().putBoolean(stampKey, true).apply()
             }
 
+            remindPersonDues(database, prefs)
+
             Result.success()
         } catch (e: Exception) {
             // A transient database or notification failure should be retried,
             // not silently dropped: a missed instalment is the whole point.
             Result.retry()
+        }
+    }
+
+    /** روز موعد (و یک روز قبلش) قرض‌هایی که با اشخاص هنوز صاف نشده‌اند */
+    private suspend fun remindPersonDues(database: AppDatabase, prefs: android.content.SharedPreferences) {
+        val all = database.debtDao().getAll().first()
+        val balances = all.filter { it.personId != null }.groupBy { it.personId!! }.mapValues { (_, l) -> l.sumOf { it.signedAmount } }
+        for (d in all) {
+            val due = d.dueDate ?: continue
+            if (d.settled || d.isRepayment) continue
+            val bal = d.personId?.let { balances[it] } ?: 0L
+            // حساب صاف شده، یا جهتش عوض شده: یادآوری لازم نیست
+            if (bal == 0L || (bal > 0) != d.owedToMe) continue
+            val days = JalaliDate.daysUntil(due)
+            if (days !in listOf(0, 1)) continue
+            val key = "debt_${d.id}_due_$days"
+            if (prefs.getBoolean(key, false)) continue
+            val amount = NotificationHelper.formatAmount(kotlin.math.abs(bal))
+            val whenText = if (days == 0) "امروز" else "فردا"
+            NotificationHelper.showNotification(
+                context = applicationContext,
+                title = if (d.owedToMe) "$whenText موعد طلب از ${d.person}" else "$whenText موعد پس دادن به ${d.person}",
+                message = if (d.owedToMe) "$amount تومان از ${d.person} طلب دارید." else "$amount تومان به ${d.person} بدهکارید.",
+                notificationId = 9000 + d.id
+            )
+            prefs.edit().putBoolean(key, true).apply()
         }
     }
 

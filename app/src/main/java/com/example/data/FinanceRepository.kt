@@ -281,7 +281,7 @@ class FinanceRepository(private val db: AppDatabase) {
      */
     suspend fun addPersonEntry(
         person: Person, amount: Long, owedToMe: Boolean, isRepayment: Boolean, account: String?, note: String,
-        at: Long = System.currentTimeMillis()
+        at: Long = System.currentTimeMillis(), dueDate: Long? = null
     ) = db.withTransaction {
         var txId: Int? = null
         if (!account.isNullOrBlank()) {
@@ -303,9 +303,35 @@ class FinanceRepository(private val db: AppDatabase) {
         debtDao.insert(
             Debt(
                 person = person.name, amount = amount, owedToMe = owedToMe, note = note.trim(), createdAt = at,
-                personId = person.id, isRepayment = isRepayment, transactionId = txId
+                personId = person.id, isRepayment = isRepayment, transactionId = txId, dueDate = dueDate
             )
         )
+    }
+
+    /**
+     * A shared bill paid from one account: the user's own share is spending in
+     * [category]; everyone else's share becomes a loan to them, so the account
+     * drops by the whole bill while monthly spending shows only the user's part.
+     */
+    suspend fun splitExpense(
+        title: String, total: Long, account: String, category: String, includeMe: Boolean, people: List<Person>
+    ) = db.withTransaction {
+        val n = people.size + if (includeMe) 1 else 0
+        if (n == 0 || total <= 0) return@withTransaction
+        val share = total / n
+        val rest = total - share * n
+        if (includeMe) {
+            insertTransaction(
+                Transaction(
+                    title = title, amount = share + rest, category = category, isExpense = true,
+                    bankName = account, type = TransactionType.EXPENSE
+                )
+            )
+        }
+        people.forEachIndexed { i, p ->
+            val amount = share + if (!includeMe && i == 0) rest else 0
+            if (amount > 0) addPersonEntry(p, amount, owedToMe = true, isRepayment = false, account = account, note = "سهم $title")
+        }
     }
 
     /** Removes a ledger line and the account transaction recorded with it. */

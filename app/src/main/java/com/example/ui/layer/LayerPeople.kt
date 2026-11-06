@@ -72,7 +72,8 @@ fun LayerObligationsScreen(
     onOpenPerson: (Person) -> Unit,
     onAddPerson: () -> Unit,
     onAddEntry: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onSplit: () -> Unit = {}
 ) {
     var segment by rememberSaveable { mutableIntStateOf(0) }
     val loanLeft = loans.filter { !it.isSettled }.sumOf { (it.totalAmount - it.paidAmount).coerceAtLeast(0) }
@@ -118,7 +119,7 @@ fun LayerObligationsScreen(
         )
 
         if (segment == 0) LoansSection(loans, onAddLoan, onPay, onOpenLoan)
-        else PeopleSection(persons, balances, onOpenPerson, onAddPerson, onAddEntry)
+        else PeopleSection(persons, balances, onOpenPerson, onAddPerson, onAddEntry, onSplit)
     }
 }
 
@@ -128,7 +129,8 @@ private fun ColumnScope.PeopleSection(
     balances: Map<Int, Long>,
     onOpenPerson: (Person) -> Unit,
     onAddPerson: () -> Unit,
-    onAddEntry: () -> Unit
+    onAddEntry: () -> Unit,
+    onSplit: () -> Unit
 ) {
     Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -143,6 +145,14 @@ private fun ColumnScope.PeopleSection(
             Spacer(Modifier.width(4.dp))
             Text("شخص جدید", style = lt(14.sp, FontWeight.Bold, L.PrimaryText))
         }
+    }
+
+    if (persons.isNotEmpty()) {
+        Row(
+            Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp).fillMaxWidth().height(42.dp).clip(ButtonShape)
+                .background(L.Surface).clickable(onClick = onSplit),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
+        ) { Text("تقسیم یک خرج جمعی (شام، سفر، خرید)", style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText)) }
     }
 
     if (persons.isEmpty()) {
@@ -223,7 +233,8 @@ fun LayerPersonDetailScreen(
     onSettle: (account: String?) -> Unit,
     onDeleteEntry: (Debt) -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onShareReminder: (() -> Unit)? = null
 ) {
     var settling by remember { mutableStateOf(false) }
     var askDelete by remember { mutableStateOf(false) }
@@ -263,6 +274,25 @@ fun LayerPersonDetailScreen(
                 Text(money(abs(balance)), style = lt(34.sp, FontWeight.Light, letterSpacing = (-1).sp))
                 Text("تومان", style = lt(14.sp), modifier = Modifier.padding(bottom = 6.dp))
             }
+            val nextDue = mine.filter { !it.settled && !it.isRepayment && it.dueDate != null && it.owedToMe == (balance > 0) }
+                .minByOrNull { it.dueDate!! }?.dueDate
+            if (balance != 0L && nextDue != null) {
+                val days = JalaliDate.daysUntil(nextDue)
+                Text(
+                    "موعد ${JalaliDate.fromTimestamp(nextDue).formatShort()} · " + when {
+                        days < 0 -> "${fa(-days)} روز گذشته"
+                        days == 0 -> "امروز"
+                        else -> "${fa(days)} روز دیگر"
+                    },
+                    style = lt(12.sp, FontWeight.SemiBold, if (days < 0) L.RedText else L.Muted)
+                )
+            }
+            if (balance > 0 && onShareReminder != null) {
+                Box(
+                    Modifier.padding(top = 6.dp).height(36.dp).clip(ButtonShape).background(L.Surface).clickable(onClick = onShareReminder).padding(horizontal = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) { Text("فرستادن یادآوری برای ${person.name}", style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText)) }
+            }
         }
 
         SectionTitle("ریز حساب")
@@ -283,6 +313,7 @@ fun LayerPersonDetailScreen(
                             )
                             Text(
                                 JalaliDate.fromTimestamp(d.createdAt).formatShort() +
+                                    (d.dueDate?.let { " · موعد ${JalaliDate.fromTimestamp(it).formatShort()}" } ?: "") +
                                     (if (d.note.isNotBlank()) " · ${d.note}" else "") +
                                     (if (d.transactionId != null) " · از حساب" else ""),
                                 style = lt(12.sp, color = L.Muted), maxLines = 1
@@ -428,8 +459,9 @@ fun PersonEntrySheet(
     cards: List<BankCard>,
     onDismiss: () -> Unit,
     onAddPerson: () -> Unit,
-    onSave: (personId: Int, amount: Long, owedToMe: Boolean, isRepayment: Boolean, account: String?, note: String) -> Unit
+    onSave: (personId: Int, amount: Long, owedToMe: Boolean, isRepayment: Boolean, account: String?, note: String, dueDate: Long?) -> Unit
 ) {
+    var dueDays by remember { mutableStateOf<Int?>(null) }
     var personId by remember { mutableStateOf(preselectedId ?: persons.firstOrNull()?.id) }
     // شخصی که همین الان از داخل این شیت ساخته شد، انتخاب شود
     androidx.compose.runtime.LaunchedEffect(preselectedId) { if (preselectedId != null) personId = preselectedId }
@@ -448,7 +480,10 @@ fun PersonEntrySheet(
         topGap = 50.dp,
         bottomBar = {
             BigButton("ثبت", enabled = person != null && amount > 0) {
-                onSave(person!!.id, amount, kind.owedToMe, kind.isRepayment, account, note)
+                onSave(
+                    person!!.id, amount, kind.owedToMe, kind.isRepayment, account, note,
+                    dueDays?.takeIf { !kind.isRepayment }?.let { startOfDay(System.currentTimeMillis()) + it * DAY_MS }
+                )
                 onDismiss()
             }
         }
@@ -481,7 +516,85 @@ fun PersonEntrySheet(
             "اگر حساب انتخاب کنید موجودی آن هم تغییر می‌کند، ولی در هزینه و درآمد ماه حساب نمی‌شود.",
             style = lt(11.sp, color = L.Muted, lineHeight = 19.sp)
         )
+        if (!kind.isRepayment) {
+            Text(if (kind.owedToMe) "کی پس می‌دهد؟" else "کی باید پس بدهید؟", style = lt(13.sp, FontWeight.SemiBold))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(null to "بدون موعد", 7 to "یک هفته", 14 to "دو هفته", 30 to "یک ماه", 90 to "سه ماه").forEach { (d, label) ->
+                    LChip(label, dueDays == d) { dueDays = d }
+                }
+            }
+            if (dueDays != null) Text("روز موعد یادآوری می‌آید.", style = lt(11.sp, color = L.Muted))
+        }
         LField(value = note, onChange = { note = it.take(60) }, label = "یادداشت (اختیاری)", placeholder = "مثلاً برای اجاره")
+        Spacer(Modifier.height(4.dp))
+    }
+}
+
+// ───────────────────────── تقسیم خرج جمعی ─────────────────────────
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun SplitExpenseSheet(
+    persons: List<Person>,
+    cards: List<BankCard>,
+    categories: List<com.example.data.Category>,
+    onDismiss: () -> Unit,
+    onSave: (title: String, total: Long, account: String, category: String, includeMe: Boolean, personIds: List<Int>) -> Unit
+) {
+    var title by remember { mutableStateOf("") }
+    var totalText by remember { mutableStateOf("") }
+    var account by remember { mutableStateOf(cards.firstOrNull()?.bankName) }
+    val expenseCats = categories.filter { !it.isIncome }.sortedBy { it.sortOrder }
+    var category by remember { mutableStateOf(expenseCats.firstOrNull()?.name ?: "سایر") }
+    var includeMe by remember { mutableStateOf(true) }
+    var picked by remember { mutableStateOf(setOf<Int>()) }
+    val total = parseAmount(totalText)
+    val n = picked.size + if (includeMe) 1 else 0
+    val share = if (n > 0) total / n else 0L
+    val ok = total > 0 && picked.isNotEmpty() && account != null
+
+    LayerSheet(
+        title = "تقسیم خرج جمعی",
+        onDismiss = onDismiss,
+        topGap = 40.dp,
+        bottomBar = {
+            BigButton("ثبت و تقسیم", enabled = ok) {
+                onSave(title, total, account!!, category, includeMe, picked.toList())
+                onDismiss()
+            }
+        }
+    ) {
+        LField(value = title, onChange = { title = it.take(40) }, label = "برای چه؟", placeholder = "مثلاً شام جمعه")
+        LField(
+            value = totalText, onChange = { totalText = groupedInput(it) }, label = "کل مبلغ (تومان)", placeholder = "۰",
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+        )
+        Text("چه کسانی بودند؟", style = lt(13.sp, FontWeight.SemiBold))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LChip("خودم", includeMe) { includeMe = !includeMe }
+            persons.sortedBy { it.name }.forEach { p ->
+                val on = p.id in picked
+                LChip(p.name, on) { picked = if (on) picked - p.id else picked + p.id }
+            }
+        }
+        if (total > 0 && n > 0) {
+            Text(
+                "سهم هر نفر ${money(share)} تومان. " +
+                    (if (includeMe) "سهم خودتان هزینه ثبت می‌شود و " else "") +
+                    "سهم ${fa(picked.size)} نفر دیگر به طلب شما از آن‌ها اضافه می‌شود.",
+                style = lt(12.sp, color = L.PrimaryText, lineHeight = 21.sp)
+            )
+        }
+        Text("از کدام حساب پرداخت کردید؟", style = lt(13.sp, FontWeight.SemiBold))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            cards.forEach { c -> LChip(c.bankName, account == c.bankName) { account = c.bankName } }
+        }
+        if (includeMe) {
+            Text("دستهٔ سهم خودتان", style = lt(13.sp, FontWeight.SemiBold))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                expenseCats.forEach { c -> LChip(c.name, category == c.name) { category = c.name } }
+            }
+        }
         Spacer(Modifier.height(4.dp))
     }
 }

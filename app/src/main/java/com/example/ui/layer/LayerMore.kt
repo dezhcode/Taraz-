@@ -51,6 +51,7 @@ import com.example.data.FinancialGoal
 import com.example.data.Loan
 import com.example.data.Transaction
 import com.example.data.countsAsExpense
+import com.example.data.countsAsIncome
 import com.example.ui.CategoryIcons
 import com.example.ui.UserProfile
 import com.example.utils.JalaliDate
@@ -133,8 +134,9 @@ fun LayerBudgetSheet(current: Long, avgDaily: Long, onDismiss: () -> Unit, onSav
 @Composable
 fun LayerGoalsScreen(
     goals: List<FinancialGoal>,
+    transactions: List<Transaction> = emptyList(),
     onBack: () -> Unit,
-    onAddGoal: (title: String, target: Long, current: Long) -> Unit,
+    onAddGoal: (title: String, target: Long, current: Long, deadline: Long?) -> Unit,
     onAdjust: (FinancialGoal, Long) -> Unit,
     onDelete: (FinancialGoal) -> Unit
 ) {
@@ -187,6 +189,17 @@ fun LayerGoalsScreen(
                     Text(money(main.currentAmount), style = lt(13.sp, FontWeight.Bold))
                     Text(" از ${money(main.targetAmount)}", style = lt(13.sp, color = L.Muted), modifier = Modifier.weight(1f))
                 }
+                val plan = remember(main, transactions) { goalPlan(main, transactions) }
+                if (plan != null) {
+                    Column(
+                        Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                            .background(if (plan.onTrack) L.GreenSoft else L.AmberSoft).padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(plan.headline, style = lt(13.sp, FontWeight.Bold, if (plan.onTrack) L.GreenText else L.AmberInk))
+                        Text(plan.advice, style = lt(12.sp, color = if (plan.onTrack) L.GreenText else L.AmberInk, lineHeight = 21.sp))
+                    }
+                }
                 Row(Modifier.padding(top = 14.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     BigButton("افزودن پول", Modifier.weight(1f), height = 48.dp) { moneyFor = main to true }
                     Box(
@@ -207,6 +220,7 @@ fun LayerGoalsScreen(
                             Text("${fa((frac * 100).toInt())}٪", style = lt(13.sp, FontWeight.Bold))
                         }
                         LProgress(frac, L.Ink, height = 6.dp)
+                        goalPlan(g, transactions)?.let { Text(it.headline, style = lt(12.sp, FontWeight.SemiBold, if (it.onTrack) L.GreenText else L.AmberInk)) }
                         Text("${millions(g.currentAmount).removeSuffix("م")} از ${millions(g.targetAmount).removeSuffix("م")} میلیون", style = lt(12.sp, color = L.Muted))
                     }
                 }
@@ -232,7 +246,7 @@ fun LayerGoalsScreen(
     }
 
     if (showAdd) {
-        LayerAddGoalSheet(onDismiss = { showAdd = false }, onSave = { t, target, cur -> onAddGoal(t, target, cur); showAdd = false })
+        LayerAddGoalSheet(onDismiss = { showAdd = false }, onSave = { t, target, cur, dl -> onAddGoal(t, target, cur, dl); showAdd = false })
     }
     moneyFor?.let { (goal, deposit) ->
         var amount by remember(goal.id, deposit) { mutableStateOf("") }
@@ -256,20 +270,78 @@ fun LayerGoalsScreen(
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun LayerAddGoalSheet(onDismiss: () -> Unit, onSave: (String, Long, Long) -> Unit) {
+private fun LayerAddGoalSheet(onDismiss: () -> Unit, onSave: (String, Long, Long, Long?) -> Unit) {
     var title by remember { mutableStateOf("") }
     var target by remember { mutableStateOf("") }
     var current by remember { mutableStateOf("") }
+    var months by remember { mutableStateOf<Int?>(12) }
     val t = parseAmount(target)
     LayerSheet(
-        title = "هدف جدید", onDismiss = onDismiss, topGap = 160.dp,
-        bottomBar = { BigButton("ساخت هدف", enabled = title.isNotBlank() && t > 0) { onSave(title.trim(), t, parseAmount(current)) } }
+        title = "هدف جدید", onDismiss = onDismiss, topGap = 120.dp,
+        bottomBar = {
+            BigButton("ساخت هدف", enabled = title.isNotBlank() && t > 0) {
+                onSave(title.trim(), t, parseAmount(current), months?.let { shiftJalaliMonth(System.currentTimeMillis(), it) })
+            }
+        }
     ) {
         LField(title, { title = it }, "نام هدف", placeholder = "مثلاً سفر شمال")
         LField(target, { target = groupedInput(it) }, "مبلغ هدف (تومان)", placeholder = "۰", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
         LField(current, { current = groupedInput(it) }, "تا حالا جمع کرده‌اید (اختیاری)", placeholder = "۰", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+        Text("تا کی؟", style = lt(13.sp, FontWeight.SemiBold))
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(3 to "۳ ماه", 6 to "۶ ماه", 12 to "یک سال", 24 to "دو سال", null to "بدون موعد").forEach { (m, label) ->
+                LChip(label, months == m) { months = m }
+            }
+        }
+        val left = (t - parseAmount(current)).coerceAtLeast(0)
+        months?.let { m ->
+            if (left > 0) Text("یعنی ماهی ${money(left / m)} تومان کنار بگذارید.", style = lt(12.sp, color = L.PrimaryText))
+        }
     }
+}
+
+/** برنامهٔ هدف: ماهی چقدر لازم است و با روند خرج و درآمد فعلی می‌رسید یا نه */
+data class GoalPlan(val headline: String, val advice: String, val onTrack: Boolean)
+
+fun goalPlan(goal: FinancialGoal, transactions: List<Transaction>, now: Long = System.currentTimeMillis()): GoalPlan? {
+    val deadline = goal.deadline ?: return null
+    val left = (goal.targetAmount - goal.currentAmount).coerceAtLeast(0)
+    if (left == 0L) return GoalPlan("به هدف رسیدید", "می‌توانید آن را تمام‌شده علامت بزنید.", true)
+    val d = JalaliDate.fromTimestamp(deadline)
+    val t = JalaliDate.fromTimestamp(now)
+    val monthsLeft = ((d.year - t.year) * 12 + (d.month - t.month)).coerceAtLeast(1)
+    val perMonth = (left + monthsLeft - 1) / monthsLeft
+    val headline = "ماهی ${money(perMonth)} تومان تا ${d.formatMonthYear()}"
+
+    // میانگین سه ماه گذشته (بدون ماه جاری که هنوز تمام نشده)
+    val months = (1..3).map { shiftJalaliMonth(now, -it) }
+    val stats = months.map { ts ->
+        val (s, e) = JalaliDate.monthRange(ts)
+        val inMonth = transactions.filter { it.date in s until e }
+        Triple(inMonth.filter { it.countsAsIncome }.sumOf { it.amount }, inMonth.filter { it.countsAsExpense }.sumOf { it.amount }, inMonth)
+    }
+    val withData = stats.filter { it.first > 0 || it.second > 0 }
+    if (withData.isEmpty()) return GoalPlan(headline, "وقتی چند ماه تراکنش ثبت کنید، می‌گویم با روند فعلی به موقع می‌رسید یا از کجا کم کنید.", true)
+    val avgSaved = withData.sumOf { it.first - it.second } / withData.size
+    if (avgSaved >= perMonth) {
+        return GoalPlan(headline, "در سه ماه گذشته به‌طور میانگین ماهی ${money(avgSaved)} تومان پس‌انداز داشتید؛ با همین روند به موقع می‌رسید.", true)
+    }
+    val gap = perMonth - avgSaved.coerceAtLeast(0)
+    // دسته‌ای که بیشترین خرج اختیاری را دارد (قسط و قبوض را نمی‌شود کم کرد)
+    val fixed = setOf("قسط", "قبوض", "انتقال", "قرض و طلب")
+    val byCat = withData.flatMap { it.third }.filter { it.countsAsExpense && it.category !in fixed }
+        .groupBy { it.category }.mapValues { (_, l) -> l.sumOf { it.amount } / withData.size }
+        .toList().sortedByDescending { it.second }
+    val top = byCat.firstOrNull()
+    val advice = if (top != null && top.second > 0) {
+        val pct = (gap * 100 / top.second).coerceAtMost(100L)
+        "میانگین پس‌انداز شما ماهی ${money(avgSaved.coerceAtLeast(0))} است و ${money(gap)} کم دارید. " +
+            "اگر از «${top.first}» (ماهی حدود ${money(top.second)}) ${fa(pct)}٪ کم کنید به موقع می‌رسید" +
+            if (pct >= 100) "؛ یا موعد را عقب‌تر بیندازید." else "."
+    } else "ماهی ${money(gap)} بیشتر از روند فعلی لازم است؛ موعد را عقب‌تر بیندازید یا از خرج‌ها کم کنید."
+    return GoalPlan(headline, advice, false)
 }
 
 // ───────────────────────── تنظیمات ─────────────────────────

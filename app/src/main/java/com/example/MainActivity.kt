@@ -161,6 +161,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 var isPersonSheetOpen by remember { mutableStateOf(false) }
                 var entrySheetPersonId by remember { mutableStateOf<Int?>(null) }
                 var isEntrySheetOpen by remember { mutableStateOf(false) }
+                var isSplitOpen by remember { mutableStateOf(false) }
                 fun openSub(name: String) { subStack.add(name) }
                 fun closeSub() { if (subStack.isNotEmpty()) subStack.removeAt(subStack.lastIndex) }
 
@@ -464,6 +465,14 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                             onDelete = {
                                                 viewModel.deletePerson(person.id)
                                                 closeSub()
+                                            },
+                                            onShareReminder = {
+                                                val text = viewModel.reminderText(person, personBalances[person.id] ?: 0L)
+                                                val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                    type = "text/plain"
+                                                    putExtra(android.content.Intent.EXTRA_TEXT, text)
+                                                }
+                                                context.startActivity(android.content.Intent.createChooser(send, "فرستادن یادآوری"))
                                             }
                                         )
                                     }
@@ -514,8 +523,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 "goals" -> {
                                     com.example.ui.layer.LayerGoalsScreen(
                                         goals = allGoals,
+                                        transactions = transactions,
                                         onBack = { closeSub() },
-                                        onAddGoal = { t, target, cur -> viewModel.insertGoal(t, target, cur) },
+                                        onAddGoal = { t, target, cur, dl -> viewModel.insertGoal(t, target, cur, dl) },
                                         onAdjust = { g, d -> viewModel.adjustGoal(g, d) },
                                         onDelete = { viewModel.deleteGoal(it.id) }
                                     )
@@ -631,7 +641,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             onOpenLoan = { selectedLoanId = it.id; openSub("loan_detail") },
                                                             onOpenPerson = { selectedPersonId = it.id; openSub("person_detail") },
                                                             onAddPerson = { personSheetFor = null; isPersonSheetOpen = true },
-                                                            onAddEntry = { entrySheetPersonId = null; isEntrySheetOpen = true }
+                                                            onAddEntry = { entrySheetPersonId = null; isEntrySheetOpen = true },
+                                                            onSplit = { isSplitOpen = true }
                                                         )
                                                     }
 
@@ -827,6 +838,16 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 )
                             }
 
+                            if (isSplitOpen) {
+                                com.example.ui.layer.SplitExpenseSheet(
+                                    persons = persons,
+                                    cards = cards,
+                                    categories = categories,
+                                    onDismiss = { isSplitOpen = false },
+                                    onSave = { t, total, acc, cat, me, ids -> viewModel.splitExpense(t, total, acc, cat, me, ids) }
+                                )
+                            }
+
                             // ثبت قرض یا پس‌دادن با یک شخص
                             if (isEntrySheetOpen) {
                                 com.example.ui.layer.PersonEntrySheet(
@@ -836,8 +857,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     cards = cards,
                                     onDismiss = { isEntrySheetOpen = false },
                                     onAddPerson = { personSheetFor = null; isPersonSheetOpen = true },
-                                    onSave = { pid, amount, owed, rep, account, note ->
-                                        viewModel.addPersonEntry(pid, amount, owed, rep, account, note)
+                                    onSave = { pid, amount, owed, rep, account, note, due ->
+                                        viewModel.addPersonEntry(pid, amount, owed, rep, account, note, due)
                                     }
                                 )
                             }
