@@ -179,7 +179,7 @@ fun LayerSmsSetupScreen(
                                 .border(2.dp, if (s.isEnabled) L.Primary else L.Chevron, RoundedCornerShape(7.dp)),
                             contentAlignment = Alignment.Center
                         ) { if (s.isEnabled) Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(16.dp)) }
-                        Box(Modifier.width(26.dp).height(18.dp).clip(RoundedCornerShape(4.dp)).background(bankColor(s.bankName)))
+                        LogoOrColor(remember(s.bankName) { BankLogos.assetFor(s.bankName) }, bankColor(s.bankName), 26.dp, 18.dp)
                         Column(Modifier.weight(1f)) {
                             Text(s.bankName, style = lt(14.sp, FontWeight.SemiBold), maxLines = 1)
                             Text("${fa(s.messageCount)} پیامک · شماره ${fa(s.senderNumber)}", style = lt(12.sp, color = L.Muted), maxLines = 1)
@@ -320,7 +320,7 @@ fun LayerSmsReviewScreen(
             Box(Modifier.fillMaxWidth().height(1.dp).background(L.Line))
             Row(Modifier.fillMaxWidth().height(46.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("حساب", style = lt(14.sp, color = L.Muted), modifier = Modifier.width(60.dp))
-                Box(Modifier.width(24.dp).height(16.dp).clip(RoundedCornerShape(4.dp)).background(cardColorFor(account, cards)))
+                AccountSwatch(account, cards, 24.dp, 16.dp)
                 Spacer(Modifier.width(8.dp))
                 Text(account.ifBlank { "—" }, style = lt(14.sp, FontWeight.SemiBold))
             }

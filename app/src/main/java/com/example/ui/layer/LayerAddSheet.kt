@@ -298,7 +298,7 @@ private fun AccountPicker(cards: List<BankCard>, selected: String?, onSelect: (S
             verticalAlignment = Alignment.CenterVertically
         ) {
             val card = cards.firstOrNull { it.bankName == selected }
-            Box(Modifier.width(26.dp).height(18.dp).clip(RoundedCornerShape(4.dp)).background(cardColorFor(selected.orEmpty(), cards)))
+            AccountSwatch(selected.orEmpty(), cards)
             Spacer(Modifier.width(8.dp))
             Text(card?.let { shortAccountLabel(it) } ?: "حسابی ندارید", style = lt(13.sp, FontWeight.Medium), modifier = Modifier.weight(1f), maxLines = 1)
             Icon(Icons.Default.KeyboardArrowDown, null, tint = L.Muted, modifier = Modifier.size(16.dp))
@@ -324,7 +324,7 @@ private fun TransferRow(label: String, cards: List<BankCard>, selected: String?,
         ) {
             Text(label, style = lt(12.sp, color = L.Muted), modifier = Modifier.width(28.dp))
             val card = cards.firstOrNull { it.bankName == selected }
-            Box(Modifier.width(26.dp).height(18.dp).clip(RoundedCornerShape(4.dp)).background(if (card != null) L.Primary.copy(alpha = 0.85f) else L.Rail))
+            AccountSwatch(selected.orEmpty(), cards, color = if (card != null) L.Primary.copy(alpha = 0.85f) else L.Rail)
             Spacer(Modifier.width(10.dp))
             Text(card?.let { shortAccountLabel(it) } ?: "انتخاب حساب", style = lt(14.sp, FontWeight.SemiBold), modifier = Modifier.weight(1f))
             if (card != null) Text(millions(card.balance), style = lt(12.sp, color = L.Muted))

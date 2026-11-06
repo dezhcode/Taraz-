@@ -7,11 +7,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -57,12 +59,36 @@ private fun senderFor(card: BankCard, senders: List<BankSender>): BankSender? =
 /** نشان کوچک رنگی بانک */
 @Composable
 private fun BankChip(card: BankCard, color: Color, w: Int = 54, h: Int = 36) {
+    val logo = remember(card.bankName, card.cardNumber, card.accountType) {
+        if (card.isCash) null else BankLogos.assetFor(card.bankName, card.cardNumber)
+    }
     Box(
         Modifier.width(w.dp).height(h.dp).clip(RoundedCornerShape(8.dp)).background(if (card.isCash) L.GreenSoft else color),
-        contentAlignment = if (card.isCash) Alignment.Center else Alignment.BottomStart
+        contentAlignment = if (card.isCash || logo != null) Alignment.Center else Alignment.BottomStart
     ) {
         if (card.isCash) Icon(Icons.Default.Payments, null, tint = L.GreenText, modifier = Modifier.size(20.dp))
+        else if (logo != null) Box(
+            Modifier.size((h - 8).dp).clip(RoundedCornerShape(8.dp)).background(Color.White).padding(3.dp),
+            contentAlignment = Alignment.Center
+        ) { BankLogo(logo, Modifier.fillMaxSize(), card.bankName) }
         else Text(card.bankName.removePrefix("بانک ").take(6), style = lt(12.sp, FontWeight.Bold, Color.White), modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp), maxLines = 1)
+    }
+}
+
+/** «شناسایی شد: بانک ملت» با لوگوی همان بانک */
+@Composable
+private fun DetectedBankPill(bank: String, logo: String?) {
+    Row(
+        Modifier.clip(PillShape).background(L.GreenSoft).padding(start = 5.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        if (logo != null) Box(
+            Modifier.size(22.dp).clip(CircleShape).background(Color.White).padding(3.dp),
+            contentAlignment = Alignment.Center
+        ) { BankLogo(logo, Modifier.fillMaxSize()) }
+        else Icon(Icons.Default.Check, null, tint = L.GreenText, modifier = Modifier.size(14.dp))
+        Text("شناسایی شد: $bank", style = lt(12.sp, FontWeight.Bold, L.GreenText))
     }
 }
 
@@ -147,6 +173,9 @@ fun LayerAccountDetailScreen(
     val sender = senderFor(card, senders)
     val smsOn = sender?.isEnabled == true
     var askDelete by remember { mutableStateOf(false) }
+    val logo = remember(card.bankName, card.cardNumber, card.accountType) {
+        if (card.isCash) null else BankLogos.assetFor(card.bankName, card.cardNumber)
+    }
 
     LayerScreen(
         title = card.bankName,
@@ -157,7 +186,13 @@ fun LayerAccountDetailScreen(
         Box(
             Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(178.dp).clip(RoundedCornerShape(24.dp)).background(color).padding(horizontal = 20.dp, vertical = 18.dp)
         ) {
-            Column(Modifier.align(Alignment.TopStart), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            if (logo != null) {
+                Box(
+                    Modifier.align(Alignment.TopEnd).size(46.dp).clip(RoundedCornerShape(14.dp)).background(Color.White).padding(6.dp),
+                    contentAlignment = Alignment.Center
+                ) { BankLogo(logo, Modifier.fillMaxSize(), card.bankName) }
+            }
+            Column(Modifier.align(Alignment.TopStart).padding(end = if (logo != null) 54.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("موجودی", style = lt(12.sp, color = Color(0xD9FFFFFF)))
                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(money(card.balance), style = lt(32.sp, FontWeight.Light, Color.White, letterSpacing = (-1).sp))
@@ -277,6 +312,7 @@ fun LayerAddAccountSheet(
     var balanceText by remember { mutableStateOf("") }
     val type = types[typeIdx].first
     val detected = remember(number) { BankBin.bankFor(number) }
+    val detectedLogo = remember(number) { BankLogos.assetForCard(number) }
 
     LaunchedEffect(detected) {
         if (detected != null && !nameTouched && type == AccountType.BANK) name = detected
@@ -308,16 +344,7 @@ fun LayerAddAccountSheet(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 visualTransformation = CardNumberTransformation
             )
-            if (detected != null) {
-                Row(
-                    Modifier.clip(PillShape).background(L.GreenSoft).padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(Icons.Default.Check, null, tint = L.GreenText, modifier = Modifier.size(14.dp))
-                    Text("شناسایی شد: $detected", style = lt(12.sp, FontWeight.Bold, L.GreenText))
-                }
-            }
+            if (detected != null) DetectedBankPill(detected, detectedLogo)
         }
 
         LField(
@@ -342,7 +369,7 @@ fun LayerAddAccountSheet(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text("پیش‌نمایش", style = lt(12.sp, color = L.Muted))
-            val previewCard = BankCard(bankName = cleanName.ifEmpty { "نام حساب" }, balance = balance, accountType = type)
+            val previewCard = BankCard(bankName = cleanName.ifEmpty { "نام حساب" }, cardNumber = if (type == AccountType.BANK) numberDigits else "", balance = balance, accountType = type)
             BankChip(previewCard, if (type == AccountType.CASH) L.Green else L.Primary)
             Text(previewCard.bankName, style = lt(14.sp, FontWeight.SemiBold), modifier = Modifier.weight(1f), maxLines = 1)
             Text(money(balance), style = lt(14.sp, FontWeight.SemiBold))
@@ -383,6 +410,8 @@ fun LayerEditAccountSheet(
                 value = number, onChange = { number = it.filter { c -> c.isDigit() }.take(16) }, label = "شمارهٔ کارت (اختیاری)",
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), visualTransformation = CardNumberTransformation
             )
+            val detected = remember(number) { BankBin.bankFor(number) }
+            if (detected != null) DetectedBankPill(detected, remember(number) { BankLogos.assetForCard(number) })
             LField(value = holder, onChange = { holder = it }, label = "نام صاحب کارت")
         }
         Spacer(Modifier.height(4.dp))

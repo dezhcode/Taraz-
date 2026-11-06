@@ -4,7 +4,7 @@ package com.example.data
  * Card prefix (BIN/IIN) to bank, so typing a card number can identify its bank.
  *
  * The first six digits of an Iranian card identify the issuer. The names here
- * are spelled the way IranianBankLogo expects them, so a hit gives both a name
+ * are spelled the way BankLogos (ui/layer/BankLogo.kt) expects them, so a hit gives both a name
  * to fill in and a logo to show.
  *
  * Two caveats worth knowing:
@@ -62,7 +62,9 @@ object BankBin {
         "504172" to "بانک قرض الحسنه رسالت",
         "507677" to "بانک نور",
         "628157" to "موسسه اعتباری توسعه",
-        "505801" to "بانک سپه"
+        "505801" to "موسسه اعتباری کوثر",
+        "585947" to "بانک خاورمیانه",
+        "636795" to "بانک مرکزی"
     )
 
     /** The bank for a card number, or null when the prefix is not one we know. */

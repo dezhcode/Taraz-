@@ -301,7 +301,7 @@ fun LayerPaySheet(
                 Box {
                     Row(Modifier.fillMaxWidth().height(50.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("از حساب", style = lt(14.sp, color = L.Muted), modifier = Modifier.weight(1f))
-                        Box(Modifier.width(24.dp).height(16.dp).clip(RoundedCornerShape(4.dp)).background(cardColorFor(from, cards)))
+                        AccountSwatch(from, cards, 24.dp, 16.dp)
                         Spacer(Modifier.width(10.dp))
                         Text(fromCard?.let { shortAccountLabel(it) } ?: from, style = lt(14.sp, FontWeight.SemiBold))
                         Spacer(Modifier.width(10.dp))

@@ -155,7 +155,7 @@ fun LayerTxEditSheet(
 
         ChangeRow("حساب", {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.width(24.dp).height(16.dp).clip(RoundedCornerShape(4.dp)).background(cardColorFor(account, cards)))
+                AccountSwatch(account, cards, 24.dp, 16.dp)
                 Text(cards.firstOrNull { it.bankName == account }?.let { shortAccountLabel(it) } ?: account, style = lt(14.sp, FontWeight.SemiBold))
             }
         }, onAction = if (locked) null else { { editing = if (editing == Editing.ACCOUNT) Editing.NONE else Editing.ACCOUNT } })

@@ -128,14 +128,17 @@ fun IranianBankLogo(
             .build()
     }
     
-    val svgFilename = remember(name) { getSvgFilenameForBank(name) }
+    // لوگوهای کامل‌تر LogoS اول، بعد لوگوهای قدیمی
+    val assetFile = remember(name) {
+        com.example.ui.layer.BankLogos.assetFor(name) ?: getSvgFilenameForBank(name)?.let { "banks/$it" }
+    }
 
     Box(
         modifier = baseModifier,
         contentAlignment = Alignment.Center
     ) {
-        if (svgFilename != null) {
-            val assetPath = "file:///android_asset/banks/$svgFilename"
+        if (assetFile != null) {
+            val assetPath = "file:///android_asset/$assetFile"
             val imageModifier = if (hasCircleBg) Modifier.size(size * 0.85f) else Modifier.fillMaxSize()
             
             AsyncImage(
