@@ -103,7 +103,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         get() = voiceController.realtimeWebView
     init {
         // مثل AI Studio: هندشیک اولیه در پس‌زمینه تا اولین پیام منتظر حل چالش نماند
-        viewModelScope.launch { com.example.ai.DuckAiClient.get(application).rehandshake() }
+        // دستیار در نسخهٔ فعلی خاموش است؛ پس در شروع هیچ اتصالی به سرویس هوش مصنوعی برقرار نمی‌شود
+        if (com.example.Features.AI) viewModelScope.launch { com.example.ai.DuckAiClient.get(application).rehandshake() }
     }
 
     val liveVoiceState: StateFlow<com.example.ai.LiveVoiceState> = voiceController.liveState
@@ -1103,6 +1104,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun refreshAiInsightsIfDue(force: Boolean = false) {
+        if (!com.example.Features.AI) return
         val txList = transactions.value
         if (txList.isEmpty()) return
         val last = sharedPrefs.getLong("ai_insight_at", 0L)
