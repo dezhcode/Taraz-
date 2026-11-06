@@ -46,7 +46,6 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
     ) { /* Declining is fine: reminders stay off until enabled in settings. */ }
 
-    @OptIn(ExperimentalMaterial3Api::class)
     /** When the app last went to the background; 0 while it is in front. */
     private var backgroundedAt = 0L
 
@@ -67,6 +66,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         const val LOCK_GRACE_MS = 30_000L
     }
 
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)

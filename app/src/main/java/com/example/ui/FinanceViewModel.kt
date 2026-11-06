@@ -237,7 +237,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
-    private val _dailyBudget = MutableStateFlow<Long>(sharedPrefs.getLong("daily_budget", 800000L))
+    private val _dailyBudget = MutableStateFlow<Long>(sharedPrefs.getLong("daily_budget", 0L))
     val dailyBudget: StateFlow<Long> = _dailyBudget.asStateFlow()
 
     fun setDailyBudget(amount: Long) {
@@ -502,14 +502,20 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 }
                 array.put(obj)
             }
-            sharedPrefs.edit().putString("chat_history_json", array.toString()).apply()
+            // Chat holds balances and transactions: keep it in the encrypted store.
+            securePrefs.edit().putString("chat_history_json", array.toString()).apply()
         } catch (e: Exception) {
             Log.e("FinanceViewModel", "Error saving chat history", e)
         }
     }
 
     private fun loadChatHistory(): List<ChatMessage> {
-        val jsonStr = sharedPrefs.getString("chat_history_json", null)
+        val jsonStr = securePrefs.getString("chat_history_json", null)
+            ?: sharedPrefs.getString("chat_history_json", null)?.also { legacy ->
+                // One-time move out of the plain prefs file.
+                securePrefs.edit().putString("chat_history_json", legacy).apply()
+                sharedPrefs.edit().remove("chat_history_json").apply()
+            }
         if (jsonStr.isNullOrEmpty()) {
             return listOf(
                 ChatMessage(
@@ -587,56 +593,20 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             _isInitialLoading.value = false
         }
 
-        // Trigger AI Backend calculation for financial health whenever SQLite data changes
+        // Health score and coach tip from the assistant, at most every few hours
+        // instead of on every change (each call sent all of the user's figures).
+        // Between calls the last answer is reused and the local rules fill in.
+        restoreAiInsights()
         viewModelScope.launch {
             @OptIn(kotlinx.coroutines.FlowPreview::class)
-            combine(transactions, cards, loans, activeGoal) { txs, crds, lns, gl ->
-                listOf(txs, crds, lns, gl)
-            }.debounce(800).collectLatest { _ ->
-                val txList = transactions.value
-                val cardList = cards.value
-                val loanList = loans.value
-                val goal = activeGoal.value
-                if (txList.isNotEmpty() || cardList.isNotEmpty() || loanList.isNotEmpty()) {
-                    val result = aiRepository.calculateFinancialHealth(txList, cardList, loanList, goal)
-                    result.getOrNull()?.let { aiHealth ->
-                        _aiFinancialHealth.value = aiHealth
-                    }
-                }
-            }
+            combine(transactions, cards, loans) { _, _, _ -> Unit }
+                .debounce(3_000)
+                .collectLatest { refreshAiInsightsIfDue() }
         }
 
-        // Trigger AI Financial Coach calculation whenever SQLite financial data changes
-        viewModelScope.launch {
-            @OptIn(kotlinx.coroutines.FlowPreview::class)
-            combine(transactions, todayExpense, dailyBudget) { _, _, _ ->
-                Unit
-            }.debounce(800).collectLatest { _ ->
-                val txList = transactions.value
-                val tExpense = todayExpense.value
-                val dBudget = dailyBudget.value
-                val cardList = cards.value
-                val loanList = loans.value
-                val goal = activeGoal.value
-                if (txList.isNotEmpty()) {
-                    val result = aiRepository.getFinancialCoachInsight(
-                        transactions = txList,
-                        todayExpense = tExpense,
-                        dailyBudget = dBudget,
-                        cards = cardList,
-                        loans = loanList,
-                        activeGoal = goal
-                    )
-                    result.getOrNull()?.let { insight ->
-                        _aiFinancialCoachInsight.value = insight
-                    }
-                }
-            }
-        }
-        
         val userName = securePrefs.getString("user_name", null) ?: sharedPrefs.getString("user_name", "") ?: ""
         val userPhone = securePrefs.getString("user_phone", null) ?: sharedPrefs.getString("user_phone", "") ?: ""
-        val userEmail = securePrefs.getString("user_email", null) ?: sharedPrefs.getString("user_email", if (userPhone.isNotEmpty()) "$userPhone@fidar.app" else "") ?: ""
+        val userEmail = securePrefs.getString("user_email", null) ?: sharedPrefs.getString("user_email", "") ?: ""
         val isGoogle = sharedPrefs.getBoolean("user_google", false)
         val isLoggedIn = sharedPrefs.getBoolean("user_logged_in", false)
         val isGuest = sharedPrefs.getBoolean("user_is_guest", false)
@@ -644,7 +614,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         if (isLoggedIn && (userPhone.isNotEmpty() || isGuest)) {
             _userProfile.value = UserProfile(
                 name = userName.ifEmpty { if (isGuest) "کاربر مهمان" else "کاربر تراز" },
-                email = userEmail.ifEmpty { "guest@fidar.app" },
+                email = userEmail,
                 phone = userPhone,
                 isGoogleConnected = isGoogle,
                 isLoggedIn = true,
@@ -659,29 +629,68 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             _currentScreen.value = Screen.AUTH
         }
 
-        viewModelScope.launch {
-            var isFirstCollection = true
-            pendingTransactions.collect { list ->
-                if (isFirstCollection) {
-                    isFirstCollection = false
-                    if (list.isNotEmpty()) {
-                        _selectedPendingTx.value = list.first()
-                        generateAiSmsDescription(list.first())
-                        _showSmsAssistantSheet.value = true
-                    }
-                } else {
-                    if (list.isNotEmpty()) {
-                        val latest = list.first()
-                        val previouslySelected = _selectedPendingTx.value
-                        if (previouslySelected == null || previouslySelected.id != latest.id) {
-                            _selectedPendingTx.value = latest
-                            generateAiSmsDescription(latest)
-                            _showSmsAssistantSheet.value = true
-                        }
-                    }
-                }
-            }
+        // New bank SMS wait on the home screen and in a notification; the review
+        // screen no longer jumps over whatever the user is doing, and no AI call
+        // is spent describing each SMS (nothing showed that text).
+    }
+
+    private val aiInsightIntervalMs = 6 * 60 * 60 * 1000L
+
+    private fun restoreAiInsights() {
+        if (sharedPrefs.contains("ai_health_score")) {
+            _aiFinancialHealth.value = FinancialHealthResult(
+                score = sharedPrefs.getInt("ai_health_score", 0),
+                status = sharedPrefs.getString("ai_health_status", "no_data") ?: "no_data",
+                recommendation = sharedPrefs.getString("ai_health_rec", "") ?: ""
+            )
         }
+        if (sharedPrefs.contains("ai_coach_message")) {
+            _aiFinancialCoachInsight.value = FinancialCoachInsight(
+                id = "ai_cached",
+                type = sharedPrefs.getString("ai_coach_type", "suggestion") ?: "suggestion",
+                priority = sharedPrefs.getInt("ai_coach_priority", 0),
+                message = sharedPrefs.getString("ai_coach_message", "") ?: "",
+                action = sharedPrefs.getString("ai_coach_action", null)
+            )
+        }
+    }
+
+    private suspend fun refreshAiInsightsIfDue(force: Boolean = false) {
+        val txList = transactions.value
+        if (txList.isEmpty()) return
+        val last = sharedPrefs.getLong("ai_insight_at", 0L)
+        if (!force && System.currentTimeMillis() - last < aiInsightIntervalMs) return
+        sharedPrefs.edit().putLong("ai_insight_at", System.currentTimeMillis()).apply()
+
+        aiRepository.calculateFinancialHealth(txList, cards.value, loans.value, activeGoal.value).getOrNull()?.let { h ->
+            _aiFinancialHealth.value = h
+            sharedPrefs.edit()
+                .putInt("ai_health_score", h.score)
+                .putString("ai_health_status", h.status)
+                .putString("ai_health_rec", h.recommendation)
+                .apply()
+        }
+        aiRepository.getFinancialCoachInsight(
+            transactions = txList,
+            todayExpense = todayExpense.value,
+            dailyBudget = dailyBudget.value,
+            cards = cards.value,
+            loans = loans.value,
+            activeGoal = activeGoal.value
+        ).getOrNull()?.let { c ->
+            _aiFinancialCoachInsight.value = c
+            sharedPrefs.edit()
+                .putString("ai_coach_type", c.type)
+                .putInt("ai_coach_priority", c.priority)
+                .putString("ai_coach_message", c.message)
+                .putString("ai_coach_action", c.action)
+                .apply()
+        }
+    }
+
+    /** تحلیل تازه از دستیار، وقتی خود کاربر می‌خواهد */
+    fun refreshAiInsightsNow() {
+        viewModelScope.launch { refreshAiInsightsIfDue(force = true) }
     }
 
     // AI SMS Assistant actions
@@ -697,42 +706,11 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         _selectedPendingTx.value = tx
         _userInputExplanation.value = ""
         _smsAiProposal.value = null
-        if (tx != null) {
-            generateAiSmsDescription(tx)
-        } else {
-            _aiDescription.value = ""
-        }
+        if (tx == null) _aiDescription.value = ""
     }
 
     fun setUserInputExplanation(text: String) {
         _userInputExplanation.value = text
-    }
-
-    fun generateAiSmsDescription(tx: PendingTransaction) {
-        viewModelScope.launch {
-            _isAiDescriptionLoading.value = true
-            try {
-                val actionType = if (tx.isExpense) "برداشت/هزینه" else "واریز/درآمد"
-                val prompt = """
-                    یک تحلیل فوق‌العاده کوتاه، جذاب، صمیمی و دوستانه (به زبان فارسی) از تراکنش بانکی زیر ارائه بده.
-                    بگو چقدر کم یا زیاد شده بابت قسط، خرید شارژ، انتقال یا واریز، با لحن پرانرژی تراز.
-                    مثال: "بانک ملی: ۱۲,۰۰۰ تومان از حساب شما کسر شد."
-                    تراکنش:
-                    مبلغ: ${tx.amount} تومان
-                    نوع: $actionType
-                    متن پیامک: ${tx.smsBody}
-                    فقط متن کوتاه را به زبان صمیمی برگردان بدون هیچگونه قالب بندی یا متن اضافی.
-                """.trimIndent()
-                val result = aiRepository.chat(prompt).getOrDefault("")
-                _aiDescription.value = result.trim().ifBlank {
-                    "${tx.card}: مبلغ ${formatNumber(tx.amount)} تومان ${if (tx.isExpense) "از حساب شما کسر شد" else "به حساب شما اضافه شد"}."
-                }
-            } catch (e: Exception) {
-                _aiDescription.value = "${tx.card}: مبلغ ${formatNumber(tx.amount)} تومان ${if (tx.isExpense) "از حساب شما کسر شد" else "به حساب شما اضافه شد"}."
-            } finally {
-                _isAiDescriptionLoading.value = false
-            }
-        }
     }
 
     fun categorizeWithAi(tx: PendingTransaction, userText: String) {
@@ -910,7 +888,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun loginWithOtp(name: String, phone: String, sessionToken: String = "") {
-        val email = "$phone@fidar.app"
+        val email = ""
         _userProfile.value = UserProfile(
             name = name,
             email = email,
@@ -934,7 +912,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
     fun loginAsGuest(guestName: String = "کاربر مهمان") {
         val name = guestName.trim().ifBlank { "کاربر مهمان" }
-        val email = "guest@fidar.app"
+        val email = ""
         _userProfile.value = UserProfile(
             name = name,
             email = email,
@@ -1887,30 +1865,6 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         return true
     }
 
-    private fun getLocalFallbackResponse(prompt: String): String {
-        val normalized = prompt.lowercase().trim()
-        return when {
-            normalized.contains("یادآور") || normalized.contains("اعلان") || normalized.contains("هشدار") || normalized.contains("یادآوری") -> {
-                "حله! برات یادآوری رو تنظیم کردم. تا ۱۰ ثانیه دیگه بهت هشدار میدم.\n[تنظیم یادآوری: یادآوری تراز: موعد پرداخت قسط | 10]"
-            }
-            normalized.contains("هزینه امروز") || normalized.contains("هزینه") || normalized.contains("امروز") -> {
-                "امروز کلاً 1,600,000 تومان هزینه ثبت کردی. این یعنی 12% کمتر از خرج‌های روزانه‌ت توی هفته قبله. واقعاً دمت گرم، مدیریت خرج‌هات عالی بوده!"
-            }
-            normalized.contains("قسط") || normalized.contains("وام") || normalized.contains("اقساط") -> {
-                "نزدیک‌ترین قسطت مربوط به وام خرید خودروی بانک ملته به مبلغ 20,000,000 تومان در تاریخ 15 تیر. موجودی کل حساب‌هات ردیفه و راحت قسطت پرداخت میشه."
-            }
-            normalized.contains("پیشنهاد") || normalized.contains("تحلیل") || normalized.contains("کمک") -> {
-                "پیشنهاد تراز برای امروز:\n\n> با توجه به اینکه پتانسیل پس‌انداز این ماهت به 4,500,000 تومان رسیده، پیشنهاد می‌کنم مبلغ 2,000,000 تومان رو به صندوق سرمایه‌گذاری با سود ثابت انتقال بدی تا سرعت رشد دارایی‌هات بیشتر بشه."
-            }
-            normalized.contains("سلام") || normalized.contains("درود") || normalized.contains("چطوری") -> {
-                "سلام! من ترازم، دستیار مالی صمیمی و باهوشت. چطوری می‌تونم توی مدیریت خرج و مخارج یا تنظیم یادآوری قسط‌ها امروز بهت کمک کنم؟"
-            }
-            else -> {
-                "پیامت رو گرفتم! به عنوان دستیار مالی صمیمیت، پیشنهاد می‌کنم هزینه‌های این هفته رو دسته‌بندی کنیم تا برات گزارش دقیق و چندتا پیشنهاد طلایی برای پس‌انداز آماده کنم. پایه‌ای تراکنش‌های اخیر رو با هم چک کنیم؟"
-            }
-        }
-    }
-
     fun selectPresetQuestion(preset: String) {
         sendChatMessage(preset)
     }
@@ -2030,10 +1984,14 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             sharedPrefs.edit().apply {
                 remove("chat_history_json")
                 remove("daily_budget")
+                listOf("ai_insight_at", "ai_health_score", "ai_health_status", "ai_health_rec",
+                    "ai_coach_type", "ai_coach_priority", "ai_coach_message", "ai_coach_action").forEach { remove(it) }
                 sharedPrefs.all.keys.filter { it.startsWith("loan_") }.forEach { remove(it) }
             }.apply()
             securePrefs.edit().remove("chat_history_json").apply()
             _dailyBudget.value = 0L
+            _aiFinancialHealth.value = null
+            _aiFinancialCoachInsight.value = null
             _selectedPendingTx.value = null
             _showSmsAssistantSheet.value = false
             _aiMemoryMessages.value = emptyList()

@@ -100,49 +100,7 @@ object BankUtils {
         return result
     }
 
-    /**
-     * Detects Iranian bank name from 16-digit card number using its 6-digit BIN prefix.
-     */
-    fun detectBankFromCardNumber(cardNumber: String): String? {
-        val cleanNumber = convertNumeralsAndClean(cardNumber).filter { it.isDigit() }
-        if (cleanNumber.length < 6) return null
-        val binStr = cleanNumber.substring(0, 6)
-        val bin = binStr.toIntOrNull() ?: return null
-
-        return when (bin) {
-            627381 -> "بانک انصار"
-            636214 -> "بانک آینده"
-            502938 -> "بانک دی"
-            627412 -> "بانک اقتصاد نوین"
-            628157 -> "موسسه اعتباری توسعه"
-            505416 -> "بانک گردشگری"
-            639599 -> "بانک قوامین"
-            627488, 502910 -> "بانک کارآفرین"
-            603770, 639217 -> "بانک کشاورزی"
-            628023 -> "بانک مسکن"
-            639370 -> "بانک مهر اقتصاد"
-            606373 -> "بانک قرض الحسنه مهر ایرانیان"
-            603799 -> "بانک ملی"
-            610433, 991975 -> "بانک ملت"
-            111111 -> "همه کارتخوانها"
-            622106 -> "بانک پارسیان"
-            502229, 639347 -> "بانک پاسارگاد"
-            627760 -> "پست بانک ایران"
-            589463 -> "بانک رفاه"
-            627961 -> "بانک صنعت و معدن"
-            603769 -> "بانک صادرات"
-            621986 -> "بانک سامان"
-            639607 -> "بانک سرمایه"
-            589210 -> "بانک سپه"
-            504706, 502806 -> "بانک شهر"
-            639346 -> "بانک سینا"
-            627353, 585983 -> "بانک تجارت"
-            636949 -> "بانک حکمت"
-            627648 -> "بانک توسعه صادرات"
-            502908 -> "بانک توسعه تعاون"
-            504172 -> "بانک رسالت"
-            505785 -> "بلو کارت"
-            else -> null
-        }
-    }
+    /** Bank of a card number from its first six digits; one table for the whole app (see [com.example.data.BankBin]). */
+    fun detectBankFromCardNumber(cardNumber: String): String? =
+        com.example.data.BankBin.bankFor(convertNumeralsAndClean(cardNumber))
 }
