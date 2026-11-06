@@ -95,11 +95,11 @@ internal fun ColumnScope.ChequesSection(cheques: List<Cheque>, onAdd: () -> Unit
         Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f).cardSurface(16.dp).padding(12.dp)) {
                 Text("چک‌های داده‌شده", style = lt(12.sp, color = L.Muted))
-                Text(millions(outSum), style = lt(17.sp, FontWeight.Bold, L.RedText))
+                FitText(toman(outSum), lt(16.sp, FontWeight.Bold, L.RedText))
             }
             Column(Modifier.weight(1f).cardSurface(16.dp).padding(12.dp)) {
                 Text("چک‌های گرفته‌شده", style = lt(12.sp, color = L.Muted))
-                Text(millions(inSum), style = lt(17.sp, FontWeight.Bold, L.Green))
+                FitText(toman(inSum), lt(16.sp, FontWeight.Bold, L.Green))
             }
         }
     }

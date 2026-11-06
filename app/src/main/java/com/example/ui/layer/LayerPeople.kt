@@ -103,23 +103,25 @@ fun LayerObligationsScreen(
         Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f).cardSurface(18.dp).padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("باید بپردازم", style = lt(12.sp, color = L.Muted))
-                Text(millions(loanLeft + iOwePeople + chequesOut + creditUsed), style = lt(20.sp, FontWeight.Bold, L.RedText))
+                FitText(money(loanLeft + iOwePeople + chequesOut + creditUsed), lt(20.sp, FontWeight.Bold, L.RedText))
+                Text("تومان", style = lt(11.sp, color = L.Muted))
                 Text(
                     listOfNotNull(
                         if (loanLeft > 0) "وام ${millions(loanLeft)}" else null,
                         if (iOwePeople > 0) "اشخاص ${millions(iOwePeople)}" else null,
                         if (chequesOut > 0) "چک ${millions(chequesOut)}" else null,
                         if (creditUsed > 0) "اعتباری ${millions(creditUsed)}" else null
-                    ).joinToString(" · ").ifEmpty { "بدهی‌ای ندارید" },
-                    style = lt(11.sp, color = L.Muted), maxLines = 1
+                    ).joinToString("\n").ifEmpty { "بدهی‌ای ندارید" },
+                    style = lt(11.sp, color = L.Muted, lineHeight = 17.sp), modifier = Modifier.padding(top = 4.dp)
                 )
             }
             Column(Modifier.weight(1f).cardSurface(18.dp).padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("طلب دارم", style = lt(12.sp, color = L.Muted))
-                Text(millions(owedToMe), style = lt(20.sp, FontWeight.Bold, L.Green))
+                FitText(money(owedToMe), lt(20.sp, FontWeight.Bold, L.Green))
+                Text("تومان", style = lt(11.sp, color = L.Muted))
                 Text(
-                    "از ${fa(balances.values.count { it > 0 })} نفر" + if (chequesIn > 0) " · چک ${millions(chequesIn)}" else "",
-                    style = lt(11.sp, color = L.Muted), maxLines = 1
+                    "از ${fa(balances.values.count { it > 0 })} نفر" + if (chequesIn > 0) "\nچک ${millions(chequesIn)}" else "",
+                    style = lt(11.sp, color = L.Muted, lineHeight = 17.sp), modifier = Modifier.padding(top = 4.dp)
                 )
             }
         }

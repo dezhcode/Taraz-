@@ -102,7 +102,7 @@ fun LayerTransactionsScreen(
                 val first = JalaliDate.fromTimestamp(days.first())
                 val last = JalaliDate.fromTimestamp(days.last())
                 Text(
-                    "هفتهٔ ${fa(first.day)} تا ${last.formatShort()} · خرج ${millions(weekSpend).removeSuffix("م")} میلیون",
+                    "هفتهٔ ${fa(first.day)} تا ${last.formatShort()} · خرج ${money(weekSpend)} تومان",
                     style = lt(13.sp, color = L.Muted)
                 )
             }
@@ -260,7 +260,7 @@ fun LayerTransactionsScreen(
                     Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(L.Amber))
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        if (dailyBudget > 0) "بالای بودجهٔ روزانه (${money(dailyBudget / 1000)} هزار)" else "بالای بودجهٔ روزانه",
+                        if (dailyBudget > 0) "بالای بودجهٔ روزانه (${toman(dailyBudget)})" else "بالای بودجهٔ روزانه",
                         style = lt(11.sp, color = L.Muted)
                     )
                 }
@@ -289,7 +289,7 @@ fun LayerTransactionsScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        if (over) "${money((daySpend - dailyBudget) / 1000)} هزار بالای بودجه" else "زیر بودجه",
+                        if (over) "${toman(daySpend - dailyBudget)} بالای بودجه" else "زیر بودجه",
                         style = lt(12.sp, FontWeight.Bold, if (over) L.AmberText else L.GreenText)
                     )
                 }

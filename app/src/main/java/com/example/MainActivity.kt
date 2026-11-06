@@ -204,6 +204,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 var billToPay by remember { mutableStateOf<com.example.data.Bill?>(null) }
                 var creditToRepay by remember { mutableStateOf<com.example.data.BankCard?>(null) }
                 var searchOpen by remember { mutableStateOf(false) }
+                // پیام کوتاه درون‌برنامه (با لوگوی تازه) به‌جای Toast سیستم
+                var appToast by remember { mutableStateOf<Pair<String, Long>?>(null) }
+                fun showToast(msg: String) { appToast = msg to System.currentTimeMillis() }
                 var loansSegment by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableIntStateOf(0) }
 
                 // صفحهٔ پشتیبان رمز پشتیبان خودکار را دارد؛ با قفل روشن، اول هویت تأیید شود
@@ -215,7 +218,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             title = "پشتیبان تراز",
                             subtitle = "برای دیدن پشتیبان و رمز آن، هویت‌تان را تأیید کنید",
                             onSuccess = { openSub("backup") },
-                            onError = { msg -> android.widget.Toast.makeText(act, msg, android.widget.Toast.LENGTH_SHORT).show() }
+                            onError = { msg -> showToast(msg.toString()) }
                         )
                     } else openSub("backup")
                 }
@@ -303,7 +306,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 }
                 val activity = context as? androidx.fragment.app.FragmentActivity
                 var lastBackPressTime by remember { mutableStateOf(0L) }
-                val exitToastMessage = "برای خروج از برنامه دوبار برگشت بزنید پشت سر هم"
+                val exitToastMessage = "برای خروج، یک بار دیگر برگشت بزنید"
 
                 BackHandler(enabled = screenState == Screen.MAIN) {
                     if (loanToPay != null) {
@@ -333,7 +336,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             activity?.finish()
                         } else {
                             lastBackPressTime = currentTime
-                            android.widget.Toast.makeText(context, exitToastMessage, android.widget.Toast.LENGTH_SHORT).show()
+                            showToast(exitToastMessage)
                         }
                     }
                 }
@@ -1226,6 +1229,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             val undoOffer by viewModel.undo.collectAsStateWithLifecycle()
                             undoOffer?.let { u ->
                                 com.example.ui.layer.UndoBar(u.title, u.detail, u.shownAt, viewModel.undoWindowMs) { viewModel.undoDelete() }
+                            }
+                            appToast?.let { (msg, at) ->
+                                com.example.ui.layer.AppToast(msg, at) { if (appToast?.second == at) appToast = null }
                             }
 
                             // موجودی با پیامک بانک نمی‌خواند

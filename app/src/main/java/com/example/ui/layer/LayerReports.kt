@@ -134,11 +134,12 @@ fun LayerReportsScreen(
         LayerCard {
             Text(if (isCurrentMonth) "پس‌انداز تا امروز" else "پس‌انداز این ماه", style = lt(13.sp, color = L.Muted))
             Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    (if (cur.saved < 0) "−" else "") + oneDecimal(kotlin.math.abs(cur.saved) / 1_000_000.0),
-                    style = lt(52.sp, FontWeight.Light, if (cur.saved < 0) L.RedText else L.Ink, letterSpacing = (-2).sp)
+                FitText(
+                    (if (cur.saved < 0) "−" else "") + money(kotlin.math.abs(cur.saved)),
+                    lt(44.sp, FontWeight.Light, if (cur.saved < 0) L.RedText else L.Ink, letterSpacing = (-1.5).sp),
+                    modifier = Modifier.weight(1f, fill = false)
                 )
-                Text("میلیون تومان", style = lt(14.sp, FontWeight.SemiBold), modifier = Modifier.padding(bottom = 8.dp))
+                Text("تومان", style = lt(14.sp, FontWeight.SemiBold), modifier = Modifier.padding(bottom = 8.dp))
                 if (cur.income > 0 && cur.saved > 0) {
                     val pct = (cur.saved * 100 / cur.income).toInt()
                     Box(
@@ -151,11 +152,11 @@ fun LayerReportsScreen(
             Row(Modifier.padding(top = 10.dp).fillMaxWidth()) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("دریافتی", style = lt(13.sp, color = L.Muted))
-                    Text("+${oneDecimal(cur.income / 1_000_000.0)} میلیون", style = lt(13.sp, FontWeight.SemiBold, L.Green))
+                    FitText("+${toman(cur.income)}", lt(13.sp, FontWeight.SemiBold, L.Green))
                 }
                 Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("هزینه", style = lt(13.sp, color = L.Muted))
-                    Text("−${oneDecimal(cur.expense / 1_000_000.0)} میلیون", style = lt(13.sp, FontWeight.SemiBold))
+                    FitText("−${toman(cur.expense)}", lt(13.sp, FontWeight.SemiBold))
                 }
             }
         }
@@ -167,7 +168,7 @@ fun LayerReportsScreen(
                 else "پس‌انداز شش ماه اخیر",
                 style = lt(14.sp, FontWeight.Bold)
             )
-            Text("پس‌انداز هر ماه، میلیون تومان", style = lt(12.sp, color = L.Muted), modifier = Modifier.padding(top = 2.dp))
+            Text("پس‌انداز هر ماه، به تومان", style = lt(12.sp, color = L.Muted), modifier = Modifier.padding(top = 2.dp))
             Row(
                 Modifier.padding(top = 14.dp).fillMaxWidth().height(150.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -180,14 +181,15 @@ fun LayerReportsScreen(
                     val label = JalaliDate.fromTimestamp(s.start).monthName
                     Column(
                         Modifier.weight(1f).height(150.dp).semantics {
-                            contentDescription = "$label: ${oneDecimal(s.saved / 1_000_000.0)} میلیون"
+                            contentDescription = "$label: ${toman(s.saved)}"
                         },
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Bottom
                     ) {
-                        Text(
-                            oneDecimal(s.saved / 1_000_000.0),
-                            style = lt(11.sp, if (isSel) FontWeight.Bold else FontWeight.Normal, if (isSel) L.Ink else L.Muted)
+                        FitText(
+                            (if (s.saved < 0) "−" else "") + money(kotlin.math.abs(s.saved)),
+                            lt(10.sp, if (isSel) FontWeight.Bold else FontWeight.Normal, if (isSel) L.Ink else L.Muted),
+                            minSize = 6.sp
                         )
                         Spacer(Modifier.height(4.dp))
                         Box(
@@ -270,7 +272,7 @@ fun LayerReportsScreen(
         LayerCard(padding = 16.dp) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
                 Text("هزینه‌ها کجا رفت؟", style = lt(14.sp, FontWeight.Bold))
-                Text("از ${oneDecimal(cur.expense / 1_000_000.0)} میلیون", style = lt(12.sp, color = L.Muted))
+                Text("از ${toman(cur.expense)}", style = lt(12.sp, color = L.Muted))
             }
             if (top.isEmpty()) {
                 Text("هنوز هزینه‌ای در این ماه ثبت نشده.", style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(top = 12.dp))
@@ -279,13 +281,13 @@ fun LayerReportsScreen(
                 Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     top.forEachIndexed { i, (name, sum) ->
                         val pct = if (cur.expense > 0) (sum * 100 / cur.expense).toInt() else 0
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(name, style = lt(13.sp, if (i == 0) FontWeight.Bold else FontWeight.Normal), modifier = Modifier.width(66.dp), maxLines = 1)
-                            LProgress(sum.toFloat() / maxCat, L.Primary, modifier = Modifier.weight(1f))
-                            Row(Modifier.width(76.dp), horizontalArrangement = Arrangement.End) {
-                                Text(millions(sum), style = lt(13.sp, FontWeight.Bold))
-                                Text(" ${fa(pct)}٪", style = lt(13.sp, color = L.Muted))
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(name, style = lt(13.sp, if (i == 0) FontWeight.Bold else FontWeight.Normal), modifier = Modifier.weight(1f), maxLines = 1)
+                                Text(toman(sum), style = lt(13.sp, FontWeight.Bold))
+                                Text(" · ${fa(pct)}٪", style = lt(13.sp, color = L.Muted))
                             }
+                            LProgress(sum.toFloat() / maxCat, L.Primary)
                         }
                         val before = prevByCategory[name] ?: 0L
                         if (before > 0) {
@@ -301,7 +303,7 @@ fun LayerReportsScreen(
                 }
                 if (rest > 0) {
                     Text(
-                        "سایر دسته‌ها: ${oneDecimal(rest / 1_000_000.0)} میلیون (${fa((rest * 100 / cur.expense.coerceAtLeast(1)).toInt())}٪)",
+                        "سایر دسته‌ها: ${toman(rest)} (${fa((rest * 100 / cur.expense.coerceAtLeast(1)).toInt())}٪)",
                         style = lt(12.sp, color = L.Muted), modifier = Modifier.padding(top = 10.dp)
                     )
                 }
@@ -327,7 +329,7 @@ fun LayerReportsScreen(
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text("هدف: ${goal.title}", style = lt(14.sp, FontWeight.Bold))
                         Text(
-                            "${oneDecimal(goal.currentAmount / 1_000_000.0)} از ${oneDecimal(goal.targetAmount / 1_000_000.0)} میلیون" +
+                            "${money(goal.currentAmount)} از ${toman(goal.targetAmount)}" +
                                 (if (monthsLeft != null && remain > 0) " · با این روند حدود ${fa(monthsLeft)} ماه دیگر" else ""),
                             style = lt(12.sp, color = L.Muted)
                         )
@@ -402,13 +404,13 @@ private fun MoneyFlowCard(income: Long, expense: Long, byCategory: List<Pair<Str
             Text("جریان پول", style = lt(14.sp, FontWeight.Bold), modifier = Modifier.weight(1f))
             Text(
                 if (income >= expense) "${fa((((income - expense) * 100) / income.coerceAtLeast(1)).toInt())}٪ درآمد ماند"
-                else "${millions(expense - income)} بیشتر از درآمد",
+                else "${toman(expense - income)} بیشتر از درآمد",
                 style = lt(12.sp, FontWeight.SemiBold, if (income >= expense) L.GreenText else L.RedText)
             )
         }
         Spacer(Modifier.height(12.dp))
         // درآمد
-        Text("درآمد ${millions(income)}", style = lt(12.sp, color = L.Muted))
+        Text("درآمد ${toman(income)}", style = lt(12.sp, color = L.Muted))
         Box(
             Modifier.padding(top = 4.dp).fillMaxWidth((income.toFloat() / whole).coerceIn(0.02f, 1f)).height(14.dp)
                 .clip(RoundedCornerShape(7.dp)).background(L.Green.copy(alpha = 0.35f))

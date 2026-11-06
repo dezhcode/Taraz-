@@ -121,7 +121,7 @@ fun LayerBudgetSheet(current: Long, avgDaily: Long, onDismiss: () -> Unit, onSav
                 Icon(Icons.Default.AutoAwesome, null, tint = L.PrimaryText, modifier = Modifier.size(18.dp))
                 Text(
                     "میانگین خرج روزانهٔ شما در ۳۰ روز گذشته ${money(avgDaily)} تومان بوده." +
-                        if (saveMonthly > 0) " با این سقف، ماهی حدود ${millions(saveMonthly).removeSuffix("م")} میلیون کمتر خرج می‌کنید." else "",
+                        if (saveMonthly > 0) " با این سقف، ماهی حدود ${money(saveMonthly)} تومان کمتر خرج می‌کنید." else "",
                     style = lt(12.sp, color = L.Info, lineHeight = 23.sp)
                 )
             }
@@ -151,7 +151,7 @@ fun LayerGoalsScreen(
 
     LayerScreen(
         title = "اهداف پس‌انداز",
-        subtitle = if (active.isEmpty()) "هنوز هدفی ندارید" else "${fa(active.size)} هدف فعال · ${millions(saved).removeSuffix("م")} میلیون جمع شده",
+        subtitle = if (active.isEmpty()) "هنوز هدفی ندارید" else "${fa(active.size)} هدف فعال · ${money(saved)} تومان جمع شده",
         onBack = onBack,
         trailing = {
             Row(
@@ -222,7 +222,7 @@ fun LayerGoalsScreen(
                         }
                         LProgress(frac, L.Ink, height = 6.dp)
                         goalPlan(g, transactions)?.let { Text(it.headline, style = lt(12.sp, FontWeight.SemiBold, if (it.onTrack) L.GreenText else L.AmberInk)) }
-                        Text("${millions(g.currentAmount).removeSuffix("م")} از ${millions(g.targetAmount).removeSuffix("م")} میلیون", style = lt(12.sp, color = L.Muted))
+                        Text("${money(g.currentAmount)} از ${money(g.targetAmount)} تومان", style = lt(12.sp, color = L.Muted))
                     }
                 }
             }

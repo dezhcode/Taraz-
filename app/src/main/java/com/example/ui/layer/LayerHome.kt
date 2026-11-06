@@ -242,45 +242,51 @@ private fun SectionTitle(title: String, trailing: String? = null, onTrailing: ((
 
 @Composable
 private fun GlanceCard(g: HomeGlance, onOpenReports: () -> Unit, onOpenObligations: () -> Unit) {
+    // مبلغ‌ها کامل نوشته می‌شوند؛ برای همین هر مورد یک ردیف کامل دارد نه یک ستون باریک
     Column(
         Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp).fillMaxWidth().cardSurface(22.dp)
-            .padding(top = 14.dp, bottom = 12.dp)
+            .padding(horizontal = 6.dp, vertical = 6.dp)
     ) {
-        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-            GlanceCell(
-                "خرج ${JalaliDate.today().monthName}", millions(g.spent), L.RedText,
-                if (g.income > 0) "از ${millions(g.income)} درآمد" else "درآمدی ثبت نشده",
-                Modifier.weight(1f), onOpenReports
-            )
-            Box(Modifier.width(1.dp).fillMaxHeight().background(L.Line))
-            GlanceCell(
-                "بدهکارم", millions(g.owe), if (g.owe > 0) L.Ink else L.Muted,
-                g.oweNote.ifBlank { "بدهی‌ای ندارید" }, Modifier.weight(1f), onOpenObligations
-            )
-            Box(Modifier.width(1.dp).fillMaxHeight().background(L.Line))
-            GlanceCell(
-                "طلبکارم", millions(g.owed), if (g.owed > 0) L.Green else L.Muted,
-                g.owedNote.ifBlank { "طلبی ندارید" }, Modifier.weight(1f), onOpenObligations
-            )
-        }
-        Box(Modifier.padding(horizontal = 16.dp, vertical = 10.dp).fillMaxWidth().height(1.dp).background(L.Line))
+        GlanceRow(
+            "خرج ${JalaliDate.today().monthName}", if (g.income > 0) "درآمد این ماه ${toman(g.income)}" else "درآمدی ثبت نشده",
+            g.spent, L.RedText, onOpenReports
+        )
+        Box(Modifier.padding(horizontal = 12.dp).fillMaxWidth().height(1.dp).background(L.Line))
+        GlanceRow("بدهکارم", g.oweNote.ifBlank { "بدهی‌ای ندارید" }, g.owe, if (g.owe > 0) L.Ink else L.Muted, onOpenObligations)
+        Box(Modifier.padding(horizontal = 12.dp).fillMaxWidth().height(1.dp).background(L.Line))
+        GlanceRow("طلبکارم", g.owedNote.ifBlank { "طلبی ندارید" }, g.owed, if (g.owed > 0) L.Green else L.Muted, onOpenObligations)
         val net = g.balance + g.owed - g.owe
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("اگر همه صاف شود", style = lt(12.sp, color = L.Muted), modifier = Modifier.weight(1f))
-            Text("${money(net)} تومان", style = lt(14.sp, FontWeight.Bold, if (net < 0) L.RedText else L.Ink))
+        Row(
+            Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                .background(L.Chip).padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("اگر همه صاف شود", style = lt(13.sp, FontWeight.SemiBold))
+                Text("موجودی + طلب − بدهی", style = lt(11.sp, color = L.Muted))
+            }
+            Spacer(Modifier.width(8.dp))
+            FitText(toman(net), lt(15.sp, FontWeight.Bold, if (net < 0) L.RedText else L.Ink))
         }
     }
 }
 
 @Composable
-private fun GlanceCell(label: String, value: String, color: Color, note: String, modifier: Modifier, onClick: () -> Unit) {
-    Column(
-        modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 2.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+private fun GlanceRow(label: String, note: String, amount: Long, color: Color, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 60.dp).clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, style = lt(12.sp, color = L.Muted), maxLines = 1)
-        Text(value, style = lt(20.sp, FontWeight.Bold, color), maxLines = 1)
-        Text(note, style = lt(11.sp, color = L.Muted), maxLines = 1)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(label, style = lt(14.sp, FontWeight.SemiBold), maxLines = 1)
+            Text(note, style = lt(11.sp, color = L.Muted), maxLines = 1)
+        }
+        Spacer(Modifier.width(8.dp))
+        Row(verticalAlignment = Alignment.Bottom) {
+            FitText(money(amount), lt(17.sp, FontWeight.Bold, color))
+            Text(" تومان", style = lt(11.sp, color = L.Muted), modifier = Modifier.padding(bottom = 2.dp))
+        }
     }
 }
 
@@ -288,7 +294,7 @@ private fun GlanceCell(label: String, value: String, color: Color, note: String,
 private fun UpcomingSection(items: List<UpcomingItem>, now: Long) {
     SectionTitle(
         "پیش رو",
-        note = if (items.isEmpty()) null else "۷ روز آینده · ${fa(items.size)} مورد · ${millions(items.sumOf { it.amount })}"
+        note = if (items.isEmpty()) null else "۷ روز آینده · ${fa(items.size)} مورد · ${toman(items.sumOf { it.amount })}"
     )
     if (items.isEmpty()) {
         Text(
@@ -411,7 +417,7 @@ private fun PlanSection(
                 Text("هدف: ${goal.title}", style = lt(12.sp, color = L.Muted), maxLines = 1)
                 Text("${fa((frac * 100).toInt())}٪", style = lt(18.sp, FontWeight.Bold))
                 LProgress(frac, L.Green, height = 6.dp)
-                Text("${millions(goal.currentAmount)} از ${millions(goal.targetAmount)}", style = lt(11.sp, color = L.Muted), maxLines = 1)
+                FitText("${money(goal.currentAmount)} از ${toman(goal.targetAmount)}", lt(11.sp, color = L.Muted), minSize = 8.sp)
             } else {
                 Text("هدف پس‌انداز", style = lt(13.sp, FontWeight.Bold))
                 Text("مثلاً سفر یا صندوق اضطراری.", style = lt(12.sp, color = L.Muted, lineHeight = 20.sp))
@@ -427,7 +433,7 @@ private fun PlanSection(
                 Text("بودجهٔ ${cat.name}", style = lt(12.sp, color = L.Muted), maxLines = 1)
                 Text("${fa(pct)}٪", style = lt(18.sp, FontWeight.Bold, if (pct >= 100) L.RedText else L.AmberText))
                 LProgress(pct / 100f, if (pct >= 100) L.Red else L.Amber, height = 6.dp)
-                Text("${millions(used)} از ${millions(cat.monthlyBudget)}", style = lt(11.sp, color = L.Muted), maxLines = 1)
+                FitText("${money(used)} از ${toman(cat.monthlyBudget)}", lt(11.sp, color = L.Muted), minSize = 8.sp)
             } else {
                 val withBudget = categories.count { it.monthlyBudget > 0 }
                 Text("بودجه", style = lt(13.sp, FontWeight.Bold))
@@ -496,9 +502,9 @@ private fun WalletStack(
                     Spacer(Modifier.width(6.dp))
                     Text("تومان", style = lt(14.sp, color = Color.White), modifier = Modifier.padding(bottom = 6.dp))
                 }
-                Text(
-                    "${JalaliDate.today().monthName}: +${millions(monthlyIncome)} دریافتی · −${millions(monthlyExpense)} هزینه",
-                    style = lt(12.sp, color = L.OnPrimarySoft)
+                FitText(
+                    "${JalaliDate.today().monthName}: +${money(monthlyIncome)} دریافتی · −${money(monthlyExpense)} هزینه",
+                    lt(12.sp, color = L.OnPrimarySoft), minSize = 9.sp
                 )
             }
             Row(
@@ -566,21 +572,19 @@ private fun TodayCard(
         Box(Modifier.padding(horizontal = 2.dp, vertical = 14.dp).fillMaxWidth().height(1.dp).background(L.Line))
         Column(Modifier.padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("خرج امروز", style = lt(13.sp, color = L.Muted))
-            val inThousands = todayExpense >= 1000
             Row(verticalAlignment = Alignment.Bottom) {
-                Text(
-                    if (inThousands) money(todayExpense / 1000) else money(todayExpense),
-                    style = lt(60.sp, FontWeight.Normal, letterSpacing = (-2).sp, lineHeight = 60.sp)
+                FitText(
+                    money(todayExpense),
+                    lt(52.sp, FontWeight.Normal, letterSpacing = (-1.5).sp, lineHeight = 56.sp),
+                    modifier = Modifier.weight(1f, fill = false)
                 )
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.padding(bottom = 6.dp)) {
-                    Text(if (inThousands) "هزار تومان" else "تومان", style = lt(15.sp, FontWeight.SemiBold))
-                    Text(
-                        if (dailyBudget > 0) "از بودجهٔ ${money(dailyBudget / 1000)} هزار" else "سقف روزانه ندارید",
-                        style = lt(12.sp, color = L.Muted)
-                    )
-                }
+                Spacer(Modifier.width(8.dp))
+                Text("تومان", style = lt(15.sp, FontWeight.SemiBold), modifier = Modifier.padding(bottom = 8.dp))
             }
+            Text(
+                if (dailyBudget > 0) "سقف خرج روزانه: ${toman(dailyBudget)}" else "سقف روزانه ندارید",
+                style = lt(12.sp, color = L.Muted)
+            )
             if (dailyBudget > 0) {
                 val pct = (todayExpense.toFloat() / dailyBudget).coerceIn(0f, 1f)
                 Box(
@@ -595,8 +599,8 @@ private fun TodayCard(
                 Text(
                     when {
                         dailyBudget <= 0 -> "با تعیین سقف روزانه، تراز به شما خبر می‌دهد کی نزدیک سقف هستید."
-                        left >= 0 -> "هنوز ${money(left / 1000)} هزار تومان تا سقف امروز جا دارید."
-                        else -> "${money(-left / 1000)} هزار تومان بیشتر از سقف امروز خرج شده."
+                        left >= 0 -> "هنوز ${toman(left)} تا سقف امروز جا دارید."
+                        else -> "${toman(-left)} بیشتر از سقف امروز خرج شده."
                     },
                     style = lt(12.sp, color = if (left < 0 && dailyBudget > 0) L.AmberText else L.Muted, lineHeight = 20.sp),
                     modifier = Modifier.weight(1f)

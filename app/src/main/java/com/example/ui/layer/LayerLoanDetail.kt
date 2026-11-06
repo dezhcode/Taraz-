@@ -209,7 +209,7 @@ private fun PaymentRow(title: String, sub: String, amount: Long, late: Boolean) 
 private fun StatTile(label: String, value: String, modifier: Modifier, valueColor: Color = L.Ink) {
     Column(modifier.cardSurface(16.dp).padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(label, style = lt(11.sp, color = L.Muted))
-        Text(value, style = lt(15.sp, FontWeight.Bold, valueColor), maxLines = 1)
+        FitText(value, lt(15.sp, FontWeight.Bold, valueColor))
     }
 }
 
@@ -303,7 +303,7 @@ fun LayerAddLoanScreen(
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(L.PrimarySoft).padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("خلاصه", style = lt(12.sp, FontWeight.Bold, L.PrimaryText))
                     Text(
-                        "${fa(remainCount)} قسط ${millions(inst).removeSuffix("م")} میلیونی مانده است. قسط بعدی ${JalaliDate.fromTimestamp(next).formatShort()} و آخرین قسط ${JalaliDate.fromTimestamp(last).formatMonthYear()}.",
+                        "${fa(remainCount)} قسط ${money(inst)} تومانی مانده است. قسط بعدی ${JalaliDate.fromTimestamp(next).formatShort()} و آخرین قسط ${JalaliDate.fromTimestamp(last).formatMonthYear()}.",
                         style = lt(13.sp, color = L.Info, lineHeight = 24.sp)
                     )
                 }

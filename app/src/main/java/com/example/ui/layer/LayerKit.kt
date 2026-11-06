@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
@@ -115,10 +116,43 @@ fun money(value: Long): String =
 fun signedMoney(value: Long, isExpense: Boolean): String =
     (if (isExpense) "−" else "+") + money(value)
 
-/** ۴۲٫۰م */
-fun millions(value: Long): String {
-    val m = value / 1_000_000.0
-    return fa(String.format(Locale.ENGLISH, "%.1f", m).replace('.', '٫')) + "م"
+/**
+ * پیش‌تر «۴۲٫۰م» بود و کاربر را گیج می‌کرد؛ حالا همیشه عدد کامل: ۴۲٬۰۰۰٬۰۰۰
+ * (برای جاهای تنگ، کنارش [FitText] بگذارید تا خودش کوچک شود).
+ */
+fun millions(value: Long): String = money(value)
+
+/** عدد کامل با واحد: ۴۲٬۰۰۰٬۰۰۰ تومان */
+fun toman(value: Long): String = money(value) + " تومان"
+
+/**
+ * متن یک‌خطی که اگر جا نشود، اندازه‌اش را کم‌کم کوچک می‌کند تا کامل دیده شود
+ * (برای مبلغ‌های کامل در کاشی‌های باریک).
+ */
+@Composable
+fun FitText(
+    text: String,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    minSize: TextUnit = 10.sp,
+    textAlign: androidx.compose.ui.text.style.TextAlign? = null
+) {
+    var scale by androidx.compose.runtime.remember(text, style) { androidx.compose.runtime.mutableFloatStateOf(1f) }
+    var ready by androidx.compose.runtime.remember(text, style) { androidx.compose.runtime.mutableStateOf(false) }
+    val size = (style.fontSize.value * scale).sp
+    val lh = if (style.lineHeight.isSp) (style.lineHeight.value * scale).sp else style.lineHeight
+    val ls = if (style.letterSpacing.isSp) (style.letterSpacing.value * scale).sp else style.letterSpacing
+    androidx.compose.material3.Text(
+        text,
+        style = style.copy(fontSize = size, lineHeight = lh, letterSpacing = ls),
+        maxLines = 1,
+        softWrap = false,
+        textAlign = textAlign,
+        modifier = modifier.drawWithContent { if (ready) drawContent() },
+        onTextLayout = { r ->
+            if (r.didOverflowWidth && size.value > minSize.value) scale *= 0.92f else ready = true
+        }
+    )
 }
 
 fun timeOfDay(ts: Long): String {

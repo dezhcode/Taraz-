@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -63,6 +64,35 @@ fun UndoBar(title: String, detail: String, shownAt: Long, windowMs: Long, onUndo
             Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF333A46))) {
                 Box(Modifier.fillMaxWidth(progress.value).fillMaxHeight().background(Color(0xFF9AB0FF)))
             }
+        }
+    }
+}
+
+/**
+ * پیام کوتاه درون‌برنامه با لوگوی تازهٔ تراز؛ به‌جای Toast سیستم که در بعضی گوشی‌ها
+ * (مثل MIUI) آیکن قدیمی کش‌شده را نشان می‌داد. خودش بعد از ۲٫۵ ثانیه محو می‌شود.
+ */
+@Composable
+fun AppToast(message: String, shownAt: Long, onGone: () -> Unit) {
+    LaunchedEffect(shownAt) {
+        kotlinx.coroutines.delay(2500)
+        onGone()
+    }
+    Box(Modifier.fillMaxSize().navigationBarsPadding().padding(start = 24.dp, end = 24.dp, bottom = 112.dp), contentAlignment = Alignment.BottomCenter) {
+        Row(
+            Modifier
+                .shadow(14.dp, RoundedCornerShape(18.dp), ambientColor = Color(0x470E1116), spotColor = Color(0x470E1116))
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color(0xFF1B2029))
+                .padding(start = 8.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            androidx.compose.foundation.Image(
+                androidx.compose.ui.res.painterResource(com.example.R.drawable.logo_taraz_app), null,
+                modifier = Modifier.size(28.dp).clip(RoundedCornerShape(8.dp))
+            )
+            Text(message, style = lt(13.sp, FontWeight.SemiBold, Color.White, lineHeight = 20.sp))
         }
     }
 }

@@ -158,10 +158,12 @@ fun LayerYearScreen(
                 val top = st.topCats.first().second.coerceAtLeast(1)
                 Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     st.topCats.forEach { (name, sum) ->
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(name, style = lt(13.sp), modifier = Modifier.width(72.dp), maxLines = 1)
-                            LProgress(sum.toFloat() / top, L.Primary, modifier = Modifier.weight(1f))
-                            Text(millions(sum), style = lt(13.sp, FontWeight.Bold), modifier = Modifier.width(56.dp), textAlign = TextAlign.End)
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(name, style = lt(13.sp), modifier = Modifier.weight(1f), maxLines = 1)
+                                Text(toman(sum), style = lt(13.sp, FontWeight.Bold))
+                            }
+                            LProgress(sum.toFloat() / top, L.Primary)
                         }
                     }
                 }
