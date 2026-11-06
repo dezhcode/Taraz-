@@ -475,7 +475,9 @@ private fun WalletStack(
     onOpenAccounts: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(modifier.fillMaxWidth().height(180.dp)) {
+    val month = JalaliDate.today().monthName
+    // طرح «ب»: موجودی کامل + نوار «چند درصد دریافتی این ماه خرج شد»؛ کارت‌های رنگی پشتش می‌مانند
+    Box(modifier.fillMaxWidth()) {
         Box(
             Modifier.padding(horizontal = 28.dp).fillMaxWidth().height(60.dp)
                 .clip(RoundedCornerShape(22.dp)).background(if (cards.size > 2) cardColor(2) else L.CardColors[2])
@@ -488,36 +490,61 @@ private fun WalletStack(
             Modifier
                 .padding(top = 16.dp)
                 .fillMaxWidth()
-                .height(164.dp)
                 .shadow(18.dp, RoundedCornerShape(24.dp), ambientColor = Color(0x472250F4), spotColor = Color(0x472250F4))
                 .clip(RoundedCornerShape(24.dp))
                 .background(L.Primary)
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+                .clickable(onClickLabel = "مشاهدهٔ حساب‌ها", onClick = onOpenAccounts)
+                .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("موجودی کل · ${fa(cards.size)} حساب", style = lt(13.sp, color = L.OnPrimarySoft))
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(money(totalBalance), style = lt(32.sp, FontWeight.Normal, Color.White, letterSpacing = (-1).sp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("تومان", style = lt(14.sp, color = Color.White), modifier = Modifier.padding(bottom = 6.dp))
-                }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("موجودی همهٔ حساب‌ها", style = lt(13.sp, color = L.OnPrimarySoft), modifier = Modifier.weight(1f))
+                Text("${fa(cards.size)} حساب", style = lt(13.sp, FontWeight.SemiBold, Color.White))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.White, modifier = Modifier.size(18.dp))
+            }
+            Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.Bottom) {
                 FitText(
-                    "${JalaliDate.today().monthName}: +${money(monthlyIncome)} دریافتی · −${money(monthlyExpense)} هزینه",
-                    lt(12.sp, color = L.OnPrimarySoft), minSize = 9.sp
+                    money(totalBalance),
+                    lt(34.sp, FontWeight.Normal, Color.White, letterSpacing = (-1).sp),
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("تومان", style = lt(14.sp, color = Color.White), modifier = Modifier.padding(bottom = 7.dp))
+            }
+            Box(Modifier.padding(vertical = 12.dp).fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.22f)))
+            val pct = if (monthlyIncome > 0) ((monthlyExpense * 100) / monthlyIncome).toInt() else null
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(month, style = lt(12.sp, color = L.OnPrimarySoft), modifier = Modifier.weight(1f))
+                Text(
+                    when {
+                        pct == null && monthlyExpense > 0 -> "دریافتی‌ای ثبت نشده"
+                        pct == null -> "هنوز خرجی نشده"
+                        pct > 100 -> "${fa(pct)}٪ دریافتی؛ بیشتر از دریافتی خرج شده"
+                        else -> "${fa(pct)}٪ دریافتی خرج شده"
+                    },
+                    style = lt(12.sp, FontWeight.SemiBold, Color.White)
                 )
             }
-            Row(
-                Modifier
-                    .height(36.dp)
-                    .clip(ButtonShape)
-                    .background(Color.White.copy(alpha = 0.18f))
-                    .clickable(onClick = onOpenAccounts)
-                    .padding(horizontal = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
+            val frac = when {
+                monthlyIncome > 0 -> (monthlyExpense.toFloat() / monthlyIncome).coerceIn(0f, 1f)
+                monthlyExpense > 0 -> 1f
+                else -> 0f
+            }
+            Box(
+                Modifier.padding(top = 8.dp).fillMaxWidth().height(8.dp).clip(PillShape).background(Color.White.copy(alpha = 0.22f))
+                    .semantics { contentDescription = "${pct?.let { fa(it) } ?: "۰"} درصد دریافتی $month خرج شده" }
             ) {
-                Text("مشاهدهٔ حساب‌ها", style = lt(13.sp, FontWeight.SemiBold, Color.White))
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                Box(
+                    Modifier.fillMaxWidth(frac).fillMaxHeight().clip(PillShape)
+                        .background(if (pct != null && pct > 100) Color(0xFFFFC56B) else Color.White)
+                )
+            }
+            Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f)) {
+                    Text("دریافتی ", style = lt(12.sp, color = L.OnPrimarySoft))
+                    FitText(money(monthlyIncome), lt(12.sp, FontWeight.Bold, Color.White), minSize = 9.sp)
+                }
+                Text("هزینه ", style = lt(12.sp, color = L.OnPrimarySoft))
+                FitText(money(monthlyExpense), lt(12.sp, FontWeight.Bold, Color.White), minSize = 9.sp)
             }
         }
     }
