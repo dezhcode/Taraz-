@@ -79,8 +79,8 @@ fun LayerTransactionsScreen(
         modifier
             .fillMaxSize()
             .background(L.Bg)
-            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
+            .statusBarsPadding()
             .padding(bottom = NavClearance)
     ) {
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 18.dp), verticalAlignment = Alignment.Bottom) {

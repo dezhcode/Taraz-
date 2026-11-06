@@ -31,6 +31,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.ui.platform.LocalContext
 import com.example.ui.*
 import com.example.ui.theme.MyApplicationTheme
+import com.example.ui.layer.edgeGlass
 import com.example.ui.components.CardDetailBottomSheet
 
 class MainActivity : androidx.fragment.app.FragmentActivity() {
@@ -364,10 +365,16 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                 .fillMaxSize()
                                                 .background(com.example.ui.layer.L.Bg)
                                         ) {
+                                            // محتوا زیر نوار وضعیت و منوی پایین می‌رود و آنجا نرم مات و محو می‌شود
+                                            val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                                            val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxSize()
-                                                    .padding(top = scaffoldPadding.calculateTopPadding())
+                                                    .edgeGlass(
+                                                        top = statusTop + 26.dp,
+                                                        bottom = if (isKeyboardVisible) 0.dp else navBottom + 88.dp
+                                                    )
                                             ) {
                                             AnimatedContent(
                                                 targetState = tabState,

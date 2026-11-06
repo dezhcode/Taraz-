@@ -95,8 +95,8 @@ fun LayerHomeScreen(
         modifier = modifier
             .fillMaxSize()
             .background(L.Bg)
-            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
+            .statusBarsPadding()
             .padding(bottom = NavClearance)
     ) {
         // ── سرصفحه

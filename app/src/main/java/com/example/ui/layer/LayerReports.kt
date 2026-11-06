@@ -100,8 +100,8 @@ fun LayerReportsScreen(
     else "${date.formatMonthYear()}، تمام ماه"
 
     Column(
-        modifier.fillMaxSize().background(L.Bg).statusBarsPadding()
-            .verticalScroll(rememberScrollState()).padding(bottom = NavClearance),
+        modifier.fillMaxSize().background(L.Bg)
+            .verticalScroll(rememberScrollState()).statusBarsPadding().padding(bottom = NavClearance),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         LayerHeader(

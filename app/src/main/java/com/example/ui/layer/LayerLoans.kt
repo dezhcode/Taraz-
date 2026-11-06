@@ -83,8 +83,8 @@ fun LayerLoansScreen(
     var picked by remember { mutableStateOf<Int?>(null) }
 
     Column(
-        modifier.fillMaxSize().background(L.Bg).statusBarsPadding()
-            .verticalScroll(rememberScrollState()).padding(bottom = NavClearance)
+        modifier.fillMaxSize().background(L.Bg)
+            .verticalScroll(rememberScrollState()).statusBarsPadding().padding(bottom = NavClearance)
     ) {
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 18.dp), verticalAlignment = Alignment.Bottom) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {

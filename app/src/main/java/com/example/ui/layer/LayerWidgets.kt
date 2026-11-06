@@ -103,8 +103,9 @@ fun LayerScreen(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                .edgeGlass(top = 22.dp, bottom = if (bottomBar != null) 22.dp else 0.dp, solidTop = 0f, solidBottom = 0f, glassTop = 28.dp)
                 .then(if (scroll) Modifier.verticalScroll(rememberScrollState()) else Modifier)
-                .padding(top = 14.dp, bottom = 12.dp),
+                .padding(top = 20.dp, bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             content = content
         )
