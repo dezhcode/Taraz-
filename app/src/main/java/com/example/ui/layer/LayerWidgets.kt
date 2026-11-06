@@ -215,8 +215,11 @@ fun LField(
     suffix: String? = null,
     singleLine: Boolean = true,
     hint: String? = null,
-    /** برای شمارهٔ کارت و مانند آن: ارقام از چپ به راست نوشته شوند */
-    ltr: Boolean = false
+    /** کادرهای عددی (مبلغ، شماره، شناسه) همیشه از چپ به راست نوشته می‌شوند */
+    ltr: Boolean = keyboardOptions.keyboardType.let {
+        it == androidx.compose.ui.text.input.KeyboardType.Number || it == androidx.compose.ui.text.input.KeyboardType.Phone ||
+            it == androidx.compose.ui.text.input.KeyboardType.Decimal || it == androidx.compose.ui.text.input.KeyboardType.NumberPassword
+    }
 ) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, style = lt(13.sp, FontWeight.SemiBold))

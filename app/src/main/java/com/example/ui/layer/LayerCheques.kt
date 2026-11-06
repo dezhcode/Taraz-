@@ -241,10 +241,14 @@ fun ChequeSheet(
         Text(if (issued) "از حساب" else "واریز به حساب", style = lt(13.sp, FontWeight.Bold))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             cards.forEach { c -> LChip(c.bankName, c.bankName == account) { account = c.bankName } }
+            AddAccountChip()
         }
+        WatchNew(cards, { it.id }) { account = it.bankName }
+        WatchNew(categories, { it.id }) { c -> if (c.isIncome == !issued) category = c.name }
         Text("دسته (هنگام وصول)", style = lt(13.sp, FontWeight.Bold))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             categories.filter { it.isIncome == !issued }.sortedBy { it.sortOrder }.forEach { c -> LChip(c.name, c.name == category) { category = c.name } }
+            AddCategoryChip(!issued)
         }
         LField(sayadi, { v -> sayadi = v.filter { it.isDigit() || it in "۰۱۲۳۴۵۶۷۸۹" }.take(16) }, "شمارهٔ صیادی (اختیاری)", placeholder = "۱۶ رقم",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))

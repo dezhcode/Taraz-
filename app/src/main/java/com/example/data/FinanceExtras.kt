@@ -51,7 +51,9 @@ data class Person(
     val relation: String = PersonRelation.OTHER,
     val phone: String = "",
     val note: String = "",
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    /** نام فایل تصویر پروفایل در پوشهٔ پیوست‌ها؛ خالی یعنی حرف اول نام نشان داده شود. */
+    val photo: String = ""
 )
 
 object PersonRelation {

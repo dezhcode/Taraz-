@@ -129,7 +129,13 @@ object Backup {
         }))
         root.put("persons", JSONArray(db.personDao().getAll().first().map { p ->
             JSONObject().put("id", p.id).put("name", p.name).put("relation", p.relation).put("phone", p.phone)
-                .put("note", p.note).put("createdAt", p.createdAt)
+                .put("note", p.note).put("createdAt", p.createdAt).put("photo", p.photo)
+                .apply {
+                    // تصویر پروفایل کوچک است؛ داخل پشتیبان می‌رود تا روی گوشی دیگر هم بیاید
+                    if (p.photo.isNotBlank() && photos != null) runCatching {
+                        put("photoData", android.util.Base64.encodeToString(java.io.File(photos, p.photo).readBytes(), android.util.Base64.NO_WRAP))
+                    }
+                }
         }))
         root.put("senders", JSONArray(db.bankSenderDao().getAllSenders().map { s ->
             JSONObject().put("bankName", s.bankName).put("senderNumber", s.senderNumber).put("isEnabled", s.isEnabled)
@@ -257,7 +263,14 @@ object Backup {
             root.optJSONArray("persons").each { o ->
                 db.personDao().insert(
                     Person(o.getInt("id"), o.getString("name"), o.optString("relation", PersonRelation.OTHER), o.optString("phone"),
-                        o.optString("note"), o.optLong("createdAt", System.currentTimeMillis()))
+                        o.optString("note"), o.optLong("createdAt", System.currentTimeMillis()),
+                        photo = o.optString("photo").takeIf { name ->
+                            name.isNotBlank() && photos != null && runCatching {
+                                val f = java.io.File(photos, name)
+                                if (!f.exists()) f.writeBytes(android.util.Base64.decode(o.getString("photoData"), android.util.Base64.NO_WRAP))
+                                true
+                            }.getOrDefault(false)
+                        }.orEmpty())
                 )
             }
             root.optJSONArray("senders").each { o ->

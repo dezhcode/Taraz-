@@ -235,7 +235,9 @@ internal fun PayBillSheet(bill: Bill, cards: List<BankCard>, onDismiss: () -> Un
         Text("از حساب", style = lt(13.sp, FontWeight.Bold))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             cards.forEach { c -> LChip(c.bankName, c.bankName == account) { account = c.bankName } }
+            AddAccountChip()
         }
+        WatchNew(cards, { it.id }) { account = it.bankName }
         Text(
             "هزینه در دستهٔ «قبوض» ثبت می‌شود و موعد بعدی ${fa(bill.periodMonths)} ماه جلو می‌رود.",
             style = lt(12.sp, color = L.Muted, lineHeight = 20.sp)

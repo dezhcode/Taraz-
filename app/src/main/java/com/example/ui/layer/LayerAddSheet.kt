@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -113,6 +114,11 @@ fun LayerAddSheet(
 
     val n = amount.toLongOrNull() ?: 0L
     val typeCats = categories.filter { it.isIncome == (type == EntryType.INCOME) }.sortedBy { it.sortOrder }
+    // موردی که همین حالا از «+ … جدید» ساخته شد، خودش انتخاب می‌شود
+    WatchNew(cards, { it.id }) { account = it.bankName }
+    WatchNew(categories, { it.id }) { c -> if (c.isIncome == (type == EntryType.INCOME)) category = c.name }
+    WatchNew(persons, { it.id }) { personId = it.id }
+    val creators = LocalCreators.current
 
     fun applyDraft(d: com.example.ui.FinanceViewModel.EntryDraft) {
         if (d.amount > 0) amount = d.amount.toString()
@@ -246,15 +252,26 @@ fun LayerAddSheet(
 
                 if (type != EntryType.TRANSFER) {
                     val shown = if (showAllCats) typeCats else typeCats.take(4)
-                    val rows = (shown.map { it as Category? } + if (!showAllCats && typeCats.size > 4) listOf(null) else emptyList()).chunked(5)
+                    val showNew = creators != null && (showAllCats || typeCats.size <= 4)
+                    val rows = (shown.map { it as Any? } +
+                        (if (!showAllCats && typeCats.size > 4) listOf(null) else emptyList()) +
+                        (if (showNew) listOf(NEW_TILE) else emptyList())).chunked(5)
                     Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         rows.forEach { row ->
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                row.forEach { c ->
+                                row.forEach { item ->
+                                    val c = item as? Category
+                                    val isNew = item == NEW_TILE
                                     val on = c != null && c.name == category
                                     Column(
                                         Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
-                                            .clickable { if (c == null) showAllCats = true else category = c.name }
+                                            .clickable {
+                                                when {
+                                                    isNew -> creators?.addCategory(type == EntryType.INCOME)
+                                                    c == null -> showAllCats = true
+                                                    else -> category = c.name
+                                                }
+                                            }
                                             .semantics { selected = on },
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -264,11 +281,11 @@ fun LayerAddSheet(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Icon(
-                                                if (c == null) Icons.Default.MoreHoriz else CategoryIcons.vectorFor(c.iconKey),
+                                                if (isNew) Icons.Default.Add else if (c == null) Icons.Default.MoreHoriz else CategoryIcons.vectorFor(c.iconKey),
                                                 null, tint = if (on) Color.White else L.Ink, modifier = Modifier.size(22.dp)
                                             )
                                         }
-                                        Text(c?.name ?: "بیشتر", style = lt(12.sp, FontWeight.Medium, if (on) L.Primary else L.Ink), maxLines = 1)
+                                        Text(if (isNew) "دستهٔ جدید" else c?.name ?: "بیشتر", style = lt(12.sp, FontWeight.Medium, if (on) L.Primary else L.Ink), maxLines = 1)
                                     }
                                 }
                                 repeat(5 - row.size) { Spacer(Modifier.weight(1f)) }
@@ -352,6 +369,7 @@ fun LayerAddSheet(
                         ) {
                             LChip("هیچ‌کدام", personId == null) { personId = null }
                             persons.sortedBy { it.name }.forEach { p -> LChip(p.name, personId == p.id) { personId = p.id } }
+                            AddPersonChip()
                         }
                         val chosen = persons.firstOrNull { it.id == personId }
                         if (chosen != null) {
@@ -445,7 +463,7 @@ private fun AccountPicker(cards: List<BankCard>, selected: String?, onSelect: (S
     Box(modifier) {
         Row(
             Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(14.dp)).background(L.Chip)
-                .clickable(enabled = cards.isNotEmpty()) { open = true }.padding(horizontal = 12.dp),
+                .clickable { open = true }.padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             val card = cards.firstOrNull { it.bankName == selected }
@@ -461,6 +479,7 @@ private fun AccountPicker(cards: List<BankCard>, selected: String?, onSelect: (S
                     onClick = { onSelect(c.bankName); open = false }
                 )
             }
+            NewAccountMenuItem { open = false }
         }
     }
 }
@@ -470,7 +489,7 @@ private fun TransferRow(label: String, cards: List<BankCard>, selected: String?,
     var open by remember { mutableStateOf(false) }
     Box {
         Row(
-            Modifier.fillMaxWidth().height(52.dp).clickable(enabled = cards.isNotEmpty()) { open = true },
+            Modifier.fillMaxWidth().height(52.dp).clickable { open = true },
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(label, style = lt(12.sp, color = L.Muted), modifier = Modifier.width(28.dp))
@@ -484,8 +503,22 @@ private fun TransferRow(label: String, cards: List<BankCard>, selected: String?,
             cards.forEach { c ->
                 DropdownMenuItem(text = { Text(shortAccountLabel(c), style = lt(14.sp)) }, onClick = { onSelect(c.bankName); open = false })
             }
+            NewAccountMenuItem { open = false }
         }
     }
+}
+
+/** نشانهٔ کاشی «دستهٔ جدید» در شبکهٔ دسته‌ها */
+private const val NEW_TILE = "\u0000new"
+
+/** گزینهٔ «+ حساب جدید» در انتهای فهرست کشویی حساب‌ها */
+@Composable
+private fun NewAccountMenuItem(close: () -> Unit) {
+    val creators = LocalCreators.current ?: return
+    DropdownMenuItem(
+        text = { Text("+ حساب جدید", style = lt(14.sp, FontWeight.SemiBold, L.PrimaryText)) },
+        onClick = { close(); creators.addAccount() }
+    )
 }
 
 /** پرتکرارترین هزینه‌ای که در همین ساعت از روز (±۱ ساعت) در ۶۰ روز اخیر ثبت شده */

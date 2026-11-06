@@ -41,6 +41,23 @@ object Attachments {
         name
     }.getOrNull()
 
+    /** تصویر پروفایل شخص: مربعی و کوچک (۵۱۲ پیکسل) تا فهرست‌ها سبک بمانند */
+    fun saveAvatar(c: Context, uri: Uri): String? = runCatching {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        c.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        var sample = 1
+        while (bounds.outWidth / sample > 1024 || bounds.outHeight / sample > 1024) sample *= 2
+        val bmp = c.contentResolver.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+        } ?: return null
+        val side = minOf(bmp.width, bmp.height)
+        val square = Bitmap.createBitmap(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side)
+        val out = if (side > 512) Bitmap.createScaledBitmap(square, 512, 512, true) else square
+        val name = "avt_${UUID.randomUUID().toString().take(12)}.jpg"
+        file(c, name).outputStream().use { out.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+        name
+    }.getOrNull()
+
     fun delete(c: Context, name: String) {
         runCatching { file(c, name).delete() }
     }

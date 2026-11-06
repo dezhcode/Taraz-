@@ -38,7 +38,8 @@ class LoanReminderWorker(
             runCatching { com.example.data.AutoBackup.runIfDue(applicationContext) }
             // Photos of deleted transactions, after a few days' grace.
             runCatching {
-                val used = database.transactionDao().getAllTransactions().first().flatMap { it.attachmentList }.toSet()
+                val used = database.transactionDao().getAllTransactions().first().flatMap { it.attachmentList }.toSet() +
+                    database.personDao().getAll().first().map { it.photo }.filter { it.isNotBlank() }
                 com.example.data.Attachments.cleanOrphans(applicationContext, used)
             }
 

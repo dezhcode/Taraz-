@@ -304,13 +304,20 @@ fun LayerPaySheet(
                         Spacer(Modifier.width(10.dp))
                         Text(fromCard?.let { shortAccountLabel(it) } ?: from, style = lt(14.sp, FontWeight.SemiBold))
                         Spacer(Modifier.width(10.dp))
-                        if (cards.size > 1) SoftButton("تغییر", height = 32.dp) { pickOpen = true }
+                        SoftButton(if (cards.isEmpty()) "افزودن" else "تغییر", height = 32.dp) { pickOpen = true }
                     }
                     DropdownMenu(expanded = pickOpen, onDismissRequest = { pickOpen = false }, containerColor = L.Surface) {
                         cards.forEach { c ->
                             DropdownMenuItem(text = { Text("${shortAccountLabel(c)} · ${millions(c.balance)}", style = lt(14.sp)) }, onClick = { from = c.bankName; pickOpen = false })
                         }
+                        LocalCreators.current?.let { cr ->
+                            DropdownMenuItem(
+                                text = { Text("+ حساب جدید", style = lt(14.sp, FontWeight.SemiBold, L.PrimaryText)) },
+                                onClick = { pickOpen = false; cr.addAccount() }
+                            )
+                        }
                     }
+                    WatchNew(cards, { it.id }) { from = it.bankName }
                 }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(L.Line))
                 Row(Modifier.fillMaxWidth().height(50.dp), verticalAlignment = Alignment.CenterVertically) {

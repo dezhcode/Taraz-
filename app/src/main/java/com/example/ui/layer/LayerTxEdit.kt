@@ -205,8 +205,11 @@ fun LayerTxEditSheet(
                         contentAlignment = Alignment.Center
                     ) { Text(c, style = lt(13.sp, FontWeight.SemiBold, if (on) Color.White else L.Ink)) }
                 }
+                AddCategoryChip(!tx.isExpense)
             }
         }
+        WatchNew(categories, { it.id }) { category = it.name }
+        WatchNew(cards, { it.id }) { account = it.bankName }
 
         ChangeRow("حساب", {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -217,6 +220,7 @@ fun LayerTxEditSheet(
         if (editing == Editing.ACCOUNT) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 cards.forEach { c -> LChip(c.bankName, c.bankName == account) { account = c.bankName; editing = Editing.NONE } }
+                AddAccountChip()
             }
         }
 

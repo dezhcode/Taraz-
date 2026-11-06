@@ -236,10 +236,14 @@ fun LayerRecurringScreen(
             Text("حساب", style = lt(13.sp, FontWeight.SemiBold))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 cards.forEach { c -> LChip(c.bankName, bank == c.bankName) { bank = c.bankName } }
+                AddAccountChip()
             }
+            WatchNew(cards, { it.id }) { bank = it.bankName }
+            WatchNew(categories, { it.id }) { c -> if (c.isIncome == !isExpense) category = c.name }
             Text("دسته", style = lt(13.sp, FontWeight.SemiBold))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 cats.forEach { c -> LChip(c.name, category == c.name) { category = c.name } }
+                AddCategoryChip(!isExpense)
             }
             Spacer(Modifier.height(4.dp))
         }

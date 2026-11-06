@@ -94,7 +94,9 @@ fun LayerBudgetSheet(current: Long, avgDaily: Long, onDismiss: () -> Unit, onSav
                     value = text,
                     onValueChange = { text = groupedInput(it) },
                     singleLine = true,
-                    textStyle = lt(54.sp, FontWeight.Light, letterSpacing = (-1.5).sp).copy(textAlign = TextAlign.Center),
+                    textStyle = lt(54.sp, FontWeight.Light, letterSpacing = (-1.5).sp).copy(
+                        textAlign = TextAlign.Center, textDirection = androidx.compose.ui.text.style.TextDirection.Ltr
+                    ),
                     cursorBrush = SolidColor(L.Primary),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth().semantics { contentDescription = "سقف هزینهٔ روزانه به تومان" }
@@ -572,10 +574,11 @@ fun LayerAddCategoryScreen(
     onSave: (name: String, iconKey: String, colorHex: String, isIncome: Boolean, monthlyBudget: Long) -> Unit,
     existing: Category? = null,
     existingNames: List<String> = emptyList(),
-    onDelete: (() -> Unit)? = null
+    onDelete: (() -> Unit)? = null,
+    startIncome: Boolean = false
 ) {
     var name by remember(existing?.id) { mutableStateOf(existing?.name.orEmpty()) }
-    var income by remember(existing?.id) { mutableStateOf(existing?.isIncome ?: false) }
+    var income by remember(existing?.id) { mutableStateOf(existing?.isIncome ?: startIncome) }
     var iconKey by remember(existing?.id) { mutableStateOf(existing?.iconKey ?: CategoryIcons.keys.first()) }
     var colorHex by remember(existing?.id) { mutableStateOf(existing?.colorHex ?: CategoryIcons.palette.first()) }
     var budgetText by remember(existing?.id) { mutableStateOf(existing?.monthlyBudget?.takeIf { it > 0 }?.let { money(it) }.orEmpty()) }

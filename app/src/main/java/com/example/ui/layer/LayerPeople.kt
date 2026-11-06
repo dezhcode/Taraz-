@@ -230,9 +230,21 @@ private fun relationColor(relation: String): Color = when (relation) {
 }
 
 @Composable
-fun PersonAvatar(person: Person, size: Dp) {
-    Box(Modifier.size(size).clip(CircleShape).background(relationColor(person.relation)), contentAlignment = Alignment.Center) {
-        Text(person.name.trim().firstOrNull()?.toString() ?: "؟", style = lt((size.value * 0.42f).sp, FontWeight.Bold, Color.White))
+fun PersonAvatar(person: Person, size: Dp) = PersonAvatar(person.name, person.relation, person.photo, size)
+
+/** تصویر پروفایل شخص؛ اگر تصویری نگذاشته باشد، حرف اول نام روی رنگ نسبت */
+@Composable
+fun PersonAvatar(name: String, relation: String, photo: String, size: Dp) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Box(Modifier.size(size).clip(CircleShape).background(relationColor(relation)), contentAlignment = Alignment.Center) {
+        if (photo.isNotBlank()) {
+            coil.compose.AsyncImage(
+                model = com.example.data.Attachments.file(context, photo), contentDescription = "تصویر $name",
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Text(name.trim().firstOrNull()?.toString() ?: "؟", style = lt((size.value * 0.42f).sp, FontWeight.Bold, Color.White))
+        }
     }
 }
 
@@ -257,9 +269,9 @@ fun LayerPersonDetailScreen(
     var entryToDelete by remember { mutableStateOf<Debt?>(null) }
     val mine = entries.filter { it.personId == person.id }.sortedByDescending { it.createdAt }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
     LayerScreen(
-        title = person.name,
-        subtitle = person.relation + if (person.phone.isNotBlank()) " · ${fa(person.phone)}" else "",
+        title = "پروفایل",
         onBack = onBack,
         trailing = {
             Box(
@@ -272,6 +284,39 @@ fun LayerPersonDetailScreen(
             if (balance != 0L) SoftBigButton("تسویهٔ کامل") { settling = true }
         }
     ) {
+        // سربرگ پروفایل: تصویر، نام، نسبت و راه‌های تماس
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(Modifier.clip(CircleShape).clickable(onClick = onEdit)) { PersonAvatar(person, 96.dp) }
+            Text(person.name, style = lt(22.sp, FontWeight.Bold))
+            Box(
+                Modifier.clip(PillShape).background(relationColor(person.relation).copy(alpha = 0.14f)).padding(horizontal = 12.dp, vertical = 3.dp)
+            ) { Text(person.relation, style = lt(12.sp, FontWeight.SemiBold, relationColor(person.relation))) }
+            if (person.phone.isNotBlank()) {
+                Text(
+                    fa(person.phone), style = lt(14.sp, color = L.Muted).copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr)
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SoftButton("تماس", height = 36.dp) {
+                        runCatching {
+                            context.startActivity(android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:${person.phone}")))
+                        }
+                    }
+                    SoftButton("پیامک", height = 36.dp) {
+                        runCatching {
+                            context.startActivity(android.content.Intent(android.content.Intent.ACTION_SENDTO, android.net.Uri.parse("smsto:${person.phone}")))
+                        }
+                    }
+                }
+            } else {
+                Text("شمارهٔ تماس ثبت نشده است", style = lt(12.sp, color = L.Muted))
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+
         Column(
             Modifier.padding(horizontal = 20.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp))
                 .background(when { balance > 0 -> L.GreenSoft; balance < 0 -> L.RedSoft; else -> L.Chip })
@@ -418,7 +463,9 @@ private fun AccountChips(cards: List<BankCard>, selected: String?, onSelect: (St
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         LChip("خارج از حساب‌ها (دستی)", selected == null) { onSelect(null) }
         cards.forEach { c -> LChip(c.bankName, selected == c.bankName) { onSelect(c.bankName) } }
+        AddAccountChip()
     }
+    WatchNew(cards, { it.id }) { onSelect(it.bankName) }
 }
 
 // ───────────────────────── افزودن/ویرایش شخص ─────────────────────────
@@ -429,18 +476,60 @@ fun PersonSheet(person: Person?, existingNames: List<String>, onDismiss: () -> U
     var name by remember { mutableStateOf(person?.name.orEmpty()) }
     var relation by remember { mutableStateOf(person?.relation ?: PersonRelation.FRIEND) }
     var phone by remember { mutableStateOf(person?.phone.orEmpty()) }
+    var photo by remember { mutableStateOf(person?.photo.orEmpty()) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // تصویرهایی که در همین برگه انتخاب و بعد کنار گذاشته شدند، روی دستگاه نمی‌مانند
+    var picked by remember { mutableStateOf(listOf<String>()) }
+    fun usePhoto(uri: android.net.Uri?) {
+        if (uri == null) return
+        com.example.data.Attachments.saveAvatar(context, uri)?.let { photo = it; picked = picked + it }
+    }
+    val galleryLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { usePhoto(it) }
+    var cameraFile by remember { mutableStateOf<java.io.File?>(null) }
+    val cameraLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.TakePicture()
+    ) { ok ->
+        val f = cameraFile
+        if (ok && f != null) { usePhoto(android.net.Uri.fromFile(f)); f.delete() }
+        cameraFile = null
+    }
+    val dismiss = {
+        picked.forEach { com.example.data.Attachments.delete(context, it) }
+        onDismiss()
+    }
     val clean = name.trim()
     val taken = existingNames.any { it.equals(clean, ignoreCase = true) && !it.equals(person?.name, ignoreCase = true) }
     LayerSheet(
         title = if (person == null) "شخص جدید" else "ویرایش ${person.name}",
-        onDismiss = onDismiss,
-        topGap = 140.dp,
+        onDismiss = dismiss,
+        topGap = 90.dp,
         bottomBar = {
             BigButton(if (person == null) "ایجاد حساب" else "ذخیره", enabled = clean.isNotEmpty() && !taken) {
-                onSave((person ?: Person(name = clean)).copy(name = clean, relation = relation, phone = phone.trim()))
+                // تصویر قبلی که عوض شد و تصویرهای کنارگذاشته پاک می‌شوند
+                picked.filter { it != photo }.forEach { com.example.data.Attachments.delete(context, it) }
+                person?.photo?.takeIf { it.isNotBlank() && it != photo }?.let { com.example.data.Attachments.delete(context, it) }
+                onSave((person ?: Person(name = clean)).copy(name = clean, relation = relation, phone = phone.trim(), photo = photo))
             }
         }
     ) {
+        // تصویر پروفایل
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            PersonAvatar(clean.ifBlank { "؟" }, relation, photo, 76.dp)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("تصویر پروفایل", style = lt(13.sp, FontWeight.SemiBold))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LChip("گالری", false) { galleryLauncher.launch("image/*") }
+                    LChip("دوربین", false) {
+                        val (f, uri) = com.example.data.Attachments.cameraTarget(context)
+                        cameraFile = f
+                        cameraLauncher.launch(uri)
+                    }
+                    if (photo.isNotBlank()) LChip("حذف تصویر", false) { photo = "" }
+                }
+            }
+        }
         LField(
             value = name, onChange = { name = it.take(40) }, label = "نام", placeholder = "مثلاً علی رضایی",
             hint = if (taken) "شخصی با این نام وجود دارد." else null
@@ -600,7 +689,11 @@ fun SplitExpenseSheet(
                 val on = p.id in picked
                 LChip(p.name, on) { picked = if (on) picked - p.id else picked + p.id }
             }
+            AddPersonChip()
         }
+        WatchNew(persons, { it.id }) { picked = picked + it.id }
+        WatchNew(cards, { it.id }) { account = it.bankName }
+        WatchNew(categories, { it.id }) { c -> if (!c.isIncome) category = c.name }
         if (total > 0 && n > 0) {
             Text(
                 "سهم هر نفر ${money(share)} تومان. " +
@@ -612,11 +705,13 @@ fun SplitExpenseSheet(
         Text("حساب پرداخت‌کننده", style = lt(13.sp, FontWeight.SemiBold))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             cards.forEach { c -> LChip(c.bankName, account == c.bankName) { account = c.bankName } }
+            AddAccountChip()
         }
         if (includeMe) {
             Text("دستهٔ سهم شما", style = lt(13.sp, FontWeight.SemiBold))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 expenseCats.forEach { c -> LChip(c.name, category == c.name) { category = c.name } }
+                AddCategoryChip(false)
             }
         }
         Spacer(Modifier.height(4.dp))

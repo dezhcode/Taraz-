@@ -353,6 +353,17 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 }
                 var themeChosen by remember { mutableStateOf(com.example.ui.layer.ThemePrefs.load(context) != null) }
 
+                // «+ … جدید» در هر انتخابگر: برگهٔ ساختن روی همان صفحه باز می‌شود
+                var quickCategory by remember { mutableStateOf<Boolean?>(null) }
+                val creators = remember {
+                    com.example.ui.layer.Creators(
+                        addAccount = { isAddCardOpen = true },
+                        addCategory = { quickCategory = it },
+                        addPerson = { personSheetFor = null; isPersonSheetOpen = true }
+                    )
+                }
+
+                CompositionLocalProvider(com.example.ui.layer.LocalCreators provides creators) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = com.example.ui.layer.L.Bg
@@ -1046,25 +1057,6 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 )
                             }
 
-                            // One sheet for adding an account, wherever it is reached from.
-                            if (isAddCardOpen) {
-                                com.example.ui.layer.LayerAddAccountSheet(
-                                    existingNames = cards.map { it.bankName },
-                                    onDismiss = { isAddCardOpen = false },
-                                    onConfirm = { name, cardNumber, balance, accountType, limit, dueDay ->
-                                        viewModel.addCard(
-                                            bankName = name,
-                                            cardNumber = cardNumber,
-                                            balance = balance,
-                                            accountType = accountType,
-                                            creditLimit = limit,
-                                            dueDay = dueDay
-                                        )
-                                        isAddCardOpen = false
-                                    }
-                                )
-                            }
-
                             accountToEdit?.let { card ->
                                 com.example.ui.layer.LayerEditAccountSheet(
                                     card = card,
@@ -1227,6 +1219,45 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 )
                             }
 
+                            // One sheet for adding an account, wherever it is reached from.
+                            if (isAddCardOpen) {
+                                com.example.ui.layer.LayerAddAccountSheet(
+                                    existingNames = cards.map { it.bankName },
+                                    onDismiss = { isAddCardOpen = false },
+                                    onConfirm = { name, cardNumber, balance, accountType, limit, dueDay ->
+                                        viewModel.addCard(
+                                            bankName = name,
+                                            cardNumber = cardNumber,
+                                            balance = balance,
+                                            accountType = accountType,
+                                            creditLimit = limit,
+                                            dueDay = dueDay
+                                        )
+                                        isAddCardOpen = false
+                                    }
+                                )
+                            }
+
+                            // ساختن دستهٔ جدید از دل یک انتخابگر (روی همهٔ برگه‌ها)
+                            quickCategory?.let { startIncome ->
+                                BackHandler { quickCategory = null }
+                                Box(
+                                    Modifier.fillMaxSize().background(com.example.ui.layer.L.Bg)
+                                        .clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) {}
+                                ) {
+                                    com.example.ui.layer.LayerAddCategoryScreen(
+                                        existingNames = categories.map { it.name },
+                                        startIncome = startIncome,
+                                        onBack = { quickCategory = null },
+                                        onSave = { name, icon, color, income, budget ->
+                                            viewModel.addCategory(name, icon, color, income)
+                                            if (budget > 0) viewModel.setBudgetForNewCategory(name, budget)
+                                            quickCategory = null
+                                        }
+                                    )
+                                }
+                            }
+
                             // بررسی پیامک‌ها تمام‌صفحه روی همه چیز
                             if (showSmsAssistantSheet) {
                                 com.example.ui.layer.LayerSmsReviewScreen(
@@ -1269,6 +1300,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                         }
                     }
                 }
+                } // LocalCreators
                 }
             }
             }

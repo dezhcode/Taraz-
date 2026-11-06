@@ -146,7 +146,7 @@ interface GoalDao {
         Bill::class,
         NetWorthSnapshot::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -291,6 +291,13 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v14: تصویر پروفایل اشخاص */
+        val MIGRATION_13_14 = object : androidx.room.migration.Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE persons ADD COLUMN photo TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         val CATEGORY_RENAMES = listOf("خوراک" to "غذا", "درآمد دیگر" to "سایر درآمدها", "قرض و طلب" to "حساب اشخاص")
 
         /** Categories a new user starts with; the add sheet is empty without them. */
@@ -432,7 +439,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "fidar_finance_database"
                 )
                 .addCallback(AppDatabaseCallback(scope))
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
                 // Only the first test builds (v1-3) have no migration. Every later
                 // version must have one: a destructive fallback wiped users' money
                 // records silently whenever a migration was forgotten.

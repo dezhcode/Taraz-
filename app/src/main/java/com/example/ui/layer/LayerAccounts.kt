@@ -556,7 +556,9 @@ fun RepayCreditSheet(card: BankCard, cards: List<BankCard>, onDismiss: () -> Uni
         Text("از حساب", style = lt(13.sp, FontWeight.Bold))
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             sources.forEach { c -> LChip(c.bankName, c.bankName == from) { from = c.bankName } }
+            AddAccountChip()
         }
+        WatchNew(cards, { it.id }) { if (!it.isCredit) from = it.bankName }
         Text("در هزینه‌ها منظور نمی‌شود؛ خریدهای کارت پیش‌تر به‌عنوان هزینه ثبت شده‌اند.", style = lt(12.sp, color = L.Muted, lineHeight = 20.sp))
     }
 }
