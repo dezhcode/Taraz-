@@ -38,26 +38,6 @@ import com.example.R
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.BlendMode
 
-fun makeWhiteTransparent(src: android.graphics.Bitmap): android.graphics.Bitmap {
-    val width = src.width
-    val height = src.height
-    val pixels = IntArray(width * height)
-    src.getPixels(pixels, 0, width, 0, 0, width, height)
-    for (i in pixels.indices) {
-        val color = pixels[i]
-        val r = (color shr 16) and 0xFF
-        val g = (color shr 8) and 0xFF
-        val b = color and 0xFF
-        val a = (color shr 24) and 0xFF
-        if (a > 0 && r > 240 && g > 240 && b > 240) {
-            pixels[i] = 0x00000000
-        }
-    }
-    val result = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
-    result.setPixels(pixels, 0, width, 0, 0, width, height)
-    return result
-}
-
 private fun getSvgFilenameForBank(bankName: String): String? {
     val name = bankName.trim()
     return when {
@@ -238,96 +218,5 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFallbackLogo(
             drawRect(color = Color.White, topLeft = Offset(cx - r * 0.06f, cy - r * 0.25f), size = Size(r * 0.12f, r * 0.45f))
             drawRect(color = Color.White, topLeft = Offset(cx + r * 0.2f, cy - r * 0.25f), size = Size(r * 0.12f, r * 0.45f))
         }
-    }
-}
-
-private fun getFallbackBgColor(bankName: String): Color {
-    val name = bankName.trim()
-    return when {
-        name.contains("ملی") -> Color(0xFFE11D48)
-        name.contains("ملت") -> Color(0xFFBE123C)
-        name.contains("تجارت") -> Color(0xFF0F766E)
-        name.contains("سامان") -> Color(0xFF0284C7)
-        name.contains("سپه") -> Color(0xFF15803D)
-        name.contains("پارسیان") -> Color(0xFFD97706)
-        name.contains("آینده") -> Color(0xFF78350F)
-        else -> Color(0xFF64748B)
-    }
-}
-
-fun Modifier.oceanicShimmer(bankName: String, seedId: String = ""): Modifier = this.drawBehind {
-    val (colorFoam, colorSky, colorCobalt, colorNavy) = when {
-        bankName.contains("ملت") -> listOf(Color(0xFFFFF1F2), Color(0xFFFDA4AF), Color(0xFFE11D48), Color(0xFF9F1239))
-        bankName.contains("سامان") -> listOf(Color(0xFFEFF6FF), Color(0xFF93C5FD), Color(0xFF2563EB), Color(0xFF1E3A8A))
-        bankName.contains("بلو") -> listOf(Color(0xFFECFEFF), Color(0xFF67E8F9), Color(0xFF06B6D4), Color(0xFF083344))
-        bankName.contains("ملی") -> listOf(Color(0xFFECFDF5), Color(0xFF6EE7B7), Color(0xFF10B981), Color(0xFF064E3B))
-        bankName.contains("رسالت") -> listOf(Color(0xFFF0F9FF), Color(0xFF7DD3FC), Color(0xFF0EA5E9), Color(0xFF0C4A6E))
-        bankName.contains("تجارت") -> listOf(Color(0xFFF0FDFA), Color(0xFF5EEAD4), Color(0xFF0D9488), Color(0xFF115E59))
-        bankName.contains("سپه") -> listOf(Color(0xFFFEFCE8), Color(0xFFFDE047), Color(0xFFCA8A04), Color(0xFF713F12))
-        bankName.contains("پارسیان") -> listOf(Color(0xFFFFFBEB), Color(0xFFFCD34D), Color(0xFFD97706), Color(0xFF78350F))
-        else -> listOf(Color(0xFFEAF7FB), Color(0xFF7FC6E6), Color(0xFF2E7CC0), Color(0xFF123A6B))
-    }
-
-    drawRect(color = colorNavy)
-    fun drawScaledCoverRect(scaleX: Float, scaleY: Float, pivot: Offset, brush: Brush) {
-        val left = (0f - pivot.x) / scaleX + pivot.x
-        val right = (size.width - pivot.x) / scaleX + pivot.x
-        val top = (0f - pivot.y) / scaleY + pivot.y
-        val bottom = (size.height - pivot.y) / scaleY + pivot.y
-        drawRect(brush = brush, topLeft = Offset(left, top), size = Size(right - left, bottom - top))
-    }
-
-    val pivot1 = Offset(size.width * 0.4158f, size.height * 0.06f)
-    scale(scaleX = 1.50f, scaleY = 0.484f, pivot = pivot1) {
-        drawScaledCoverRect(1.50f, 0.484f, pivot1, Brush.radialGradient(
-            0.0f to colorFoam.copy(alpha = 0.92f), 0.1325f to colorFoam.copy(alpha = 0.7765f), 0.265f to colorFoam.copy(alpha = 0.46f),
-            0.3975f to colorFoam.copy(alpha = 0.1435f), 0.53f to Color.Transparent, 1.0f to Color.Transparent, center = pivot1, radius = size.width
-        ))
-    }
-
-    val pivot2 = Offset(size.width * 0.4242f, size.height * 0.33f)
-    scale(scaleX = 1.50f, scaleY = 0.484f, pivot = pivot2) {
-        drawScaledCoverRect(1.50f, 0.484f, pivot2, Brush.radialGradient(
-            0.0f to colorSky.copy(alpha = 0.92f), 0.1325f to colorSky.copy(alpha = 0.7765f), 0.265f to colorSky.copy(alpha = 0.46f),
-            0.3975f to colorSky.copy(alpha = 0.1435f), 0.53f to Color.Transparent, 1.0f to Color.Transparent, center = pivot2, radius = size.width
-        ))
-    }
-
-    val pivot3 = Offset(size.width * 0.5119f, size.height * 0.67f)
-    scale(scaleX = 1.50f, scaleY = 0.484f, pivot = pivot3) {
-        drawScaledCoverRect(1.50f, 0.484f, pivot3, Brush.radialGradient(
-            0.0f to colorCobalt.copy(alpha = 0.92f), 0.1325f to colorCobalt.copy(alpha = 0.7765f), 0.265f to colorCobalt.copy(alpha = 0.46f),
-            0.3975f to colorCobalt.copy(alpha = 0.1435f), 0.53f to Color.Transparent, 1.0f to Color.Transparent, center = pivot3, radius = size.width
-        ))
-    }
-
-    val pivot4 = Offset(size.width * 0.5367f, size.height * 0.94f)
-    scale(scaleX = 1.50f, scaleY = 0.484f, pivot = pivot4) {
-        drawScaledCoverRect(1.50f, 0.484f, pivot4, Brush.radialGradient(
-            0.0f to colorNavy.copy(alpha = 0.92f), 0.1325f to colorNavy.copy(alpha = 0.7765f), 0.265f to colorNavy.copy(alpha = 0.46f),
-            0.3975f to colorNavy.copy(alpha = 0.1435f), 0.53f to Color.Transparent, 1.0f to Color.Transparent, center = pivot4, radius = size.width
-        ))
-    }
-
-    drawRect(
-        brush = Brush.linearGradient(
-            colors = listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.03f), Color.Transparent),
-            start = Offset(0f, 0f),
-            end = Offset(size.width, size.height)
-        )
-    )
-    drawRect(
-        color = Color.White.copy(alpha = 0.08f),
-        topLeft = Offset(1f, 1f),
-        size = Size(size.width - 2f, size.height - 2f),
-        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
-    )
-
-    val random = java.util.Random(seedId.hashCode().toLong().let { if (it == 0L) 12345L else it })
-    for (i in 0 until 1800) {
-        val rx = random.nextFloat() * size.width
-        val ry = random.nextFloat() * size.height
-        val alpha = random.nextFloat() * 0.14f
-        drawCircle(Color.White.copy(alpha = alpha), 0.4.dp.toPx(), Offset(rx, ry))
     }
 }

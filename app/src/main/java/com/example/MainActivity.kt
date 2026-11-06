@@ -32,7 +32,6 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.ui.*
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.layer.edgeGlass
-import com.example.ui.components.CardDetailBottomSheet
 
 class MainActivity : androidx.fragment.app.FragmentActivity() {
 
