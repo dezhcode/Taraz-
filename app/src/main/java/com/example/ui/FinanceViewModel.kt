@@ -562,6 +562,37 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    // ─── چیدمان صفحهٔ خانه ───
+
+    private val _homeLayout = MutableStateFlow(com.example.ui.layer.HomeTools.decodeLayout(sharedPrefs.getString("home_layout", null)))
+    /** بخش‌های خانه به ترتیب، هر کدام روشن یا خاموش */
+    val homeLayout: StateFlow<List<Pair<String, Boolean>>> = _homeLayout.asStateFlow()
+
+    private val _homeTools = MutableStateFlow(com.example.ui.layer.HomeTools.decodeTools(sharedPrefs.getString("home_tools", null)))
+    /** ابزارهایی که کاربر به خانه سنجاق کرده، به ترتیب */
+    val homeTools: StateFlow<List<String>> = _homeTools.asStateFlow()
+
+    fun setHomeLayout(layout: List<Pair<String, Boolean>>) {
+        _homeLayout.value = layout
+        sharedPrefs.edit().putString("home_layout", com.example.ui.layer.HomeTools.encodeLayout(layout)).apply()
+    }
+
+    fun setHomeTools(ids: List<String>) {
+        val clean = ids.distinct().take(com.example.ui.layer.HomeTools.MAX_PINNED)
+        _homeTools.value = clean
+        sharedPrefs.edit().putString("home_tools", clean.joinToString(",")).apply()
+    }
+
+    fun toggleHomeTool(id: String) {
+        val cur = _homeTools.value
+        setHomeTools(if (id in cur) cur - id else cur + id)
+    }
+
+    fun resetHomeLayout() {
+        setHomeLayout(com.example.ui.layer.HomeTools.defaultLayout)
+        setHomeTools(com.example.ui.layer.HomeTools.defaultTools)
+    }
+
     // ─── دارایی خالص در برابر تورم: یک عکس در هر ماه ───
 
     val netWorthSnapshots: StateFlow<List<NetWorthSnapshot>> = repository.allSnapshots

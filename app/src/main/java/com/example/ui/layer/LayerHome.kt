@@ -1,6 +1,10 @@
 package com.example.ui.layer
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -62,6 +66,30 @@ import com.example.data.countsAsExpense
 import com.example.data.isTransfer
 import com.example.utils.JalaliDate
 
+/** «یک نگاه»: چقدر خرج کرده‌ام، چقدر بدهکارم و چقدر طلبکارم */
+data class HomeGlance(
+    val spent: Long = 0,
+    val income: Long = 0,
+    val owe: Long = 0,
+    val oweNote: String = "",
+    val owed: Long = 0,
+    val owedNote: String = "",
+    val balance: Long = 0
+)
+
+/** یک کار در «پیش رو»: قسط، قبض، چک، طلب یا بازپرداخت کارت اعتباری */
+data class UpcomingItem(
+    val kind: String,
+    val title: String,
+    val amount: Long,
+    val at: Long,
+    val action: String,
+    /** رنگ برچسب نوع: ۰ آبی، ۱ کهربایی، ۲ قرمز، ۳ سبز */
+    val tone: Int,
+    val primary: Boolean = false,
+    val onAction: () -> Unit
+)
+
 @Composable
 fun LayerHomeScreen(
     userName: String,
@@ -91,7 +119,15 @@ fun LayerHomeScreen(
     modifier: Modifier = Modifier,
     activeGoal: com.example.data.FinancialGoal? = null,
     onOpenGoals: () -> Unit = {},
-    onOpenCategories: () -> Unit = {}
+    onOpenCategories: () -> Unit = {},
+    layout: List<Pair<String, Boolean>> = HomeTools.defaultLayout,
+    tools: List<String> = HomeTools.defaultTools,
+    glance: HomeGlance = HomeGlance(),
+    upcoming: List<UpcomingItem> = emptyList(),
+    onTool: (String) -> Unit = {},
+    onOpenAllTools: () -> Unit = {},
+    onOpenLayout: () -> Unit = {},
+    onOpenObligations: () -> Unit = {}
 ) {
     val now = System.currentTimeMillis()
     val todayStart = startOfDay(now)
@@ -136,7 +172,7 @@ fun LayerHomeScreen(
             }
         }
 
-        // ── کیف پول لایه‌ای
+        // ── کیف پول لایه‌ای (همیشه بالای صفحه)
         WalletStack(
             cards = cards,
             totalBalance = totalBalance,
@@ -146,184 +182,273 @@ fun LayerHomeScreen(
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp)
         )
 
-        // ── روزشمار: نوار هفته + خرج امروز
-        TodayCard(
-            transactions = transactions,
-            todayStart = todayStart,
-            todayExpense = todayExpense,
-            dailyBudget = dailyBudget,
-            onOpenDay = onOpenDay,
-            onOpenReports = onOpenReports,
-            onSetBudget = onOpenBudget,
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp)
-        )
+        // ── بخش‌ها به چیدمان کاربر
+        layout.filter { it.second }.forEach { (id, _) ->
+            when (id) {
+                "glance" -> GlanceCard(glance, onOpenReports, onOpenObligations)
+                "upcoming" -> UpcomingSection(upcoming, now)
+                "sms" -> if (pendingSms.isNotEmpty()) SmsBanner(pendingSms, onOpenSmsInbox)
+                "today" -> TodayCard(
+                    transactions = transactions,
+                    todayStart = todayStart,
+                    todayExpense = todayExpense,
+                    dailyBudget = dailyBudget,
+                    onOpenDay = onOpenDay,
+                    onOpenReports = onOpenReports,
+                    onSetBudget = onOpenBudget,
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp)
+                )
+                "tools" -> ToolsSection(tools, onTool, onOpenAllTools, onOpenLayout)
+                "plan" -> PlanSection(activeGoal, categories, transactions, onOpenGoals, onOpenBudget, onOpenReports)
+                "recent" -> RecentSection(transactions, cards, categories, onTransactionClick, onSeeAllTransactions)
+            }
+        }
 
-        // ── هشدار بودجهٔ دسته‌ها (۸۰٪ به بالا)
-        val alerts = remember(categories, transactions) { budgetAlerts(categories, transactions) }
-        if (alerts.isNotEmpty()) {
-            val (cat, used, pct) = alerts.first()
-            val over = pct >= 100
-            Callout(
-                title = if (over) "بودجهٔ «${cat.name}» تمام شد" else "${fa(pct)}٪ بودجهٔ «${cat.name}» خرج شده",
-                body = "${millions(used)} از ${millions(cat.monthlyBudget)} این ماه" +
-                    (if (alerts.size > 1) " · ${fa(alerts.size - 1)} دستهٔ دیگر هم نزدیک سقف است" else ""),
-                bg = if (over) L.RedSoft else L.AmberSoft,
-                titleColor = if (over) L.RedText else L.AmberInk,
-                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp).clickable(onClick = onOpenReports)
+        // چیدمان همیشه در دسترس است، حتی اگر «ابزارهای من» خاموش باشد
+        Row(
+            Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp).fillMaxWidth().height(46.dp)
+                .clip(RoundedCornerShape(14.dp)).clickable(onClick = onOpenLayout),
+            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.Tune, null, tint = L.PrimaryText, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("چیدمان خانه", style = lt(14.sp, FontWeight.SemiBold, L.PrimaryText))
+        }
+    }
+}
+
+@Composable
+private fun SectionTitle(title: String, trailing: String? = null, onTrailing: (() -> Unit)? = null, note: String? = null) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 24.dp, end = 20.dp, top = 22.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, style = lt(17.sp, FontWeight.Bold), modifier = Modifier.weight(1f))
+        if (note != null) Text(note, style = lt(12.sp, color = L.Muted))
+        if (trailing != null && onTrailing != null) {
+            Box(
+                Modifier.height(36.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = onTrailing).padding(horizontal = 8.dp),
+                contentAlignment = Alignment.Center
+            ) { Text(trailing, style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText)) }
+        }
+    }
+}
+
+@Composable
+private fun GlanceCard(g: HomeGlance, onOpenReports: () -> Unit, onOpenObligations: () -> Unit) {
+    Column(
+        Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp).fillMaxWidth().cardSurface(22.dp)
+            .padding(top = 14.dp, bottom = 12.dp)
+    ) {
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+            GlanceCell(
+                "خرج ${JalaliDate.today().monthName}", millions(g.spent), L.RedText,
+                if (g.income > 0) "از ${millions(g.income)} درآمد" else "درآمدی ثبت نشده",
+                Modifier.weight(1f), onOpenReports
+            )
+            Box(Modifier.width(1.dp).fillMaxHeight().background(L.Line))
+            GlanceCell(
+                "بدهکارم", millions(g.owe), if (g.owe > 0) L.Ink else L.Muted,
+                g.oweNote.ifBlank { "بدهی‌ای ندارید" }, Modifier.weight(1f), onOpenObligations
+            )
+            Box(Modifier.width(1.dp).fillMaxHeight().background(L.Line))
+            GlanceCell(
+                "طلبکارم", millions(g.owed), if (g.owed > 0) L.Green else L.Muted,
+                g.owedNote.ifBlank { "طلبی ندارید" }, Modifier.weight(1f), onOpenObligations
             )
         }
+        Box(Modifier.padding(horizontal = 16.dp, vertical = 10.dp).fillMaxWidth().height(1.dp).background(L.Line))
+        val net = g.balance + g.owed - g.owe
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("اگر همه صاف شود", style = lt(12.sp, color = L.Muted), modifier = Modifier.weight(1f))
+            Text("${money(net)} تومان", style = lt(14.sp, FontWeight.Bold, if (net < 0) L.RedText else L.Ink))
+        }
+    }
+}
 
-        // ── اهداف پس‌انداز و دسته‌بندی‌ها
-        Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(
-                Modifier.weight(1f).cardSurface(18.dp).clickable(onClick = onOpenGoals).padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("اهداف پس‌انداز", style = lt(13.sp, FontWeight.Bold), modifier = Modifier.weight(1f))
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.Chevron, modifier = Modifier.size(16.dp))
-                }
-                if (activeGoal != null && activeGoal.targetAmount > 0) {
-                    val frac = (activeGoal.currentAmount.toFloat() / activeGoal.targetAmount).coerceIn(0f, 1f)
-                    Text(activeGoal.title, style = lt(12.sp, color = L.Muted), maxLines = 1)
-                    LProgress(frac, L.Primary, height = 6.dp)
-                    Text("${fa((frac * 100).toInt())}٪ · ${millions(activeGoal.currentAmount)} از ${millions(activeGoal.targetAmount)}", style = lt(11.sp, color = L.Muted), maxLines = 1)
-                } else {
-                    Text("هدفی بگذارید؛ مثلاً سفر یا صندوق اضطراری.", style = lt(12.sp, color = L.Muted, lineHeight = 20.sp))
-                }
+@Composable
+private fun GlanceCell(label: String, value: String, color: Color, note: String, modifier: Modifier, onClick: () -> Unit) {
+    Column(
+        modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(label, style = lt(12.sp, color = L.Muted), maxLines = 1)
+        Text(value, style = lt(20.sp, FontWeight.Bold, color), maxLines = 1)
+        Text(note, style = lt(11.sp, color = L.Muted), maxLines = 1)
+    }
+}
+
+@Composable
+private fun UpcomingSection(items: List<UpcomingItem>, now: Long) {
+    SectionTitle(
+        "پیش رو",
+        note = if (items.isEmpty()) null else "۷ روز آینده · ${fa(items.size)} مورد · ${millions(items.sumOf { it.amount })}"
+    )
+    if (items.isEmpty()) {
+        Text(
+            "تا یک هفتهٔ آینده قسط، قبض یا چکی موعد ندارد.",
+            style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(horizontal = 24.dp)
+        )
+        return
+    }
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        items.forEach { u ->
+            val days = JalaliDate.daysUntil(u.at, now)
+            val (soft, ink) = when (u.tone) {
+                1 -> L.AmberSoft to L.AmberInk
+                2 -> L.RedSoft to L.RedText
+                3 -> L.GreenSoft to L.GreenText
+                else -> L.PrimarySoft to L.PrimaryText
             }
             Column(
-                Modifier.weight(1f).cardSurface(18.dp).clickable(onClick = onOpenCategories).padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                Modifier.width(200.dp).cardSurface(20.dp).padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("دسته‌بندی‌ها", style = lt(13.sp, FontWeight.Bold), modifier = Modifier.weight(1f))
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.Chevron, modifier = Modifier.size(16.dp))
+                    Box(Modifier.height(24.dp).clip(PillShape).background(soft).padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
+                        Text(u.kind, style = lt(12.sp, FontWeight.Bold, ink))
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        dueLabel(u.at), style = lt(12.sp, FontWeight.SemiBold, if (days <= 1) L.AmberText else L.Muted)
+                    )
                 }
+                Text(u.title, style = lt(14.sp, FontWeight.SemiBold), maxLines = 1)
+                Text(if (u.amount > 0) "${money(u.amount)} تومان" else "مبلغ نامشخص", style = lt(17.sp))
+                Box(
+                    Modifier.fillMaxWidth().height(40.dp).clip(ButtonShape)
+                        .background(if (u.primary) L.Primary else L.PrimarySoft).clickable(onClick = u.onAction),
+                    contentAlignment = Alignment.Center
+                ) { Text(u.action, style = lt(13.sp, FontWeight.Bold, if (u.primary) Color.White else L.PrimaryText)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SmsBanner(pending: List<PendingTransaction>, onOpen: () -> Unit) {
+    Row(
+        Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp))
+            .background(L.PrimarySoft).clickable(onClick = onOpen).padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(Icons.Default.Sms, null, tint = L.PrimaryText, modifier = Modifier.size(22.dp))
+        Column(Modifier.weight(1f)) {
+            Text("${fa(pending.size)} پیامک بانکی منتظر تأیید", style = lt(14.sp, FontWeight.Bold, L.PrimaryText))
+            Text(
+                pending.take(2).joinToString(" · ") { (if (it.isExpense) "برداشت " else "واریز ") + money(it.amount) },
+                style = lt(12.sp, color = L.Info), maxLines = 1
+            )
+        }
+        Box(Modifier.height(36.dp).clip(ButtonShape).background(L.Primary).padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+            Text("بررسی", style = lt(13.sp, FontWeight.Bold, Color.White))
+        }
+    }
+}
+
+@Composable
+private fun ToolsSection(tools: List<String>, onTool: (String) -> Unit, onOpenAll: () -> Unit, onOpenLayout: () -> Unit) {
+    SectionTitle("ابزارهای من", trailing = "چیدمان", onTrailing = onOpenLayout)
+    val items: List<HomeTool?> = tools.mapNotNull { HomeTools.find(it) } + listOf(null) // null = «همهٔ ابزارها»
+    Column(
+        Modifier.padding(horizontal = 20.dp).fillMaxWidth().cardSurface(22.dp).padding(horizontal = 6.dp, vertical = 8.dp)
+    ) {
+        items.chunked(4).forEach { row ->
+            Row(Modifier.fillMaxWidth()) {
+                row.forEach { t ->
+                    Column(
+                        Modifier.weight(1f).heightIn(min = 86.dp).clip(RoundedCornerShape(14.dp))
+                            .clickable { if (t == null) onOpenAll() else onTool(t.id) }
+                            .padding(vertical = 6.dp, horizontal = 2.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        if (t == null) {
+                            Box(
+                                Modifier.size(46.dp).clip(RoundedCornerShape(14.dp)).border(1.5.dp, L.PrimaryDisabled, RoundedCornerShape(14.dp)),
+                                contentAlignment = Alignment.Center
+                            ) { Icon(Icons.Default.MoreHoriz, null, tint = L.PrimaryText, modifier = Modifier.size(22.dp)) }
+                            Text("همهٔ ابزارها", style = lt(12.sp, FontWeight.SemiBold, L.PrimaryText), textAlign = TextAlign.Center)
+                        } else {
+                            IconWell(t.icon, size = 46.dp, bg = L.PrimarySoft, fg = L.PrimaryText, iconSize = 22.dp, radius = 14.dp)
+                            Text(t.label, style = lt(12.sp, lineHeight = 17.sp), textAlign = TextAlign.Center, maxLines = 2)
+                        }
+                    }
+                }
+                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlanSection(
+    goal: com.example.data.FinancialGoal?,
+    categories: List<Category>,
+    transactions: List<Transaction>,
+    onOpenGoals: () -> Unit,
+    onOpenBudget: () -> Unit,
+    onOpenReports: () -> Unit
+) {
+    val alerts = remember(categories, transactions) { budgetAlerts(categories, transactions) }
+    Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(
+            Modifier.weight(1f).cardSurface(20.dp).clickable(onClick = onOpenGoals).padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (goal != null && goal.targetAmount > 0) {
+                val frac = (goal.currentAmount.toFloat() / goal.targetAmount).coerceIn(0f, 1f)
+                Text("هدف: ${goal.title}", style = lt(12.sp, color = L.Muted), maxLines = 1)
+                Text("${fa((frac * 100).toInt())}٪", style = lt(18.sp, FontWeight.Bold))
+                LProgress(frac, L.Green, height = 6.dp)
+                Text("${millions(goal.currentAmount)} از ${millions(goal.targetAmount)}", style = lt(11.sp, color = L.Muted), maxLines = 1)
+            } else {
+                Text("هدف پس‌انداز", style = lt(13.sp, FontWeight.Bold))
+                Text("مثلاً سفر یا صندوق اضطراری.", style = lt(12.sp, color = L.Muted, lineHeight = 20.sp))
+            }
+        }
+        Column(
+            Modifier.weight(1f).cardSurface(20.dp).clickable(onClick = if (alerts.isEmpty()) onOpenBudget else onOpenReports).padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            val top = alerts.firstOrNull()
+            if (top != null) {
+                val (cat, used, pct) = top
+                Text("بودجهٔ ${cat.name}", style = lt(12.sp, color = L.Muted), maxLines = 1)
+                Text("${fa(pct)}٪", style = lt(18.sp, FontWeight.Bold, if (pct >= 100) L.RedText else L.AmberText))
+                LProgress(pct / 100f, if (pct >= 100) L.Red else L.Amber, height = 6.dp)
+                Text("${millions(used)} از ${millions(cat.monthlyBudget)}", style = lt(11.sp, color = L.Muted), maxLines = 1)
+            } else {
                 val withBudget = categories.count { it.monthlyBudget > 0 }
-                Text("${fa(categories.size)} دسته", style = lt(12.sp, color = L.Muted))
+                Text("بودجه", style = lt(13.sp, FontWeight.Bold))
                 Text(
-                    if (withBudget > 0) "${fa(withBudget)} دسته با بودجهٔ ماهانه" else "برای هر دسته بودجهٔ ماهانه بگذارید",
-                    style = lt(11.sp, color = L.Muted, lineHeight = 19.sp)
+                    if (withBudget > 0) "همهٔ ${fa(withBudget)} دسته زیر سقف هستند." else "برای دسته‌ها سقف ماهانه بگذارید.",
+                    style = lt(12.sp, color = L.Muted, lineHeight = 20.sp)
                 )
             }
         }
+    }
+}
 
-        // ── خط زمان
-        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("خط زمان", style = lt(17.sp, FontWeight.Bold))
-            Text("کارهای پیش رو و تراکنش‌های امروز", style = lt(12.sp, color = L.Muted))
+@Composable
+private fun RecentSection(
+    transactions: List<Transaction>,
+    cards: List<BankCard>,
+    categories: List<Category>,
+    onTransactionClick: (Transaction) -> Unit,
+    onSeeAll: () -> Unit
+) {
+    SectionTitle("آخرین تراکنش‌ها", trailing = "همه", onTrailing = onSeeAll)
+    val recent = remember(transactions) { transactions.sortedByDescending { it.date }.take(4) }
+    Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (recent.isEmpty()) {
+            Text("هنوز تراکنشی ثبت نشده. با دکمهٔ + یا از پیامک بانک ثبت کنید.", style = lt(13.sp, color = L.Muted, lineHeight = 22.sp))
         }
-        Column(Modifier.padding(horizontal = 20.dp)) {
-            val upcoming = loans
-                .filter { !it.isSettled }
-                .map { it to JalaliDate.nextDueTimestamp(it.dueDay, now) }
-                .filter { JalaliDate.daysUntil(it.second, now) in 0..7 }
-                .sortedBy { it.second }
-
-            upcoming.forEach { (loan, due) ->
-                val days = JalaliDate.daysUntil(due, now)
-                TimelineRow(
-                    label = "${weekdayName(due)}\n${JalaliDate.fromTimestamp(due).formatShort()}",
-                    node = { HollowNode(L.Amber) },
-                    railTop = 30.dp
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth().cardSurface().padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text("قسط ${loan.loanName}", style = lt(14.sp, FontWeight.SemiBold))
-                            Row {
-                                Text("${money(loan.installmentAmount)} تومان · ", style = lt(12.sp, color = L.Muted))
-                                Text(daysLabel(days), style = lt(12.sp, FontWeight.SemiBold, L.AmberText))
-                            }
-                        }
-                        SoftButton("پرداخت") { onPayLoan(loan) }
-                    }
-                }
-            }
-
-            // اکنون
-            Row(Modifier.fillMaxWidth().height(30.dp).padding(bottom = 0.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("اکنون · ${timeOfDay(now)}", style = lt(12.sp, FontWeight.Bold, L.PrimaryText))
-                Spacer(Modifier.width(8.dp))
-                Box(Modifier.weight(1f).height(2.dp).clip(RoundedCornerShape(1.dp)).background(L.Primary))
-            }
-            Spacer(Modifier.height(8.dp))
-
-            val todayTx = transactions.filter { it.date >= todayStart }.sortedByDescending { it.date }
-            val entries: List<Pair<Long, Any>> =
-                (todayTx.map { it.date to (it as Any) } + pendingSms.map { it.date to (it as Any) })
-                    .sortedByDescending { it.first }
-                    .take(8)
-
-            if (entries.isEmpty()) {
-                Text(
-                    "امروز هنوز تراکنشی ثبت نشده. با دکمهٔ + یا از پیامک بانک ثبت کنید.",
-                    style = lt(13.sp, color = L.Muted, lineHeight = 22.sp),
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-            }
-
-            entries.forEachIndexed { i, (ts, item) ->
-                val last = i == entries.lastIndex
-                val label = if (ts >= todayStart) timeOfDay(ts) else JalaliDate.fromTimestamp(ts).formatShort()
-                when (item) {
-                    is PendingTransaction -> TimelineRow(
-                        label = label,
-                        node = { HollowNode(L.Amber, filled = false, size = 14.dp) },
-                        lastRow = last
-                    ) {
-                        Column(
-                            Modifier
-                                .fillMaxWidth()
-                                .clip(ItemShape)
-                                .background(L.Surface)
-                                .border(1.5.dp, L.AmberRing, ItemShape)
-                                .clickable { onReviewSms(item) }
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconWell(Icons.Default.Sms)
-                                Spacer(Modifier.width(10.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(item.title.ifBlank { "تراکنش بانکی" }, style = lt(14.sp, FontWeight.Medium))
-                                    Text("از پیامک ${item.card} · هنوز ثبت نشده", style = lt(12.sp, FontWeight.SemiBold, L.AmberText))
-                                }
-                                Text(signedMoney(item.amount, item.isExpense), style = lt(14.sp, FontWeight.SemiBold, if (item.isExpense) L.RedText else L.Green))
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                PrimaryButton("ثبت کن", Modifier.weight(1f).height(40.dp)) { onApproveSms(item) }
-                                SoftButton("مال من نیست") { onDismissSms(item) }
-                            }
-                        }
-                    }
-                    is Transaction -> TimelineRow(
-                        label = label,
-                        node = { SolidNode(txColor(item, L.Primary)) },
-                        lastRow = last
-                    ) {
-                        TransactionCard(item, cards, categories) { onTransactionClick(item) }
-                    }
-                }
-            }
-
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp)
-                    .height(46.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .clickable(onClick = onSeeAllTransactions),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("همهٔ تراکنش‌ها", style = lt(14.sp, FontWeight.SemiBold, L.PrimaryText))
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.PrimaryText, modifier = Modifier.size(18.dp))
-            }
-        }
+        recent.forEach { tx -> TransactionCard(tx, cards, categories) { onTransactionClick(tx) } }
     }
 }
 

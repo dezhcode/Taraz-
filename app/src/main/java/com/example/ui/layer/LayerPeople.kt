@@ -78,9 +78,12 @@ fun LayerObligationsScreen(
     cheques: List<com.example.data.Cheque> = emptyList(),
     onAddCheque: () -> Unit = {},
     onOpenCheque: (com.example.data.Cheque) -> Unit = {},
-    creditUsed: Long = 0
+    creditUsed: Long = 0,
+    segment: Int? = null,
+    onSegment: (Int) -> Unit = {}
 ) {
-    var segment by rememberSaveable { mutableIntStateOf(0) }
+    var ownSegment by rememberSaveable { mutableIntStateOf(0) }
+    val current = segment ?: ownSegment
     val loanLeft = loans.filter { !it.isSettled }.sumOf { (it.totalAmount - it.paidAmount).coerceAtLeast(0) }
     val iOwePeople = balances.values.filter { it < 0 }.sumOf { -it }
     val pendingCheques = cheques.filter { it.status == com.example.data.ChequeStatus.PENDING }
@@ -122,11 +125,11 @@ fun LayerObligationsScreen(
         }
 
         LSegmented(
-            listOf("اقساط", "اشخاص", "چک‌ها"), segment, { segment = it },
+            listOf("اقساط", "اشخاص", "چک‌ها"), current, { ownSegment = it; onSegment(it) },
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp)
         )
 
-        when (segment) {
+        when (current) {
             0 -> LoansSection(loans, onAddLoan, onPay, onOpenLoan)
             1 -> PeopleSection(persons, balances, onOpenPerson, onAddPerson, onAddEntry, onSplit)
             else -> ChequesSection(cheques, onAddCheque, onOpenCheque)

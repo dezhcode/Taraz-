@@ -219,7 +219,7 @@ private fun BillSheet(bill: Bill?, onDismiss: () -> Unit, onSave: (Bill) -> Unit
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PayBillSheet(bill: Bill, cards: List<BankCard>, onDismiss: () -> Unit, onPay: (Long, String) -> Unit) {
+internal fun PayBillSheet(bill: Bill, cards: List<BankCard>, onDismiss: () -> Unit, onPay: (Long, String) -> Unit) {
     var amountText by remember { mutableStateOf(bill.amount.takeIf { it > 0 }?.let { money(it) } ?: "") }
     var account by remember { mutableStateOf(bill.bankName.takeIf { n -> cards.any { it.bankName == n } } ?: cards.firstOrNull()?.bankName ?: "") }
     val amount = parseAmount(amountText)

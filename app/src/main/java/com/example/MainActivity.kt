@@ -148,6 +148,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 val cheques by viewModel.cheques.collectAsStateWithLifecycle()
                 val bills by viewModel.bills.collectAsStateWithLifecycle()
                 val netWorthSnapshots by viewModel.netWorthSnapshots.collectAsStateWithLifecycle()
+                val homeLayout by viewModel.homeLayout.collectAsStateWithLifecycle()
+                val homeTools by viewModel.homeTools.collectAsStateWithLifecycle()
                 val assetsTotal = assets.sumOf { a ->
                     val u = if (a.manualPrice > 0) a.manualPrice else prices[a.code]?.price ?: 0L
                     kotlin.math.round(u * a.quantity).toLong()
@@ -195,6 +197,49 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 var chequeEditing by remember { mutableStateOf<com.example.data.Cheque?>(null) }
                 fun openSub(name: String) { subStack.add(name) }
                 fun closeSub() { if (subStack.isNotEmpty()) subStack.removeAt(subStack.lastIndex) }
+
+                // ─── خانهٔ قابل چیدن: ابزارها، «یک نگاه» و «پیش رو» ───
+                var homeLayoutOpen by remember { mutableStateOf(false) }
+                var allToolsOpen by remember { mutableStateOf(false) }
+                var billToPay by remember { mutableStateOf<com.example.data.Bill?>(null) }
+                var loansSegment by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableIntStateOf(0) }
+
+                fun runTool(id: String) {
+                    when (id) {
+                        "expense" -> { initialIsExpenseForDialog = true; addWithVoice = false; isAddTransactionOpen = true }
+                        "income" -> { initialIsExpenseForDialog = false; addWithVoice = false; isAddTransactionOpen = true }
+                        "voice" -> { initialIsExpenseForDialog = true; addWithVoice = true; isAddTransactionOpen = true }
+                        "transfer" -> isTransferOpen = true
+                        "sms" -> viewModel.setSmsAssistantSheetOpen(true)
+                        "recurring" -> openSub("recurring")
+                        "pay_loan" -> {
+                            val active = loans.filter { !it.isSettled }
+                            if (active.size == 1) loanToPay = active.first()
+                            else { loansSegment = 0; viewModel.setTab(Tab.LOANS) }
+                        }
+                        "bills" -> openSub("bills")
+                        "cheque" -> { chequeEditing = null; chequeSheetOpen = true }
+                        "cheques" -> { loansSegment = 2; viewModel.setTab(Tab.LOANS) }
+                        "add_loan" -> openSub("add_loan")
+                        "accounts", "wallet" -> openSub("accounts")
+                        "add_account" -> isAddCardOpen = true
+                        "add_person" -> { personSheetFor = null; isPersonSheetOpen = true }
+                        "person_entry" -> { entrySheetPersonId = null; isEntrySheetOpen = true }
+                        "split" -> isSplitOpen = true
+                        "people" -> { loansSegment = 1; viewModel.setTab(Tab.LOANS) }
+                        "budget" -> isBudgetOpen = true
+                        "goals" -> openSub("goals")
+                        "categories" -> openSub("categories")
+                        "assets" -> openSub("assets")
+                        "report", "tags" -> viewModel.setTab(Tab.REPORTS)
+                        "weekly" -> weeklyOpen = true
+                        "year" -> openSub("year")
+                        "share" -> shareMonthTs = System.currentTimeMillis()
+                        "assistant" -> isAiSheetOpen = true
+                        "search" -> viewModel.setTab(Tab.TRANSACTIONS)
+                        "backup" -> openSub("backup")
+                    }
+                }
 
                 // System Back Button Handling
                 val context = LocalContext.current
@@ -655,7 +700,81 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                             ) { targetTab ->
                                                 when (targetTab) {
                                                     Tab.HOME -> {
+                                                        val creditUsed = cards.filter { it.accountType == com.example.data.AccountType.CREDIT && it.balance < 0 }.sumOf { -it.balance }
+                                                        val glance = remember(monthlyExpense, monthlyIncome, loans, personBalances, cheques, cards, totalBalance) {
+                                                            val loansLeft = loans.filter { !it.isSettled }.sumOf { (it.totalAmount - it.paidAmount).coerceAtLeast(0) }
+                                                            val iOwePeople = personBalances.values.filter { it < 0 }.sumOf { -it }
+                                                            val owedPeople = personBalances.values.filter { it > 0 }.sum()
+                                                            val pending = cheques.filter { it.status == com.example.data.ChequeStatus.PENDING }
+                                                            val chequesOut = pending.filter { it.issued }.sumOf { it.amount }
+                                                            val chequesIn = pending.filter { !it.issued }.sumOf { it.amount }
+                                                            com.example.ui.layer.HomeGlance(
+                                                                spent = monthlyExpense,
+                                                                income = monthlyIncome,
+                                                                owe = loansLeft + iOwePeople + chequesOut + creditUsed,
+                                                                oweNote = listOfNotNull(
+                                                                    if (loansLeft > 0) "وام" else null,
+                                                                    if (iOwePeople > 0) "اشخاص" else null,
+                                                                    if (chequesOut > 0) "چک" else null,
+                                                                    if (creditUsed > 0) "اعتباری" else null
+                                                                ).joinToString("، "),
+                                                                owed = owedPeople + chequesIn,
+                                                                owedNote = listOfNotNull(
+                                                                    personBalances.values.count { it > 0 }.takeIf { it > 0 }?.let { "از ${com.example.utils.JalaliDate.toPersianDigits(it)} نفر" },
+                                                                    if (chequesIn > 0) "چک" else null
+                                                                ).joinToString(" · "),
+                                                                // کارت اعتباری در موجودی منفی است و در بدهی هم آمده؛ یک بار حساب شود
+                                                                balance = totalBalance + creditUsed
+                                                            )
+                                                        }
+                                                        val upcoming = remember(loans, loanPayments, bills, cheques, debts, personBalances, cards) {
+                                                            val now = System.currentTimeMillis()
+                                                            val J = com.example.utils.JalaliDate
+                                                            buildList {
+                                                                loans.filter { !it.isSettled }.forEach { l ->
+                                                                    val due = J.nextDueTimestamp(l.dueDay, now)
+                                                                    val paid = loanPayments.any { it.loanId == l.id && it.monthKey == J.fromTimestamp(due).monthKey() }
+                                                                    if (!paid && J.daysUntil(due, now) in 0..7) add(
+                                                                        com.example.ui.layer.UpcomingItem(if (l.isPurchase) "قسط خرید" else "قسط", "${l.loanName} · ${l.bankName}",
+                                                                            l.installmentAmount, due, "پرداخت", 0, primary = true) { loanToPay = l }
+                                                                    )
+                                                                }
+                                                                bills.filter { it.enabled && J.daysUntil(it.dueDate, now) <= 7 }.forEach { b ->
+                                                                    add(com.example.ui.layer.UpcomingItem("قبض", b.title.ifBlank { b.kind }, b.amount, b.dueDate, "پرداخت کردم", 1) { billToPay = b })
+                                                                }
+                                                                cheques.filter { it.status == com.example.data.ChequeStatus.PENDING && J.daysUntil(it.dueDate, now) in -30..7 }.forEach { c ->
+                                                                    add(com.example.ui.layer.UpcomingItem(
+                                                                        if (c.issued) "چک" else "چک دریافتی", (if (c.issued) "به " else "از ") + c.person,
+                                                                        c.amount, c.dueDate, "پاس شد؟", if (c.issued) 2 else 3
+                                                                    ) { chequeEditing = c; chequeSheetOpen = true })
+                                                                }
+                                                                debts.filter { d -> d.dueDate != null && !d.settled && !d.isRepayment && d.personId != null }.forEach { d ->
+                                                                    val bal = personBalances[d.personId] ?: 0L
+                                                                    val due = d.dueDate ?: return@forEach
+                                                                    if (bal != 0L && (bal > 0) == d.owedToMe && J.daysUntil(due, now) in -7..7) add(
+                                                                        com.example.ui.layer.UpcomingItem(
+                                                                            if (d.owedToMe) "طلب" else "بدهی", (if (d.owedToMe) "از " else "به ") + d.person,
+                                                                            kotlin.math.abs(bal), due, if (d.owedToMe) "یادآوری" else "تسویه", if (d.owedToMe) 3 else 2
+                                                                        ) { selectedPersonId = d.personId; openSub("person_detail") }
+                                                                    )
+                                                                }
+                                                                cards.filter { it.accountType == com.example.data.AccountType.CREDIT && it.dueDay > 0 && it.balance < 0 }.forEach { c ->
+                                                                    val due = J.nextDueTimestamp(c.dueDay, now)
+                                                                    if (J.daysUntil(due, now) in 0..7) add(
+                                                                        com.example.ui.layer.UpcomingItem("اعتباری", c.bankName, -c.balance, due, "بازپرداخت", 0) { isTransferOpen = true }
+                                                                    )
+                                                                }
+                                                            }.distinctBy { it.kind + it.title + it.at }.sortedBy { it.at }
+                                                        }
                                                         com.example.ui.layer.LayerHomeScreen(
+                                                            layout = homeLayout,
+                                                            tools = homeTools,
+                                                            glance = glance,
+                                                            upcoming = upcoming,
+                                                            onTool = { runTool(it) },
+                                                            onOpenAllTools = { allToolsOpen = true },
+                                                            onOpenLayout = { homeLayoutOpen = true },
+                                                            onOpenObligations = { loansSegment = 0; viewModel.setTab(Tab.LOANS) },
                                                             userName = userProfile?.name.orEmpty(),
                                                             cards = cards,
                                                             totalBalance = totalBalance,
@@ -739,7 +858,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             cheques = cheques,
                                                             onAddCheque = { chequeEditing = null; chequeSheetOpen = true },
                                                             onOpenCheque = { chequeEditing = it; chequeSheetOpen = true },
-                                                            creditUsed = cards.filter { it.accountType == com.example.data.AccountType.CREDIT && it.balance < 0 }.sumOf { -it.balance }
+                                                            creditUsed = cards.filter { it.accountType == com.example.data.AccountType.CREDIT && it.balance < 0 }.sumOf { -it.balance },
+                                                            segment = loansSegment,
+                                                            onSegment = { loansSegment = it }
                                                         )
                                                     }
 
@@ -969,6 +1090,29 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             }
                             shareMonthTs?.let { ts ->
                                 com.example.ui.layer.ShareReportSheet(transactions, ts, onDismiss = { shareMonthTs = null })
+                            }
+
+                            if (homeLayoutOpen) {
+                                com.example.ui.layer.HomeLayoutSheet(
+                                    layout = homeLayout,
+                                    tools = homeTools,
+                                    onLayout = { viewModel.setHomeLayout(it) },
+                                    onTools = { viewModel.setHomeTools(it) },
+                                    onAddTool = { allToolsOpen = true },
+                                    onReset = { viewModel.resetHomeLayout() },
+                                    onDismiss = { homeLayoutOpen = false }
+                                )
+                            }
+                            if (allToolsOpen) {
+                                com.example.ui.layer.AllToolsSheet(
+                                    pinned = homeTools,
+                                    onToggle = { viewModel.toggleHomeTool(it) },
+                                    onRun = { id -> allToolsOpen = false; homeLayoutOpen = false; runTool(id) },
+                                    onDismiss = { allToolsOpen = false }
+                                )
+                            }
+                            billToPay?.let { b ->
+                                com.example.ui.layer.PayBillSheet(b, cards, onDismiss = { billToPay = null }, onPay = { amount, account -> viewModel.payBill(b, amount, account) })
                             }
 
                             if (chequeSheetOpen) {
