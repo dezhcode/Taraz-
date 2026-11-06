@@ -55,7 +55,8 @@ fun Modifier.edgeGlass(
         val topPx = top.toPx()
         val bottomPx = bottom.toPx()
         if (canBlur && (topPx > 0f || bottomPx > 0f)) {
-            content.record(this, layoutDirection, IntSize(size.width.toInt().coerceAtLeast(1), size.height.toInt().coerceAtLeast(1))) {
+            // record باید از خود DrawScope صدا زده شود تا drawContent داخل لایه کشیده شود، نه روی صفحه
+            content.record {
                 this@drawWithContent.drawContent()
             }
             drawLayer(content)
@@ -119,7 +120,7 @@ private fun ContentDrawScope.glassBand(
         val layer = layers[i]
         val r = radiusDp.dp.toPx()
         layer.renderEffect = BlurEffect(r, r, TileMode.Clamp)
-        layer.record(this, layoutDirection, IntSize(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1))) {
+        layer.record(size = IntSize(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1))) {
             translate(0f, -y) { drawLayer(content) }
         }
         drawIntoCanvas { canvas ->
