@@ -93,10 +93,13 @@ class FinanceRepository(private val db: AppDatabase) {
      * halves of a transfer go together, and an instalment payment is taken off
      * its loan again.
      */
-    suspend fun deleteTransaction(transaction: Transaction) = db.withTransaction {
+    suspend fun deleteTransaction(transaction: Transaction): Deleted = db.withTransaction {
         val rows = transaction.transferGroupId?.let { transactionDao.getByTransferGroup(it) }
             ?.takeIf { it.isNotEmpty() }
             ?: listOfNotNull(transactionDao.getById(transaction.id))
+        // What goes with the rows, kept so «برگردان» can put everything back.
+        val payments = rows.flatMap { loanPaymentDao.byTransaction(it.id) }
+        val debts = rows.flatMap { debtDao.byTransaction(it.id) }
         for (row in rows) {
             transactionDao.deleteTransaction(row.id)
             bankCardDao.adjustBalance(row.bankName, -signed(row))
@@ -110,6 +113,29 @@ class FinanceRepository(private val db: AppDatabase) {
             // A loan to or from a person goes with the money that moved for it.
             debtDao.deleteByTransaction(row.id)
         }
+        Deleted(rows, payments, debts)
+    }
+
+    /** What a delete removed: enough to restore it exactly. */
+    data class Deleted(
+        val transactions: List<Transaction>,
+        val loanPayments: List<LoanPayment>,
+        val debts: List<Debt>
+    )
+
+    /** Undoes [deleteTransaction] / [deletePersonEntry]: rows, balances, loan payments and ledger lines come back. */
+    suspend fun restore(d: Deleted) = db.withTransaction {
+        for (row in d.transactions) {
+            insertTransaction(row)
+            val loanId = row.loanId
+            if (loanId != null) {
+                loanDao.getById(loanId)?.let { loan ->
+                    loanDao.insertLoan(loan.copy(paidAmount = (loan.paidAmount + row.amount).coerceAtMost(loan.totalAmount)))
+                }
+            }
+        }
+        d.loanPayments.forEach { loanPaymentDao.insert(it) }
+        d.debts.forEach { debtDao.insert(it) }
     }
 
     /**
@@ -344,9 +370,10 @@ class FinanceRepository(private val db: AppDatabase) {
     }
 
     /** Removes a ledger line and the account transaction recorded with it. */
-    suspend fun deletePersonEntry(debt: Debt) = db.withTransaction {
-        debt.transactionId?.let { id -> transactionDao.getById(id)?.let { deleteTransaction(it) } }
+    suspend fun deletePersonEntry(debt: Debt): Deleted = db.withTransaction {
+        val withTx = debt.transactionId?.let { id -> transactionDao.getById(id)?.let { deleteTransaction(it) } }
         debtDao.delete(debt.id)
+        Deleted(withTx?.transactions.orEmpty(), withTx?.loanPayments.orEmpty(), (withTx?.debts.orEmpty() + debt).distinctBy { it.id })
     }
 
     // ─── Reset ───

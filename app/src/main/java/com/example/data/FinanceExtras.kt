@@ -117,6 +117,9 @@ interface LoanPaymentDao {
     @Query("DELETE FROM loan_payments WHERE transactionId = :transactionId")
     suspend fun deleteByTransaction(transactionId: Int)
 
+    @Query("SELECT * FROM loan_payments WHERE transactionId = :transactionId")
+    suspend fun byTransaction(transactionId: Int): List<LoanPayment>
+
     @Query("UPDATE loan_payments SET amount = :amount WHERE transactionId = :transactionId")
     suspend fun updateAmountByTransaction(transactionId: Int, amount: Long)
 
@@ -185,6 +188,9 @@ interface DebtDao {
 
     @Query("DELETE FROM debts WHERE transactionId = :transactionId")
     suspend fun deleteByTransaction(transactionId: Int)
+
+    @Query("SELECT * FROM debts WHERE transactionId = :transactionId")
+    suspend fun byTransaction(transactionId: Int): List<Debt>
 
     @Query("UPDATE debts SET person = :name WHERE personId = :personId")
     suspend fun renamePerson(personId: Int, name: String)

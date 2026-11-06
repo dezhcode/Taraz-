@@ -255,13 +255,73 @@ fun LayerBackupScreen(
     onBack: () -> Unit,
     onCreate: (password: String) -> Unit,
     onRestore: (password: String) -> Unit,
-    onExportCsv: () -> Unit
+    onExportCsv: () -> Unit,
+    auto: com.example.data.AutoBackup.State? = null,
+    onAutoEnabled: (Boolean) -> Unit = {},
+    onAutoPeriod: (Int) -> Unit = {},
+    onPickFolder: () -> Unit = {},
+    onAutoPassword: (String) -> Unit = {},
+    onAutoNow: () -> Unit = {}
 ) {
-    var mode by remember { mutableStateOf<String?>(null) } // "create" | "restore"
+    var mode by remember { mutableStateOf<String?>(null) } // "create" | "restore" | "auto"
     LayerScreen(title = "پشتیبان و خروجی", subtitle = "داده‌هایتان را بیرون از گوشی هم نگه دارید", onBack = onBack) {
         message?.let { (ok, text) ->
             Callout(text, null, if (ok) L.GreenSoft else L.RedSoft, if (ok) L.GreenText else L.RedText, Modifier.padding(horizontal = 20.dp))
         }
+        if (auto != null) {
+            LayerCard(radius = 20.dp, padding = 16.dp) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("پشتیبان خودکار", style = lt(15.sp, FontWeight.Bold))
+                        Text("بی‌آنکه کاری کنید، خودش فایل رمزدار می‌سازد", style = lt(12.sp, color = L.Muted))
+                    }
+                    LSwitch(auto.enabled, "پشتیبان خودکار") { on ->
+                        when {
+                            !on -> onAutoEnabled(false)
+                            auto.folderLabel == null -> onPickFolder()
+                            !auto.hasPassword -> mode = "auto"
+                            else -> onAutoEnabled(true)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                LSegmented(listOf("هفتگی", "ماهانه"), if (auto.periodDays >= 28) 1 else 0, { onAutoPeriod(if (it == 1) 30 else 7) })
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("پوشهٔ ذخیره", style = lt(12.sp, color = L.Muted))
+                        Text(auto.folderLabel ?: "انتخاب نشده", style = lt(14.sp, FontWeight.SemiBold), maxLines = 1)
+                    }
+                    SoftButton(if (auto.folderLabel == null) "انتخاب" else "تغییر", height = 36.dp, onClick = onPickFolder)
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("رمز فایل‌ها", style = lt(12.sp, color = L.Muted))
+                        Text(if (auto.hasPassword) "گذاشته شده" else "گذاشته نشده", style = lt(14.sp, FontWeight.SemiBold))
+                    }
+                    SoftButton(if (auto.hasPassword) "تغییر" else "گذاشتن", height = 36.dp) { mode = "auto" }
+                }
+                Spacer(Modifier.height(10.dp))
+                when {
+                    auto.lastError != null -> Callout(auto.lastError, null, L.RedSoft, L.RedText)
+                    auto.lastAt > 0 -> Callout(
+                        "آخرین پشتیبان: ${weekdayName(auto.lastAt)} ${JalaliDate.fromTimestamp(auto.lastAt).formatShort()}، ${timeOfDay(auto.lastAt)} · ${fa(auto.lastSize / 1024)} کیلوبایت",
+                        null, L.GreenSoft, L.GreenText
+                    )
+                }
+                if (auto.folderLabel != null && auto.hasPassword) {
+                    Spacer(Modifier.height(8.dp))
+                    SoftButton(if (busy) "در حال ساخت…" else "ساخت همین حالا", height = 36.dp) { if (!busy) onAutoNow() }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "رمز یک بار پرسیده و رمزگذاری‌شده روی گوشی نگه داشته می‌شود. ۵ نسخهٔ آخر می‌ماند و قدیمی‌ترها پاک می‌شوند. پوشه را می‌توانید با گوگل‌درایو هم‌گام کنید.",
+                    style = lt(11.sp, color = L.Muted, lineHeight = 19.sp)
+                )
+            }
+        }
+
         LayerCard(radius = 20.dp, padding = 0.dp) {
             // فاصلهٔ داخلی از دو طرف تا متن‌ها به لبهٔ کادر نچسبند (مثل گروه‌های تنظیمات)
             Column(Modifier.padding(horizontal = 16.dp)) {
@@ -284,15 +344,22 @@ fun LayerBackupScreen(
     mode?.let { m ->
         var pass by remember(m) { mutableStateOf("") }
         var pass2 by remember(m) { mutableStateOf("") }
-        val creating = m == "create"
+        val creating = m == "create" || m == "auto"
         val ok = if (creating) pass.length >= 6 && pass == pass2 else pass.isNotEmpty()
         LayerSheet(
             title = if (creating) "رمز فایل پشتیبان" else "رمز فایل پشتیبان را بنویسید",
             onDismiss = { mode = null },
             topGap = 200.dp,
             bottomBar = {
-                BigButton(if (creating) "ساخت و ذخیرهٔ فایل" else "انتخاب فایل و بازگردانی", enabled = ok) {
-                    if (creating) onCreate(pass) else onRestore(pass)
+                BigButton(
+                    when (m) { "auto" -> "ذخیرهٔ رمز"; "create" -> "ساخت و ذخیرهٔ فایل"; else -> "انتخاب فایل و بازگردانی" },
+                    enabled = ok
+                ) {
+                    when (m) {
+                        "auto" -> { onAutoPassword(pass); onAutoEnabled(true) }
+                        "create" -> onCreate(pass)
+                        else -> onRestore(pass)
+                    }
                     mode = null
                 }
             }

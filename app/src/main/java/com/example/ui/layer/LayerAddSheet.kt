@@ -90,6 +90,7 @@ fun LayerAddSheet(
     BackHandler(onBack = onDismiss)
     // تاریخی که از جملهٔ «دیروز…» آمده؛ null یعنی همین الان
     var dateOverride by remember { mutableStateOf<Long?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
     var helperMsg by remember { mutableStateOf<String?>(null) }
     // اگر این پول برای یک شخص بود (قرض دادن/گرفتن یا پس دادن)، در حساب همان شخص ثبت می‌شود
     var personId by remember { mutableStateOf<Int?>(null) }
@@ -270,9 +271,9 @@ fun LayerAddSheet(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                dateOverride?.let { com.example.utils.JalaliDate.fromTimestamp(it).formatShort() } ?: "امروز، ${timeOfDay(System.currentTimeMillis())}",
+                                dateOverride?.let { "${com.example.utils.JalaliDate.fromTimestamp(it).formatShort()}، ${timeOfDay(it)}" } ?: "امروز، ${timeOfDay(System.currentTimeMillis())}",
                                 style = lt(13.sp, FontWeight.Medium, if (dateOverride != null) L.Primary else L.Ink),
-                                modifier = Modifier.clickable(enabled = dateOverride != null) { dateOverride = null }
+                                modifier = Modifier.clickable { showDatePicker = true }
                             )
                         }
                     }
@@ -374,6 +375,16 @@ fun LayerAddSheet(
                 val who = persons.firstOrNull { it.id == personId }
                 Text(if (who != null && type != EntryType.TRANSFER) "ثبت در حساب ${who.name}" else type.cta, style = lt(16.sp, FontWeight.Bold, Color.White))
             }
+        }
+        if (showDatePicker) {
+            JalaliDatePickerSheet(
+                initial = dateOverride ?: System.currentTimeMillis(),
+                onDismiss = { showDatePicker = false },
+                onPick = { picked ->
+                    // همین الان (چند دقیقه اختلاف) یعنی بدون تاریخ جدا
+                    dateOverride = if (kotlin.math.abs(System.currentTimeMillis() - picked) < 10 * 60_000L) null else picked
+                }
+            )
         }
     }
 }

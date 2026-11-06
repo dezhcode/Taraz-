@@ -33,6 +33,8 @@ class LoanReminderWorker(
             // Monthly recurring items are recorded here too, so they arrive even
             // if the app is not opened on their day.
             runCatching { com.example.data.FinanceRepository(database).runDueRecurring() }
+            // Weekly or monthly encrypted backup into the folder the user chose.
+            runCatching { com.example.data.AutoBackup.runIfDue(applicationContext) }
 
             if (!prefs.getBoolean("alerts_enabled", true)) return Result.success()
             val loans = database.loanDao().getAllLoans().first()

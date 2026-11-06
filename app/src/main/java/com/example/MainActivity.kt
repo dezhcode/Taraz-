@@ -189,6 +189,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                         }
                     }
                 }
+                val autoBackupState by viewModel.autoBackup.collectAsStateWithLifecycle()
+                val folderLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
+                ) { uri -> if (uri != null) viewModel.setAutoBackupFolder(uri) }
                 val readFileLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
                     androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
                 ) { uri ->
@@ -520,6 +524,19 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                             backupMsg = null
                                             pendingRestorePassword = pass
                                             readFileLauncher.launch(arrayOf("*/*"))
+                                        },
+                                        auto = autoBackupState,
+                                        onAutoEnabled = { viewModel.setAutoBackupEnabled(it) },
+                                        onAutoPeriod = { viewModel.setAutoBackupPeriod(it) },
+                                        onPickFolder = { folderLauncher.launch(null) },
+                                        onAutoPassword = { viewModel.setAutoBackupPassword(it) },
+                                        onAutoNow = {
+                                            backupBusy = true
+                                            backupMsg = null
+                                            viewModel.runAutoBackupNow { err ->
+                                                backupBusy = false
+                                                backupMsg = if (err == null) true to "پشتیبان در پوشهٔ انتخابی ذخیره شد." else false to err
+                                            }
                                         },
                                         onExportCsv = {
                                             backupBusy = true
@@ -914,6 +931,12 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     cards = cards,
                                     onBack = { viewModel.setSmsAssistantSheetOpen(false) }
                                 )
+                            }
+
+                            // برگرداندن حذف (۶ ثانیه)
+                            val undoOffer by viewModel.undo.collectAsStateWithLifecycle()
+                            undoOffer?.let { u ->
+                                com.example.ui.layer.UndoBar(u.title, u.detail, u.shownAt, viewModel.undoWindowMs) { viewModel.undoDelete() }
                             }
 
                             // موجودی با پیامک بانک نمی‌خواند

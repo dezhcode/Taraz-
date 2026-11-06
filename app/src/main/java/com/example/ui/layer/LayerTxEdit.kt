@@ -59,12 +59,14 @@ fun LayerTxEditSheet(
     var category by remember { mutableStateOf(tx.category) }
     var account by remember { mutableStateOf(tx.bankName) }
     var title by remember { mutableStateOf(tx.title) }
+    var date by remember { mutableStateOf(tx.date) }
+    var showDatePicker by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(Editing.NONE) }
     var askDelete by remember { mutableStateOf(false) }
     var saved by remember { mutableStateOf(false) }
 
     val amount = parseAmount(amountText)
-    val dirty = amount != tx.amount || category != tx.category || account != tx.bankName || title != tx.title
+    val dirty = amount != tx.amount || category != tx.category || account != tx.bankName || title != tx.title || date != tx.date
     val canSave = dirty && amount > 0 && title.isNotBlank()
     val typeLabel = when {
         tx.isTransfer -> "انتقال"
@@ -90,7 +92,7 @@ fun LayerTxEditSheet(
                 }
             }
             BigButton(if (dirty) "ذخیره تغییرات" else "تغییری نداده‌اید", enabled = canSave) {
-                onSave(tx.copy(amount = amount, category = category, bankName = account, title = title.trim()))
+                onSave(tx.copy(amount = amount, category = category, bankName = account, title = title.trim(), date = date))
                 saved = true
             }
             if (askDelete) {
@@ -170,8 +172,8 @@ fun LayerTxEditSheet(
         }
 
         ChangeRow("زمان", {
-            Text("${weekdayName(tx.date)} ${JalaliDate.fromTimestamp(tx.date).formatShort()}، ${timeOfDay(tx.date)}", style = lt(14.sp, FontWeight.SemiBold))
-        })
+            Text("${weekdayName(date)} ${JalaliDate.fromTimestamp(date).formatShort()}، ${timeOfDay(date)}", style = lt(14.sp, FontWeight.SemiBold))
+        }, onAction = if (locked) null else { { showDatePicker = true } })
 
         ChangeRow("توضیح", { Text(title.ifBlank { "—" }, style = lt(14.sp)) },
             onAction = if (locked) null else { { editing = if (editing == Editing.TITLE) Editing.NONE else Editing.TITLE } })
@@ -182,5 +184,8 @@ fun LayerTxEditSheet(
         if (locked) {
             Text("انتقال بین حساب‌ها قابل ویرایش نیست؛ اگر اشتباه شده حذفش کنید و دوباره ثبت کنید.", style = lt(12.sp, color = L.Muted, lineHeight = 20.sp))
         }
+    }
+    if (showDatePicker) {
+        JalaliDatePickerSheet(initial = date, onDismiss = { showDatePicker = false }, onPick = { date = it })
     }
 }

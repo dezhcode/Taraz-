@@ -517,7 +517,10 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun deletePersonEntry(debt: Debt) {
-        viewModelScope.launch { repository.deletePersonEntry(debt) }
+        viewModelScope.launch {
+            val gone = repository.deletePersonEntry(debt)
+            offerUndo("ردیف «${debt.kindLabel}» حذف شد", "${formatNumber(debt.amount)} تومان · ${debt.person}", gone)
+        }
     }
 
     // ─── دارایی‌ها با قیمت روز ───
@@ -682,6 +685,27 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             } catch (e: Exception) {
                 onDone(false, e.message ?: "بازگردانی انجام نشد.")
             }
+        }
+    }
+
+    // ─── پشتیبان خودکار ───
+
+    private val _autoBackup = MutableStateFlow(AutoBackup.state(application))
+    val autoBackup: StateFlow<AutoBackup.State> = _autoBackup.asStateFlow()
+
+    private fun refreshAutoBackup() { _autoBackup.value = AutoBackup.state(getApplication()) }
+
+    fun setAutoBackupEnabled(on: Boolean) { AutoBackup.setEnabled(getApplication(), on); refreshAutoBackup() }
+    fun setAutoBackupPeriod(days: Int) { AutoBackup.setPeriod(getApplication(), days); refreshAutoBackup() }
+    fun setAutoBackupFolder(uri: android.net.Uri) { AutoBackup.setFolder(getApplication(), uri); refreshAutoBackup() }
+    fun setAutoBackupPassword(password: String) { AutoBackup.setPassword(getApplication(), password); refreshAutoBackup() }
+
+    /** پشتیبان خودکار را همین حالا اجرا می‌کند؛ [onDone] پیام خطا یا null می‌گیرد */
+    fun runAutoBackupNow(onDone: (String?) -> Unit) {
+        viewModelScope.launch {
+            val err = AutoBackup.runIfDue(getApplication(), force = true)
+            refreshAutoBackup()
+            onDone(err)
         }
     }
 
@@ -1322,8 +1346,47 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
     fun deleteTransaction(transaction: Transaction) {
         viewModelScope.launch {
-            repository.deleteTransaction(transaction)
+            val gone = repository.deleteTransaction(transaction)
+            offerUndo(
+                if (transaction.isTransfer) "انتقال حذف شد" else "«${transaction.title}» حذف شد",
+                if (transaction.isTransfer) "موجودی هر دو حساب برگشت"
+                else "${formatNumber(transaction.amount)} تومان ${if (transaction.isExpense) "به" else "از"} ${transaction.bankName} ${if (transaction.isExpense) "برگشت" else "کم شد"}",
+                gone
+            )
         }
+    }
+
+    // ─── برگرداندن حذف ───
+
+    data class UndoOffer(val title: String, val detail: String, val shownAt: Long, val deleted: FinanceRepository.Deleted)
+
+    private val _undo = MutableStateFlow<UndoOffer?>(null)
+    val undo: StateFlow<UndoOffer?> = _undo.asStateFlow()
+    private var undoJob: kotlinx.coroutines.Job? = null
+    val undoWindowMs = 6_000L
+
+    private fun offerUndo(title: String, detail: String, deleted: FinanceRepository.Deleted) {
+        if (deleted.transactions.isEmpty() && deleted.debts.isEmpty()) return
+        val offer = UndoOffer(title, detail, System.currentTimeMillis(), deleted)
+        _undo.value = offer
+        undoJob?.cancel()
+        undoJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(undoWindowMs)
+            if (_undo.value === offer) _undo.value = null
+        }
+    }
+
+    /** حذف آخر را برمی‌گرداند (تا ۶ ثانیه بعد از حذف) */
+    fun undoDelete() {
+        val offer = _undo.value ?: return
+        _undo.value = null
+        undoJob?.cancel()
+        viewModelScope.launch { repository.restore(offer.deleted) }
+    }
+
+    fun dismissUndo() {
+        _undo.value = null
+        undoJob?.cancel()
     }
 
     fun updateTransaction(oldTx: Transaction, updatedTx: Transaction) {
