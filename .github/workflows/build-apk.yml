@@ -66,6 +66,15 @@ jobs:
               -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
+      - name: Test money logic
+        run: |
+          if [ -f ./gradlew ]; then
+            chmod +x ./gradlew
+            ./gradlew testDebugUnitTest --tests 'com.example.logic.*' --stacktrace
+          else
+            gradle testDebugUnitTest --tests 'com.example.logic.*' --stacktrace
+          fi
+
       - name: Build Debug APK
         run: |
           if [ -f ./gradlew ]; then
