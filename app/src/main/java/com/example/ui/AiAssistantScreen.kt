@@ -85,7 +85,8 @@ fun AiAssistantScreen(
     speakingMessageId: String? = null,
     onSpeakMessage: ((ChatMessage) -> Unit)? = null,
     onStartLiveVoice: (() -> Unit)? = null,
-    onMicPermissionDenied: () -> Unit = {}
+    onMicPermissionDenied: () -> Unit = {},
+    onNewChat: (() -> Unit)? = null
 ) {
     LaunchedEffect(Unit) {
         onOpenChat()
@@ -150,6 +151,46 @@ fun AiAssistantScreen(
             .background(BackgroundLight)
             .statusBarsPadding()
     ) {
+        // هدر طرح «لایه»
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, top = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(EmeraldPrimary),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("دستیار", style = com.example.ui.layer.lt(22.sp, FontWeight.Bold))
+                Text(
+                    "هر تغییری قبل از ثبت، از شما تأیید می‌گیرد.",
+                    style = com.example.ui.layer.lt(12.sp, color = com.example.ui.layer.L.Muted)
+                )
+            }
+            if (onNewChat != null) {
+                Box(
+                    modifier = Modifier
+                        .height(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(com.example.ui.layer.L.PrimarySoft)
+                        .clickable(enabled = !isLoading) { onNewChat() }
+                        .padding(horizontal = 12.dp)
+                        .testTag("ai_new_chat"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("گفتگوی تازه", style = com.example.ui.layer.lt(13.sp, FontWeight.Bold, com.example.ui.layer.L.PrimaryText))
+                }
+            }
+        }
+
         // 1. Conversation Chat Window
         Box(
             modifier = Modifier
@@ -312,11 +353,10 @@ fun AiAssistantScreen(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color.White)
+                            .background(com.example.ui.layer.L.PrimarySoft)
                             .clickable(enabled = !isLoading) {
                                 onSendMessage(presetText)
                             }
-                            .border(1.dp, IceSlate, RoundedCornerShape(12.dp))
                             .padding(horizontal = 14.dp, vertical = 8.dp)
                             .testTag("preset_prompt_${presetText.hashCode()}"),
                         contentAlignment = Alignment.Center
@@ -325,131 +365,125 @@ fun AiAssistantScreen(
                             text = presetText,
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = EmeraldPrimary
+                                color = com.example.ui.layer.L.PrimaryText
                             )
                         )
                     }
                 }
             }
 
-            // 3. Bottom Chat Send Field Bar
+            // 3. نوار نوشتن — طرح «لایه»: فیلد سفید، میکروفون، ارسال آبی
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .imePadding()
-                        .padding(
-                            start = 16.dp,
-                            end = 16.dp,
-                            top = 8.dp,
-                            bottom = if (isFocused) 10.dp else 14.dp
-                        )
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(Color(0xE60F172A)) // Very matte dark navy glassmorphic look (90% opacity NavySecondary)
-                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(28.dp))
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = if (isFocused) 10.dp else 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Send Button on the right (First in RTL layout)
-                    IconButton(
-                        onClick = {
-                            if (textInput.isNotBlank()) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.White)
+                            .border(1.dp, com.example.ui.layer.L.Line, RoundedCornerShape(16.dp))
+                            .padding(start = 14.dp, end = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        TextField(
+                            value = textInput,
+                            onValueChange = { textInput = it },
+                            enabled = !isLoading,
+                            placeholder = {
+                                Text(
+                                    when {
+                                        isLoading -> "دستیار در حال پاسخ دادن است…"
+                                        isDictating -> "در حال شنیدن… صحبت کنید"
+                                        else -> "سؤال بعدی را بپرسید"
+                                    },
+                                    style = com.example.ui.layer.lt(14.sp, color = com.example.ui.layer.L.Faint)
+                                )
+                            },
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                disabledContainerColor = Color.Transparent,
+                                focusedTextColor = NavySecondary,
+                                unfocusedTextColor = NavySecondary,
+                                disabledTextColor = com.example.ui.layer.L.Faint,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
+                                cursorColor = EmeraldPrimary
+                            ),
+                            textStyle = com.example.ui.layer.lt(14.sp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .onFocusChanged { isFocused = it.isFocused }
+                                .testTag("ai_chat_text_input")
+                        )
+
+                        // دیکته صوتی (صدا → متن)
+                        if (onToggleDictation != null) {
+                            val micPulse = if (isDictating) 1f + dictationAmplitude.coerceIn(0f, 1f) * 0.25f else 1f
+                            IconButton(
+                                onClick = startDictation,
+                                enabled = !isLoading,
+                                modifier = Modifier
+                                    .size((40 * micPulse).dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isDictating) ErrorRed else IceSlate)
+                                    .testTag("ai_chat_mic_button")
+                            ) {
+                                Icon(
+                                    imageVector = if (isDictating) Icons.Default.Stop else Icons.Default.Mic,
+                                    contentDescription = if (isDictating) "توقف دیکته" else "تبدیل صدا به متن",
+                                    tint = if (isDictating) Color.White else NavySecondary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+
+                        // گفت‌وگوی زنده صوتی
+                        if (onStartLiveVoice != null) {
+                            IconButton(
+                                onClick = { withMicPermission { onStartLiveVoice() } },
+                                enabled = !isLoading && !isDictating,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(com.example.ui.layer.L.PrimarySoft)
+                                    .testTag("ai_chat_live_voice_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.GraphicEq,
+                                    contentDescription = "گفت‌وگوی زنده صوتی",
+                                    tint = com.example.ui.layer.L.PrimaryText,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    val canSend = textInput.isNotBlank() && !isLoading
+                    Box(
+                        modifier = Modifier
+                            .height(52.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (canSend) EmeraldPrimary else com.example.ui.layer.L.PrimaryDisabled)
+                            .clickable(enabled = canSend) {
                                 onSendMessage(textInput)
                                 textInput = ""
                             }
-                        },
-                        enabled = !isLoading && textInput.isNotBlank(),
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(if (textInput.isNotBlank() && !isLoading) EmeraldPrimary else Color.White.copy(alpha = 0.1f))
-                            .testTag("ai_chat_send_button")
+                            .padding(horizontal = 18.dp)
+                            .testTag("ai_chat_send_button"),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowUpward,
-                            contentDescription = "Send",
-                            tint = if (textInput.isNotBlank() && !isLoading) Color.White else Color.White.copy(alpha = 0.4f),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    // TextField on the left (Second in RTL layout)
-                    TextField(
-                        value = textInput,
-                        onValueChange = { textInput = it },
-                        enabled = !isLoading,
-                        placeholder = { 
-                            Text(
-                                when {
-                                    isLoading -> "در حال پردازش پاسخ توسط دستیار مالی..."
-                                    isDictating -> "در حال شنیدن… صحبت کنید"
-                                    else -> "سوال خود را از دستیار مالی بپرسید..."
-                                }, 
-                                style = MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = if (isLoading) 0.35f else 0.5f))
-                            ) 
-                        },
-                        singleLine = true,
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            disabledContainerColor = Color.Transparent,
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            disabledTextColor = Color.White.copy(alpha = 0.4f),
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            disabledIndicatorColor = Color.Transparent,
-                            cursorColor = EmeraldPrimary
-                        ),
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = if (isLoading) Color.White.copy(alpha = 0.5f) else Color.White),
-                        modifier = Modifier
-                            .weight(1f)
-                            .onFocusChanged { isFocused = it.isFocused }
-                            .testTag("ai_chat_text_input")
-                    )
-
-                    // دکمه دیکته صوتی (صدا → متن)
-                    if (onToggleDictation != null) {
-                        val micPulse = if (isDictating) 1f + dictationAmplitude.coerceIn(0f, 1f) * 0.25f else 1f
-                        IconButton(
-                            onClick = startDictation,
-                            enabled = !isLoading,
-                            modifier = Modifier
-                                .size((40 * micPulse).dp)
-                                .clip(CircleShape)
-                                .background(if (isDictating) ErrorRed else Color.White.copy(alpha = 0.1f))
-                                .testTag("ai_chat_mic_button")
-                        ) {
-                            Icon(
-                                imageVector = if (isDictating) Icons.Default.Stop else Icons.Default.Mic,
-                                contentDescription = if (isDictating) "توقف دیکته" else "تبدیل صدا به متن",
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(6.dp))
-                    }
-
-                    // دکمه گفت‌وگوی زنده صوتی
-                    if (onStartLiveVoice != null) {
-                        IconButton(
-                            onClick = { withMicPermission { onStartLiveVoice() } },
-                            enabled = !isLoading && !isDictating,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.1f))
-                                .testTag("ai_chat_live_voice_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.GraphicEq,
-                                contentDescription = "گفت‌وگوی زنده صوتی",
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                        Text("ارسال", style = com.example.ui.layer.lt(15.sp, FontWeight.Bold, Color.White))
                     }
                 }
             }
@@ -466,68 +500,61 @@ fun ChatBubble(
     onSpeak: ((ChatMessage) -> Unit)? = null
 ) {
     val isUser = message.sender == "user"
-    
+
     if (isUser) {
-        val bubbleShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 2.dp)
-        Box(
+        // پرسش شما: کارت سفید با برچسب کوچک
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color.White)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
                 .testTag("chat_bubble_${message.id}"),
-            contentAlignment = Alignment.CenterEnd
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Card(
-                shape = bubbleShape,
-                colors = CardDefaults.cardColors(containerColor = NavySecondary),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                modifier = Modifier.fillMaxWidth(0.85f)
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    RichMarkdownContent(text = message.text, isUser = true)
-                }
-            }
+            Text("شما پرسیدید", style = com.example.ui.layer.lt(12.sp, color = com.example.ui.layer.L.Muted))
+            RichMarkdownContent(text = message.text, isUser = false)
         }
     } else {
-        // AI Message: Full screen width, no avatar icon, gorgeous structured layout
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        // پاسخ دستیار: متن آزاد روی زمینه، بدون کارت
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp)
-                .testTag("chat_bubble_${message.id}")
+                .padding(horizontal = 4.dp, vertical = 4.dp)
+                .testTag("chat_bubble_${message.id}"),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                RichMarkdownContent(text = message.text, isUser = false)
-                
-                message.actionProposed?.let { action ->
-                    ProposedActionCard(
-                        messageId = message.id,
-                        action = action,
-                        onApprove = onApprove,
-                        onCancel = onCancel
-                    )
-                }
+            RichMarkdownContent(text = message.text, isUser = false)
 
-                // پخش صوتی پاسخ دستیار (متن → صدا)
-                if (onSpeak != null && message.status == "success" && message.text.isNotBlank()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
+            message.actionProposed?.let { action ->
+                ProposedActionCard(
+                    messageId = message.id,
+                    action = action,
+                    onApprove = onApprove,
+                    onCancel = onCancel
+                )
+            }
+
+            // پخش صوتی پاسخ دستیار (متن → صدا)
+            if (onSpeak != null && message.status == "success" && message.text.isNotBlank()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Start
+                ) {
+                    IconButton(
+                        onClick = { onSpeak(message) },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isSpeaking) ErrorLight else IceSlate)
+                            .testTag("chat_speak_${message.id}")
                     ) {
-                        IconButton(
-                            onClick = { onSpeak(message) },
-                            modifier = Modifier
-                                .size(32.dp)
-                                .testTag("chat_speak_${message.id}")
-                        ) {
-                            Icon(
-                                imageVector = if (isSpeaking) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
-                                contentDescription = if (isSpeaking) "توقف پخش" else "پخش صوتی پاسخ",
-                                tint = if (isSpeaking) ErrorRed else SlateGray,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = if (isSpeaking) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
+                            contentDescription = if (isSpeaking) "توقف پخش" else "پخش صوتی پاسخ",
+                            tint = if (isSpeaking) ErrorRed else SlateGray,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }
@@ -543,10 +570,10 @@ fun ProposedActionCard(
     onCancel: (String) -> Unit
 ) {
     val actionColor = when {
-        action.isApproved -> Color(0xFF10B981) // Beautiful Emerald Green
+        action.isApproved -> SuccessGreen
         action.isCancelled -> Color.Gray
-        action.type.contains("delete") -> Color(0xFFEF4444) // Soft Coral Red
-        else -> Color(0xFF3B82F6) // Premium Royal Blue
+        action.type.contains("delete") -> ErrorRed
+        else -> EmeraldPrimary
     }
     
     val actionLabel = when (action.type) {
@@ -561,9 +588,9 @@ fun ProposedActionCard(
     }
 
     Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = actionColor.copy(alpha = 0.08f)),
-        border = BorderStroke(1.dp, actionColor.copy(alpha = 0.3f)),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, com.example.ui.layer.L.Line),
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 12.dp)
@@ -624,8 +651,8 @@ fun ProposedActionCard(
                     ) {
                         Button(
                             onClick = { onApprove(messageId) },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
-                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
+                            shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(44.dp)
@@ -643,9 +670,9 @@ fun ProposedActionCard(
                         
                         OutlinedButton(
                             onClick = { onCancel(messageId) },
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444)),
-                            shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, Color(0xFFEF4444)),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, com.example.ui.layer.L.Line),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(44.dp)
@@ -667,20 +694,20 @@ fun ProposedActionCard(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color(0xFFD1FAE5), RoundedCornerShape(8.dp))
+                            .background(com.example.ui.layer.L.GreenSoft, RoundedCornerShape(12.dp))
                             .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = "Approved",
-                            tint = Color(0xFF059669),
+                            tint = SuccessGreen,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             "این تغییرات در سیستم ثبت شد.",
                             style = MaterialTheme.typography.bodyMedium.copy(
-                                color = Color(0xFF065F46),
+                                color = com.example.ui.layer.L.GreenText,
                                 fontWeight = FontWeight.Bold
                             )
                         )

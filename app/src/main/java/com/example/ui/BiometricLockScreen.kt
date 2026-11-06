@@ -1,34 +1,62 @@
 package com.example.ui
 
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Fingerprint
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
+import com.example.ui.layer.BigButton
+import com.example.ui.layer.L
+import com.example.ui.layer.SoftBigButton
+import com.example.ui.layer.lt
 import com.example.utils.BiometricHelper
 
+/**
+ * صفحهٔ قفل — طرح نهایی: نشان تراز، حلقهٔ اثر انگشت و دکمهٔ «استفاده از رمز گوشی».
+ * منطق بیومتریک همان قبلی است؛ فقط ظاهر عوض شده.
+ */
 @Composable
 fun BiometricLockScreen(
     onUnlockSuccess: () -> Unit,
@@ -39,16 +67,18 @@ fun BiometricLockScreen(
     var authError by remember { mutableStateOf<String?>(null) }
     var isUnavailableOnDevice by remember { mutableStateOf(false) }
 
-    // Pulsing animation for the biometric ring
-    val infiniteTransition = rememberInfiniteTransition(label = "BiometricPulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1.0f,
-        targetValue = 1.25f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "PulseRing"
+    val infinite = rememberInfiniteTransition(label = "lock_ring")
+    val ring by infinite.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.22f,
+        animationSpec = infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "ring_scale"
+    )
+    val ringAlpha by infinite.animateFloat(
+        initialValue = 0.9f,
+        targetValue = 0.2f,
+        animationSpec = infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "ring_alpha"
     )
 
     fun triggerBiometricAuthentication() {
@@ -66,12 +96,8 @@ fun BiometricLockScreen(
                     authError = null
                     onUnlockSuccess()
                 },
-                onError = { errorMsg ->
-                    authError = errorMsg
-                },
-                onFailedAttempt = {
-                    authError = "احراز هویت انجام نشد. لطفاً مجدداً تلاش کنید."
-                }
+                onError = { errorMsg -> authError = errorMsg },
+                onFailedAttempt = { authError = "احراز هویت انجام نشد. لطفاً مجدداً تلاش کنید." }
             )
         } else {
             isUnavailableOnDevice = true
@@ -79,160 +105,87 @@ fun BiometricLockScreen(
         }
     }
 
-    // Automatically trigger biometric authentication when the screen loads
-    LaunchedEffect(Unit) {
-        triggerBiometricAuthentication()
-    }
+    LaunchedEffect(Unit) { triggerBiometricAuthentication() }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFF0F172A), Color(0xFF020617))))
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .background(L.Bg)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 28.dp)
+            .padding(bottom = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // App icon and security label
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+        Column(
+            Modifier.padding(top = 88.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.AutoAwesome,
-                contentDescription = null,
-                tint = Color(0xFFFCD34D),
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "حفاظت امنیتی تراز",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White.copy(alpha = 0.8f)
-                )
-            )
-        }
-
-        Spacer(modifier = Modifier.height(48.dp))
-
-        // Large animated Fingerprint Scanning Button
-        Box(
-            modifier = Modifier
-                .size(160.dp)
-                .clip(CircleShape)
-                .clickable { triggerBiometricAuthentication() }
-                .testTag("biometric_fingerprint_scanner_button"),
-            contentAlignment = Alignment.Center
-        ) {
-            // Ripple Canvas
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                drawCircle(
-                    brush = Brush.radialGradient(listOf(Color(0xFF2D7D5F).copy(alpha = 0.12f * pulseScale), Color.Transparent)),
-                    radius = (size.minDimension / 2) * pulseScale
-                )
-                drawCircle(
-                    color = Color(0xFF2D7D5F).copy(alpha = 0.2f),
-                    radius = size.minDimension / 2 - 10.dp.toPx(),
-                    style = Stroke(width = 2.dp.toPx())
-                )
-            }
-
             Box(
-                modifier = Modifier
-                    .size(100.dp)
-                    .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(Color(0xFF2D7D5F), Color(0xFF225E47)))),
+                Modifier.size(56.dp).clip(RoundedCornerShape(18.dp)).background(L.Primary),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Fingerprint,
-                    contentDescription = "اثر انگشت",
-                    tint = Color.White,
-                    modifier = Modifier.size(54.dp)
+                Image(
+                    painter = painterResource(id = com.example.R.drawable.logo_taraz_mark),
+                    contentDescription = null,
+                    colorFilter = ColorFilter.tint(Color.White),
+                    modifier = Modifier.size(34.dp)
                 )
             }
+            Text("تراز قفل است", style = lt(24.sp, FontWeight.Bold), modifier = Modifier.padding(top = 10.dp))
+            Text(
+                "برای دیدن حساب‌ها و اقساطتان، هویت‌تان را تأیید کنید.",
+                style = lt(14.sp, color = L.Muted, lineHeight = 26.sp),
+                textAlign = TextAlign.Center
+            )
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Text(
-            text = "تایید اثر انگشت برای ورود",
-            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-            text = "برنامه تراز توسط لایه امنیتی اندروید محافظت می‌شود. لطفاً سنسور اثر انگشت دستگاه را لمس نمایید تا قفل باز شود.",
-            style = MaterialTheme.typography.bodyLarge.copy(color = Color(0xFF94A3B8), lineHeight = 24.sp),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        if (authError != null) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp)
-                    .testTag(if (isUnavailableOnDevice) "biometric_unavailable_message" else "biometric_error_card"),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF7F1D1D).copy(alpha = 0.2f)),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+        Column(
+            Modifier.weight(1f).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(Modifier.size(150.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(120.dp).scale(ring).alpha(ringAlpha).clip(CircleShape).background(L.NavSelected))
+                Box(
+                    Modifier.size(120.dp).clip(CircleShape).background(L.NavSelected)
+                        .clickable { triggerBiometricAuthentication() }
+                        .testTag("biometric_fingerprint_scanner_button"),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = null,
-                        tint = Color(0xFFFCA5A5),
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = authError!!,
-                        style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFFFCA5A5), fontWeight = FontWeight.Bold),
-                        modifier = Modifier.weight(1f)
-                    )
+                    Icon(Icons.Default.Fingerprint, contentDescription = "باز کردن با اثر انگشت", tint = L.Primary, modifier = Modifier.size(56.dp))
                 }
             }
-        }
+            Spacer(Modifier.height(14.dp))
+            Text("انگشتتان را روی حسگر بگذارید", style = lt(14.sp, FontWeight.SemiBold, L.PrimaryText))
 
-        Spacer(modifier = Modifier.height(32.dp))
+            if (authError != null) {
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    authError!!,
+                    style = lt(12.sp, FontWeight.SemiBold, L.RedText, lineHeight = 21.sp),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFFFFF1F1))
+                        .padding(12.dp)
+                        .testTag(if (isUnavailableOnDevice) "biometric_unavailable_message" else "biometric_error_card")
+                )
+            }
+        }
 
         if (isUnavailableOnDevice) {
-            Button(
-                onClick = { onLockUnavailable() },
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D7D5F)),
-                modifier = Modifier
-                    .width(220.dp)
-                    .height(48.dp)
-                    .testTag("biometric_unavailable_ack_button")
-            ) {
-                Text(
-                    text = "متوجه شدم، ادامه",
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = Color.White)
-                )
-            }
+            BigButton("متوجه شدم، ادامه", Modifier.testTag("biometric_unavailable_ack_button")) { onLockUnavailable() }
         } else {
-            // Retry button to trigger BiometricPrompt again
-            Button(
-                onClick = { triggerBiometricAuthentication() },
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D7D5F)),
-                modifier = Modifier
-                    .width(220.dp)
-                    .height(48.dp)
-                    .testTag("biometric_retry_button")
-            ) {
-                Text(
-                    text = "تلاش مجدد",
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = Color.White)
-                )
-            }
+            SoftBigButton("استفاده از رمز گوشی", Modifier.testTag("biometric_retry_button")) { triggerBiometricAuthentication() }
         }
+        Text(
+            "این قفل را از «تنظیمات › امنیت» خاموش یا روشن کنید.",
+            style = lt(12.sp, color = L.Muted, lineHeight = 22.sp),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 14.dp)
+        )
     }
 }

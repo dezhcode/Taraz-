@@ -56,13 +56,13 @@ import com.example.data.BankCard
 import com.example.data.Loan
 import com.example.utils.JalaliDate
 
-private fun remainingInstallments(loan: Loan): Int {
+internal fun remainingInstallments(loan: Loan): Int {
     if (loan.installmentAmount <= 0) return 0
     val left = (loan.totalAmount - loan.paidAmount).coerceAtLeast(0)
     return ((left + loan.installmentAmount - 1) / loan.installmentAmount).toInt()
 }
 
-private fun totalInstallments(loan: Loan): Int =
+internal fun totalInstallments(loan: Loan): Int =
     if (loan.installmentAmount <= 0) 0
     else ((loan.totalAmount + loan.installmentAmount - 1) / loan.installmentAmount).toInt()
 
@@ -71,6 +71,7 @@ fun LayerLoansScreen(
     loans: List<Loan>,
     onAddLoan: () -> Unit,
     onPay: (Loan) -> Unit,
+    onOpenLoan: (Loan) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val now = System.currentTimeMillis()
@@ -220,7 +221,7 @@ fun LayerLoansScreen(
             Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 loans.sortedBy { it.isSettled }.forEach { loan ->
                     val progress = if (loan.totalAmount > 0) (loan.paidAmount.toFloat() / loan.totalAmount).coerceIn(0f, 1f) else 0f
-                    Column(Modifier.fillMaxWidth().cardSurface().padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.fillMaxWidth().cardSurface().clickable { onOpenLoan(loan) }.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(loan.loanName, style = lt(15.sp, FontWeight.SemiBold))

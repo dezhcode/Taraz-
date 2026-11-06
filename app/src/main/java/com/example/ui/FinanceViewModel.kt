@@ -412,6 +412,14 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /** افزودن (مثبت) یا برداشت (منفی) پول از یک هدف؛ با رسیدن به مبلغ هدف، تمام‌شده علامت می‌خورد */
+    fun adjustGoal(goal: FinancialGoal, delta: Long) {
+        viewModelScope.launch {
+            val now = (goal.currentAmount + delta).coerceAtLeast(0L)
+            repository.insertGoal(goal.copy(currentAmount = now, isCompleted = goal.targetAmount > 0 && now >= goal.targetAmount))
+        }
+    }
+
     fun deleteGoal(goalId: Int) {
         viewModelScope.launch {
             repository.deleteGoal(goalId)
@@ -1161,7 +1169,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         totalAmount: Long,
         paidAmount: Long,
         installmentAmount: Long,
-        dueDay: Int
+        dueDay: Int,
+        reminderEnabled: Boolean = true
     ) {
         viewModelScope.launch {
             val day = dueDay.coerceIn(1, 31)
@@ -1173,7 +1182,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     paidAmount = paidAmount,
                     installmentAmount = installmentAmount,
                     dueDate = "روز ${com.example.utils.JalaliDate.toPersianDigits(day)} هر ماه",
-                    dueDay = day
+                    dueDay = day,
+                    reminderEnabled = reminderEnabled
                 )
             )
             // Pick up a reminder that may already be within the warning window.
@@ -1185,6 +1195,17 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     "وام $loanName بانک $bankName به مبلغ کل ${formatNumber(totalAmount)} تومان در سررسیدهای منظم ثبت شد."
                 )
             }
+        }
+    }
+
+    fun deleteLoan(loanId: Int) {
+        viewModelScope.launch { repository.deleteLoan(loanId) }
+    }
+
+    fun setLoanReminder(loan: Loan, enabled: Boolean) {
+        viewModelScope.launch {
+            repository.insertLoan(loan.copy(reminderEnabled = enabled))
+            com.example.reminders.ReminderScheduler.runLoanCheckNow(getApplication())
         }
     }
 

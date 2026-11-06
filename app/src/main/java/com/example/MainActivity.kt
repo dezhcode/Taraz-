@@ -95,20 +95,29 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 val chatErrorToast by viewModel.chatErrorToast.collectAsStateWithLifecycle()
                 val showSmsAssistantSheet by viewModel.showSmsAssistantSheet.collectAsStateWithLifecycle()
                 val pendingSms by viewModel.pendingTransactions.collectAsStateWithLifecycle()
-                // طرح «لایه»: روز انتخاب‌شده در تراکنش‌ها، شیت پرداخت قسط، دیالوگ وام جدید
+                // طرح «لایه»: روز انتخاب‌شده در تراکنش‌ها، شیت پرداخت قسط و ...
                 var txSelectedDay by remember { mutableStateOf(System.currentTimeMillis()) }
                 var loanToPay by remember { mutableStateOf<com.example.data.Loan?>(null) }
-                var isAddLoanOpen by remember { mutableStateOf(false) }
+                val bankSenders by viewModel.bankSenders.collectAsStateWithLifecycle()
+                val allGoals by viewModel.allGoals.collectAsStateWithLifecycle()
 
                 // Overlays states
                 var isAddTransactionOpen by remember { mutableStateOf(false) }
                 var initialIsExpenseForDialog by remember { mutableStateOf(true) }
                 var selectedTransactionForEdit by remember { mutableStateOf<com.example.data.Transaction?>(null) }
                 var isAiSheetOpen by remember { mutableStateOf(false) }
-                var activeSubScreen by remember { mutableStateOf<String?>(null) } // "banks" or "loans"
-                var selectedCardForDetail by remember { mutableStateOf<com.example.data.BankCard?>(null) }
+                var isBudgetOpen by remember { mutableStateOf(false) }
                 var isAddCardOpen by remember { mutableStateOf(false) }
+                var accountToEdit by remember { mutableStateOf<com.example.data.BankCard?>(null) }
                 var isTransferOpen by remember { mutableStateOf(false) }
+
+                // صفحه‌های فرعی با پشتهٔ ساده: بازگشت همیشه به صفحهٔ قبلی می‌رود
+                val subStack = remember { mutableStateListOf<String>() }
+                val activeSubScreen: String? = subStack.lastOrNull()
+                var selectedAccountId by remember { mutableStateOf<Int?>(null) }
+                var selectedLoanId by remember { mutableStateOf<Int?>(null) }
+                fun openSub(name: String) { subStack.add(name) }
+                fun closeSub() { if (subStack.isNotEmpty()) subStack.removeAt(subStack.lastIndex) }
 
                 // System Back Button Handling
                 val context = LocalContext.current
@@ -128,12 +137,14 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                         selectedTransactionForEdit = null
                     } else if (isTransferOpen) {
                         isTransferOpen = false
-                    } else if (selectedCardForDetail != null) {
-                        selectedCardForDetail = null
+                    } else if (isBudgetOpen) {
+                        isBudgetOpen = false
+                    } else if (accountToEdit != null) {
+                        accountToEdit = null
                     } else if (isAddCardOpen) {
                         isAddCardOpen = false
                     } else if (activeSubScreen != null) {
-                        activeSubScreen = null
+                        closeSub()
                     } else if (tabState != Tab.HOME) {
                         viewModel.setTab(Tab.HOME)
                     } else {
@@ -162,42 +173,159 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                         if (screenState == Screen.MAIN) {
                             // Sub-screens override main tab navigation
                             when (activeSubScreen) {
-                                "banks" -> {
-                                    BanksSubScreen(
+                                "accounts" -> {
+                                    com.example.ui.layer.LayerAccountsScreen(
                                         cards = cards,
-                                        onBack = { activeSubScreen = null },
-                                        onAddCard = { bankName, cardNumber, balance, cardHolderName ->
-                                            viewModel.addCard(bankName, cardNumber, balance, cardHolderName)
-                                        }
+                                        senders = bankSenders,
+                                        totalBalance = totalBalance,
+                                        onBack = { closeSub() },
+                                        onOpenAccount = { selectedAccountId = it.id; openSub("account_detail") },
+                                        onAdd = { isAddCardOpen = true },
+                                        onTransfer = { isTransferOpen = true }
                                     )
                                 }
 
-                                "loans" -> {
-                                    LoansSubScreen(
-                                        loans = loans,
+                                "account_detail" -> {
+                                    val idx = cards.indexOfFirst { it.id == selectedAccountId }
+                                    val card = cards.getOrNull(idx)
+                                    if (card == null) {
+                                        LaunchedEffect(Unit) { closeSub() }
+                                    } else {
+                                        com.example.ui.layer.LayerAccountDetailScreen(
+                                            card = card,
+                                            cardIndex = idx,
+                                            cards = cards,
+                                            transactions = transactions,
+                                            categories = categories,
+                                            senders = bankSenders,
+                                            holderName = userProfile?.name.orEmpty(),
+                                            onBack = { closeSub() },
+                                            onEdit = { accountToEdit = card },
+                                            onTransfer = { isTransferOpen = true },
+                                            onOpenTransactions = {
+                                                subStack.clear()
+                                                viewModel.setTab(Tab.TRANSACTIONS)
+                                            },
+                                            onOpenTransaction = { selectedTransactionForEdit = it },
+                                            onToggleSms = { viewModel.toggleBankSender(it) },
+                                            onOpenSmsSetup = { openSub("sms_setup") },
+                                            onDelete = {
+                                                viewModel.deleteCard(card.id)
+                                                closeSub()
+                                            }
+                                        )
+                                    }
+                                }
+
+                                "loan_detail" -> {
+                                    val loan = loans.firstOrNull { it.id == selectedLoanId }
+                                    if (loan == null) {
+                                        LaunchedEffect(Unit) { closeSub() }
+                                    } else {
+                                        com.example.ui.layer.LayerLoanDetailScreen(
+                                            loan = loan,
+                                            transactions = transactions,
+                                            onBack = { closeSub() },
+                                            onPay = { loanToPay = loan },
+                                            onToggleReminder = { viewModel.setLoanReminder(loan, it) },
+                                            onDelete = {
+                                                viewModel.deleteLoan(loan.id)
+                                                closeSub()
+                                            }
+                                        )
+                                    }
+                                }
+
+                                "add_loan" -> {
+                                    com.example.ui.layer.LayerAddLoanScreen(
                                         cards = cards,
-                                        onBack = { activeSubScreen = null },
-                                        onPayInstallment = { loan ->
-                                            viewModel.payInstallment(loan)
-                                        },
-                                        onAddLoan = { bankName, loanName, totalAmount, paidAmount, installmentAmount, dueDay ->
-                                            viewModel.addLoan(bankName, loanName, totalAmount, paidAmount, installmentAmount, dueDay)
+                                        onBack = { closeSub() },
+                                        onConfirm = { bank, name, total, paid, inst, day, reminder ->
+                                            viewModel.addLoan(bank, name, total, paid, inst, day, reminder)
+                                            closeSub()
                                         }
                                     )
                                 }
 
                                 "settings" -> {
-                                    SettingsScreen(
-                                        viewModel = viewModel,
-                                        userProfile = userProfile,
+                                    com.example.ui.layer.LayerSettingsScreen(
+                                        profile = userProfile,
                                         biometricEnabled = biometricEnabled,
                                         alertsEnabled = alertsEnabled,
+                                        smsBankCount = bankSenders.count { it.isEnabled },
+                                        categoryCount = categories.size,
+                                        onBack = { closeSub() },
                                         onBiometricChange = { viewModel.setBiometricEnabled(it) },
                                         onAlertsChange = { viewModel.setAlertsEnabled(it) },
-                                        onResetAll = { viewModel.resetAllData() },
-                                        onLogout = { viewModel.logout() },
-                                        onScheduleReminder = { title, delay -> viewModel.scheduleReminder(title, delay) },
-                                        onBack = { activeSubScreen = null }
+                                        onTestLock = { viewModel.lockApp() },
+                                        onOpenSms = { openSub("sms_setup") },
+                                        onOpenCategories = { openSub("categories") },
+                                        onOpenGoals = { openSub("goals") },
+                                        onTestServer = { cb -> viewModel.testAiServerConnection(cb) },
+                                        onLogout = {
+                                            subStack.clear()
+                                            viewModel.logout()
+                                        },
+                                        onResetAll = {
+                                            subStack.clear()
+                                            viewModel.resetAllData()
+                                        }
+                                    )
+                                }
+
+                                "sms_setup" -> {
+                                    com.example.ui.layer.LayerSmsSetupScreen(
+                                        viewModel = viewModel,
+                                        onBack = { closeSub() },
+                                        onOpenReview = { viewModel.setSmsAssistantSheetOpen(true) },
+                                        onOpenLearn = { openSub("sms_learn") }
+                                    )
+                                }
+
+                                "sms_learn" -> {
+                                    com.example.ui.layer.LayerSmsLearnScreen(viewModel = viewModel, onBack = { closeSub() })
+                                }
+
+                                "categories" -> {
+                                    com.example.ui.layer.LayerCategoriesScreen(
+                                        categories = categories,
+                                        onBack = { closeSub() },
+                                        onAdd = { openSub("add_category") },
+                                        onDelete = { viewModel.deleteCategory(it.id) }
+                                    )
+                                }
+
+                                "add_category" -> {
+                                    com.example.ui.layer.LayerAddCategoryScreen(
+                                        onBack = { closeSub() },
+                                        onSave = { name, icon, color, income ->
+                                            viewModel.addCategory(name, icon, color, income)
+                                            closeSub()
+                                        }
+                                    )
+                                }
+
+                                "goals" -> {
+                                    com.example.ui.layer.LayerGoalsScreen(
+                                        goals = allGoals,
+                                        onBack = { closeSub() },
+                                        onAddGoal = { t, target, cur -> viewModel.insertGoal(t, target, cur) },
+                                        onAdjust = { g, d -> viewModel.adjustGoal(g, d) },
+                                        onDelete = { viewModel.deleteGoal(it.id) }
+                                    )
+                                }
+
+                                "notifications" -> {
+                                    com.example.ui.layer.LayerNotificationsScreen(
+                                        loans = loans,
+                                        pendingSmsCount = pendingSms.size,
+                                        todayExpense = todayExpense,
+                                        dailyBudget = dailyBudget,
+                                        alertsEnabled = alertsEnabled,
+                                        onAlertsChange = { viewModel.setAlertsEnabled(it) },
+                                        onBack = { closeSub() },
+                                        onPay = { loanToPay = it },
+                                        onReviewSms = { viewModel.setSmsAssistantSheetOpen(true) }
                                     )
                                 }
 
@@ -240,9 +368,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             loans = loans,
                                                             pendingSms = pendingSms,
                                                             categories = categories,
-                                                            onSetDailyBudget = { viewModel.setDailyBudget(it) },
-                                                            onOpenAccounts = { activeSubScreen = "banks" },
-                                                            onOpenSettings = { activeSubScreen = "settings" },
+                                                            onOpenBudget = { isBudgetOpen = true },
+                                                            onOpenNotifications = { openSub("notifications") },
+                                                            onOpenAccounts = { openSub("accounts") },
+                                                            onOpenSettings = { openSub("settings") },
                                                             onOpenSmsInbox = { viewModel.setSmsAssistantSheetOpen(true) },
                                                             onOpenReports = { viewModel.setTab(Tab.REPORTS) },
                                                             onOpenDay = { day ->
@@ -262,7 +391,6 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             },
                                                             onDismissSms = { p -> viewModel.rejectPendingTransaction(p.id) },
                                                             onReviewSms = { p ->
-                                                                viewModel.selectPendingTx(p)
                                                                 viewModel.setSmsAssistantSheetOpen(true)
                                                             },
                                                             onTransactionClick = { tx -> selectedTransactionForEdit = tx }
@@ -284,23 +412,25 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                     Tab.LOANS -> {
                                                         com.example.ui.layer.LayerLoansScreen(
                                                             loans = loans,
-                                                            onAddLoan = { isAddLoanOpen = true },
-                                                            onPay = { loanToPay = it }
+                                                            onAddLoan = { openSub("add_loan") },
+                                                            onPay = { loanToPay = it },
+                                                            onOpenLoan = { selectedLoanId = it.id; openSub("loan_detail") }
                                                         )
                                                     }
 
                                                     Tab.REPORTS -> {
-                                                        ReportsScreen(
+                                                        com.example.ui.layer.LayerReportsScreen(
                                                             transactions = transactions,
-                                                            monthlyIncome = monthlyIncome,
-                                                            monthlyExpense = monthlyExpense
+                                                            goal = activeGoal,
+                                                            onOpenGoals = { openSub("goals") },
+                                                            onAskAssistant = { isAiSheetOpen = true }
                                                         )
                                                     }
                                                 }
                                             }
 
                                             } // Close the inner content Box
-                                            
+
                                             // منوی شناور طرح «لایه»
                                             if (!isKeyboardVisible) {
                                                 com.example.ui.layer.LayerNavBar(
@@ -330,7 +460,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                      dragHandle = { BottomSheetDefaults.DragHandle() },
                                      containerColor = BackgroundLight
                                  ) {
-                                     Box(modifier = Modifier.fillMaxHeight(0.85f)) {
+                                     Box(modifier = Modifier.fillMaxHeight(0.88f)) {
                                          if (liveVoiceState.isActive) {
                                              LiveVoiceOverlayScreen(
                                                  liveState = liveVoiceState,
@@ -356,33 +486,15 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                  speakingMessageId = speakingMessageId,
                                                  onSpeakMessage = { viewModel.speakChatMessage(it) },
                                                  onStartLiveVoice = { viewModel.startLiveVoiceCall() },
-                                                 onMicPermissionDenied = { viewModel.reportMicPermissionDenied() }
+                                                 onMicPermissionDenied = { viewModel.reportMicPermissionDenied() },
+                                                 onNewChat = { viewModel.resetVisibleChat() }
                                              )
                                          }
                                      }
                                  }
                              }
 
-                             // Quick transaction register modal overlays
-                             // Bank SMS Assistant bottom sheet overlay
-                             if (showSmsAssistantSheet) {
-                                 ModalBottomSheet(
-                                     onDismissRequest = { viewModel.setSmsAssistantSheetOpen(false) },
-                                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                                     dragHandle = { BottomSheetDefaults.DragHandle() },
-                                     containerColor = BackgroundLight
-                                 ) {
-                                     Box(modifier = Modifier.fillMaxHeight(0.85f)) {
-                                         BankSmsAssistantBottomSheet(
-                                             viewModel = viewModel,
-                                             onDismiss = { viewModel.setSmsAssistantSheetOpen(false) }
-                                         )
-                                     }
-                                 }
-                             }
-
-                            // Adding uses the new sheet; editing an existing row keeps the
-                            // old one, which already knows how to delete and pre-fill.
+                            // Adding uses the new sheet; editing an existing row uses the detail sheet.
                             if (isAddTransactionOpen) {
                                 com.example.ui.layer.LayerAddSheet(
                                     categories = categories,
@@ -399,6 +511,18 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 )
                             }
 
+                            if (isBudgetOpen) {
+                                com.example.ui.layer.LayerBudgetSheet(
+                                    current = dailyBudget,
+                                    avgDaily = remember(transactions) { com.example.ui.layer.averageDailySpend(transactions) },
+                                    onDismiss = { isBudgetOpen = false },
+                                    onSave = {
+                                        viewModel.setDailyBudget(it)
+                                        isBudgetOpen = false
+                                    }
+                                )
+                            }
+
                             loanToPay?.let { loan ->
                                 com.example.ui.layer.LayerPaySheet(
                                     loan = loan,
@@ -407,71 +531,29 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     onDismiss = { loanToPay = null },
                                     onGoHome = {
                                         loanToPay = null
+                                        subStack.clear()
                                         viewModel.setTab(Tab.HOME)
                                     }
                                 )
                             }
 
-                            if (isAddLoanOpen) {
-                                AddLoanDialog(
-                                    onDismiss = { isAddLoanOpen = false },
-                                    onConfirm = { bankName, loanName, totalAmount, paidAmount, installmentAmount, dueDay ->
-                                        viewModel.addLoan(bankName, loanName, totalAmount, paidAmount, installmentAmount, dueDay)
-                                        isAddLoanOpen = false
-                                    }
-                                )
-                            }
-
-                            if (selectedTransactionForEdit != null) {
-                                PremiumTransactionSheet(
+                            selectedTransactionForEdit?.let { tx ->
+                                com.example.ui.layer.LayerTxEditSheet(
+                                    tx = tx,
                                     cards = cards,
-                                    existingTransaction = selectedTransactionForEdit,
-                                    onDismiss = {
-                                        isAddTransactionOpen = false
-                                        selectedTransactionForEdit = null
-                                    },
-                                    onConfirm = { title, amount, category, isExpense, bankName ->
-                                        val oldTx = selectedTransactionForEdit!!
-                                        val updatedTx = oldTx.copy(
-                                            title = title,
-                                            amount = amount,
-                                            category = category,
-                                            isExpense = isExpense,
-                                            bankName = bankName
-                                        )
-                                        viewModel.updateTransaction(oldTx, updatedTx)
-                                        isAddTransactionOpen = false
-                                        selectedTransactionForEdit = null
-                                    },
-                                    onDelete = { tx ->
+                                    categories = categories,
+                                    onDismiss = { selectedTransactionForEdit = null },
+                                    onSave = { updated -> viewModel.updateTransaction(tx, updated) },
+                                    onDelete = {
                                         viewModel.deleteTransaction(tx)
-                                        isAddTransactionOpen = false
                                         selectedTransactionForEdit = null
-                                    }
-                                )
-                            }
-
-                            if (selectedCardForDetail != null) {
-                                CardDetailBottomSheet(
-                                    card = selectedCardForDetail!!,
-                                    onDismiss = { selectedCardForDetail = null },
-                                    onEnableSmsBanking = { bankName ->
-                                        activeSubScreen = "settings"
-                                    },
-                                    onUpdateCard = { updatedCard ->
-                                        viewModel.updateCard(updatedCard)
-                                        selectedCardForDetail = null
-                                    },
-                                    onDeleteCard = { cardId ->
-                                        viewModel.deleteCard(cardId)
-                                        selectedCardForDetail = null
                                     }
                                 )
                             }
 
                             // One sheet for adding an account, wherever it is reached from.
                             if (isAddCardOpen) {
-                                AddAccountSheet(
+                                com.example.ui.layer.LayerAddAccountSheet(
                                     existingNames = cards.map { it.bankName },
                                     onDismiss = { isAddCardOpen = false },
                                     onConfirm = { name, cardNumber, balance, accountType ->
@@ -486,6 +568,17 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 )
                             }
 
+                            accountToEdit?.let { card ->
+                                com.example.ui.layer.LayerEditAccountSheet(
+                                    card = card,
+                                    onDismiss = { accountToEdit = null },
+                                    onSave = {
+                                        viewModel.updateCard(it)
+                                        accountToEdit = null
+                                    }
+                                )
+                            }
+
                             if (isTransferOpen) {
                                 TransferDialog(
                                     cards = cards,
@@ -494,6 +587,17 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         viewModel.transferBetweenCards(fromCardName, toCardName, amount)
                                         isTransferOpen = false
                                     }
+                                )
+                            }
+
+                            // بررسی پیامک‌ها تمام‌صفحه روی همه چیز
+                            if (showSmsAssistantSheet) {
+                                com.example.ui.layer.LayerSmsReviewScreen(
+                                    viewModel = viewModel,
+                                    pending = pendingSms,
+                                    categories = categories,
+                                    cards = cards,
+                                    onBack = { viewModel.setSmsAssistantSheetOpen(false) }
                                 )
                             }
                         }

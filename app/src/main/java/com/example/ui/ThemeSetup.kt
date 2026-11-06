@@ -11,20 +11,20 @@ import com.example.ui.theme.IranYekanFontFamily
 
 // --- Fidar Luxury Design System Color Palette ---
 
-val EmeraldPrimary = Color(0xFF1F9D73) // Emerald Green - Income, Growth, Primary Button (#1F9D73)
-val EmeraldHover = Color(0xFF167656)   // Hover/Active Green
-val NavySecondary = Color(0xFF3D3D3D)  // Dark Gray - Typography, High Contrast
-val IceSlate = Color(0xFFF1F5F9)       // Ice Slate - Accent backgrounds, light separators
+val EmeraldPrimary = Color(0xFF2250F4) // رنگ اصلی طرح نهایی «تراز»
+val EmeraldHover = Color(0xFF1D44D8)   // حالت فشرده
+val NavySecondary = Color(0xFF0E1116)  // متن اصلی
+val IceSlate = Color(0xFFF1F3F6)       // پس‌زمینهٔ چیپ و جداکننده
 val WhiteSurface = Color(0xFFFFFFFF)   // Pure White - Cards, elevated panels
-val BackgroundLight = Color(0xFFF8FAFC) // Premium, light slate/ice gray background to separate cards and text clearly
+val BackgroundLight = Color(0xFFF5F6F8) // پس‌زمینهٔ صفحه
 val SurfaceWhite = Color(0xFFFFFFFF)    // Pure White - Cards, sheets, and floating components
 
 
 // --- Status Colors ---
-val SuccessGreen = Color(0xFF1F9D73)
+val SuccessGreen = Color(0xFF0E8A5F)
 val AlertOrange = Color(0xFFF59E0B)
-val ErrorRed = Color(0xFFC93756)       // Rose Red - Expenses, warnings (#C93756)
-val SlateGray = Color(0xFF64748B)
+val ErrorRed = Color(0xFFE5484D)       // خطا و هشدار
+val SlateGray = Color(0xFF5D6573)
 
 // Brand Gradients
 val EmeraldNavyGradient = listOf(Color(0xFF167656), Color(0xFF1E293B))

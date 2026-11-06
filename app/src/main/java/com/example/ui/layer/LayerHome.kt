@@ -73,7 +73,8 @@ fun LayerHomeScreen(
     loans: List<Loan>,
     pendingSms: List<PendingTransaction>,
     categories: List<Category>,
-    onSetDailyBudget: (Long) -> Unit,
+    onOpenBudget: () -> Unit,
+    onOpenNotifications: () -> Unit = {},
     onOpenAccounts: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenSmsInbox: () -> Unit,
@@ -87,7 +88,6 @@ fun LayerHomeScreen(
     onTransactionClick: (Transaction) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var showBudgetDialog by remember { mutableStateOf(false) }
     val now = System.currentTimeMillis()
     val todayStart = startOfDay(now)
 
@@ -113,8 +113,8 @@ fun LayerHomeScreen(
             }
             Spacer(Modifier.width(8.dp))
             HeaderButton(
-                if (pendingSms.isEmpty()) "پیامک‌های بانکی" else "پیامک‌های بانکی، ${fa(pendingSms.size)} مورد جدید",
-                onOpenSmsInbox
+                if (pendingSms.isEmpty()) "اعلان‌ها" else "اعلان‌ها، ${fa(pendingSms.size)} پیامک منتظر تأیید",
+                onOpenNotifications
             ) {
                 Icon(Icons.Default.Notifications, null, tint = L.Ink, modifier = Modifier.size(22.dp))
                 if (pendingSms.isNotEmpty()) {
@@ -149,7 +149,7 @@ fun LayerHomeScreen(
             dailyBudget = dailyBudget,
             onOpenDay = onOpenDay,
             onOpenReports = onOpenReports,
-            onSetBudget = { showBudgetDialog = true },
+            onSetBudget = onOpenBudget,
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp)
         )
 
@@ -268,14 +268,6 @@ fun LayerHomeScreen(
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = L.PrimaryText, modifier = Modifier.size(18.dp))
             }
         }
-    }
-
-    if (showBudgetDialog) {
-        BudgetDialog(
-            current = dailyBudget,
-            onDismiss = { showBudgetDialog = false },
-            onSave = { onSetDailyBudget(it); showBudgetDialog = false }
-        )
     }
 }
 
@@ -428,32 +420,6 @@ private fun TodayCard(
             }
         }
     }
-}
-
-@Composable
-private fun BudgetDialog(current: Long, onDismiss: () -> Unit, onSave: (Long) -> Unit) {
-    var text by remember { mutableStateOf(if (current > 0) current.toString() else "") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = L.Surface,
-        title = { Text("سقف خرج روزانه", style = lt(17.sp, FontWeight.Bold)) },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { v -> text = v.filter { it.isDigit() }.take(12) },
-                label = { Text("مبلغ به تومان", style = lt(13.sp, color = L.Muted)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                textStyle = lt(16.sp)
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onSave(text.toLongOrNull() ?: 0L) }) { Text("ذخیره", style = lt(14.sp, FontWeight.Bold, L.PrimaryText)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("انصراف", style = lt(14.sp, color = L.Muted)) }
-        }
-    )
 }
 
 // ─────────────────── اجزای مشترک خط زمان ───────────────────
