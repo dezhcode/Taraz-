@@ -665,7 +665,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     fun createBackup(password: String, onDone: (ByteArray?, String?) -> Unit) {
         viewModelScope.launch {
             try {
-                val json = Backup.snapshot(db)
+                val json = Backup.snapshot(db, Attachments.dir(getApplication()))
                 val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Backup.encrypt(json, password) }
                 onDone(bytes, null)
             } catch (e: Exception) {
@@ -679,7 +679,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             try {
                 val json = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Backup.decrypt(data, password) }
-                val count = Backup.restore(db, json)
+                val count = Backup.restore(db, json, Attachments.dir(getApplication()))
                 sharedPrefs.edit().remove("ai_insight_at").apply()
                 onDone(true, "${com.example.utils.JalaliDate.toPersianDigits(count)} تراکنش و همهٔ حساب‌ها بازگردانده شد.")
             } catch (e: Exception) {
@@ -706,6 +706,12 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             val err = AutoBackup.runIfDue(getApplication(), force = true)
             refreshAutoBackup()
             onDone(err)
+        }
+    }
+
+    fun exportCsvOf(list: List<Transaction>, onDone: (ByteArray?, String?) -> Unit) {
+        viewModelScope.launch {
+            try { onDone(Backup.csvOf(list), null) } catch (e: Exception) { onDone(null, e.message ?: "ساخت فایل انجام نشد.") }
         }
     }
 
@@ -1322,7 +1328,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     }
 
     // Transaction management
-    fun addTransaction(title: String, amount: Long, category: String, isExpense: Boolean, bankName: String, date: Long? = null) {
+    fun addTransaction(title: String, amount: Long, category: String, isExpense: Boolean, bankName: String, date: Long? = null, tags: List<String> = emptyList()) {
         viewModelScope.launch {
             repository.insertTransaction(
                 Transaction(
@@ -1332,7 +1338,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     date = date ?: System.currentTimeMillis(),
                     isExpense = isExpense,
                     bankName = bankName,
-                    type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME
+                    type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME,
+                    tags = tags.joinToString(",")
                 )
             )
         }

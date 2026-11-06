@@ -1,4 +1,7 @@
 <resources>
     <string name="app_name">Taraz</string>
     <string name="widget_today_desc">خرج امروز و نزدیک‌ترین قسط</string>
+    <string name="sc_expense">ثبت هزینه</string>
+    <string name="sc_income">ثبت درآمد</string>
+    <string name="sc_voice">بگو و ثبت کن</string>
 </resources>

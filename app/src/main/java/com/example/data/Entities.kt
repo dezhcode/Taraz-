@@ -25,8 +25,18 @@ data class Transaction(
     /** Ties the two halves of a transfer together. Null for everything else. */
     val transferGroupId: String? = null,
     /** Set on an instalment payment, so deleting or editing it corrects the loan too. */
-    val loanId: Int? = null
+    val loanId: Int? = null,
+    /** Labels such as «سفر شمال», comma-separated; empty for none. */
+    val tags: String = "",
+    /** Photo file names in the app's attachments folder, comma-separated. */
+    val attachments: String = ""
 )
+
+val Transaction.tagList: List<String>
+    get() = tags.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+
+val Transaction.attachmentList: List<String>
+    get() = attachments.split(',').map { it.trim() }.filter { it.isNotEmpty() }
 
 /**
  * Moving money between your own accounts is not income and not spending.
@@ -76,6 +86,7 @@ object AccountType {
     const val BANK = "BANK"     // a card of your own
     const val CASH = "CASH"     // notes in a wallet
     const val OTHER = "OTHER"   // someone else's card, a savings box, anything
+    const val CREDIT = "CREDIT" // a credit card: spending lowers the balance below zero, up to the limit
 }
 
 @Entity(tableName = "bank_cards")
@@ -87,8 +98,15 @@ data class BankCard(
     val cardNumber: String = "",
     val balance: Long,
     val cardHolderName: String = "کاربر تراز",
-    val accountType: String = AccountType.BANK
+    val accountType: String = AccountType.BANK,
+    /** Credit cards only: the limit in toman. */
+    val creditLimit: Long = 0,
+    /** Credit cards only: day of the Jalali month repayment is due; 0 = none. */
+    val dueDay: Int = 0
 )
+
+val BankCard.isCredit: Boolean
+    get() = accountType == AccountType.CREDIT
 
 val BankCard.isCash: Boolean
     get() = accountType == AccountType.CASH
@@ -109,9 +127,17 @@ data class Loan(
     val dueDate: String,
     /** Day of the Jalali month the instalment falls due, 1..31. Drives reminders. */
     val dueDay: Int = 1,
-    val reminderEnabled: Boolean = true
+    val reminderEnabled: Boolean = true,
+    /** "loan" for a bank loan, "purchase" for buying in instalments (store, BNPL). */
+    val kind: String = LoanKind.LOAN
 ) {
+    val isPurchase: Boolean get() = kind == LoanKind.PURCHASE
     val isSettled: Boolean get() = paidAmount >= totalAmount
+}
+
+object LoanKind {
+    const val LOAN = "loan"
+    const val PURCHASE = "purchase"
 }
 
 @Entity(tableName = "financial_goals")

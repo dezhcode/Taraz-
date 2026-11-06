@@ -31,6 +31,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.platform.LocalContext
 import com.example.ui.*
+import com.example.data.tagList
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.layer.edgeGlass
 
@@ -45,6 +46,15 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     private val notificationPermissionLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
     ) { /* Declining is fine: reminders stay off until enabled in settings. */ }
+
+    /** «ثبت هزینه / درآمد / صوتی» از میان‌بُر آیکن یا ویجت؛ صفحهٔ ثبت باز می‌شود */
+    private val quickAction = mutableStateOf<String?>(null)
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        quickAction.value = intent.action?.takeIf { it.startsWith("ir.taraz.finance.") }
+    }
 
     /** When the app last went to the background; 0 while it is in front. */
     private var backgroundedAt = 0L
@@ -70,6 +80,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) quickAction.value = intent?.action?.takeIf { it.startsWith("ir.taraz.finance.") }
         enableEdgeToEdge()
 
         com.example.utils.NotificationHelper.createNotificationChannel(this)
@@ -142,7 +153,17 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 
                 // Overlays states
                 var isAddTransactionOpen by remember { mutableStateOf(false) }
+                var addWithVoice by remember { mutableStateOf(false) }
                 var initialIsExpenseForDialog by remember { mutableStateOf(true) }
+                val pendingQuick = quickAction.value
+                LaunchedEffect(pendingQuick) {
+                    when (pendingQuick) {
+                        com.example.widget.QuickAction.ADD_EXPENSE -> { initialIsExpenseForDialog = true; addWithVoice = false; isAddTransactionOpen = true }
+                        com.example.widget.QuickAction.ADD_INCOME -> { initialIsExpenseForDialog = false; addWithVoice = false; isAddTransactionOpen = true }
+                        com.example.widget.QuickAction.VOICE -> { initialIsExpenseForDialog = true; addWithVoice = true; isAddTransactionOpen = true }
+                    }
+                    if (pendingQuick != null) quickAction.value = null
+                }
                 var selectedTransactionForEdit by remember { mutableStateOf<com.example.data.Transaction?>(null) }
                 var isAiSheetOpen by remember { mutableStateOf(false) }
                 var isBudgetOpen by remember { mutableStateOf(false) }
@@ -667,7 +688,16 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             onSelectDay = { txSelectedDay = it },
                                                             onTransactionClick = { tx -> selectedTransactionForEdit = tx },
                                                             recurringCount = recurringItems.count { it.enabled },
-                                                            onOpenRecurring = { openSub("recurring") }
+                                                            onOpenRecurring = { openSub("recurring") },
+                                                            onExport = { list ->
+                                                                viewModel.exportCsvOf(list) { bytes, _ ->
+                                                                    if (bytes != null) {
+                                                                        pendingBackupBytes = bytes
+                                                                        val d = com.example.utils.JalaliDate.today()
+                                                                        writeFileLauncher.launch("taraz-filtered-%04d-%02d-%02d.csv".format(java.util.Locale.US, d.year, d.month, d.day))
+                                                                    }
+                                                                }
+                                                            }
                                                         )
                                                     }
 
@@ -773,9 +803,12 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     cards = cards,
                                     transactions = transactions,
                                     startAsExpense = initialIsExpenseForDialog,
-                                    onDismiss = { isAddTransactionOpen = false },
-                                    onSave = { title, amount, category, isExpense, bankName, date ->
-                                        viewModel.addTransaction(title, amount, category, isExpense, bankName, date)
+                                    onDismiss = { isAddTransactionOpen = false; addWithVoice = false },
+                                    onSave = { title, amount, category, isExpense, bankName, date, tags ->
+                                        viewModel.addTransaction(title, amount, category, isExpense, bankName, date, tags)
+                                    },
+                                    tagSuggestions = remember(transactions) {
+                                        transactions.flatMap { it.tagList }.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.map { it.key }.take(12)
                                     },
                                     onTransfer = { from, to, amount ->
                                         viewModel.transferBetweenCards(from, to, amount)
@@ -786,6 +819,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         viewModel.recordPersonMoney(pid, amount, outgoing, account, note)
                                     },
                                     isListening = isDictating,
+                                    startWithVoice = addWithVoice,
                                     onVoice = { onDraft ->
                                         viewModel.toggleVoiceDictation { spoken -> viewModel.parseSpokenEntry(spoken, onDraft) }
                                     }
@@ -828,6 +862,11 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     onDelete = {
                                         viewModel.deleteTransaction(tx)
                                         selectedTransactionForEdit = null
+                                    }
+                                ,
+                                    tagSuggestions = remember(transactions) {
+                                        transactions.flatMap { it.tagList }.groupingBy { it }.eachCount()
+                                            .entries.sortedByDescending { it.value }.map { it.key }.take(12)
                                     }
                                 )
                             }

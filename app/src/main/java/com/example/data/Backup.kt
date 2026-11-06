@@ -65,7 +65,8 @@ object Backup {
 
     // ─── snapshot ───
 
-    suspend fun snapshot(db: AppDatabase): String = withContext(Dispatchers.IO) {
+    /** [photos]: the attachments folder; its pictures travel inside the backup. */
+    suspend fun snapshot(db: AppDatabase, photos: java.io.File? = null): String = withContext(Dispatchers.IO) {
         val root = JSONObject()
         root.put("format", 1)
         root.put("exportedAt", System.currentTimeMillis())
@@ -73,15 +74,17 @@ object Backup {
             JSONObject().put("id", t.id).put("title", t.title).put("amount", t.amount).put("category", t.category)
                 .put("date", t.date).put("isExpense", t.isExpense).put("bankName", t.bankName).put("type", t.type)
                 .put("transferGroupId", t.transferGroupId ?: JSONObject.NULL).put("loanId", t.loanId ?: JSONObject.NULL)
+                .put("tags", t.tags).put("attachments", t.attachments)
         }))
         root.put("cards", JSONArray(db.bankCardDao().getAll().map { c ->
             JSONObject().put("id", c.id).put("bankName", c.bankName).put("cardNumber", c.cardNumber).put("balance", c.balance)
                 .put("cardHolderName", c.cardHolderName).put("accountType", c.accountType)
+                .put("creditLimit", c.creditLimit).put("dueDay", c.dueDay)
         }))
         root.put("loans", JSONArray(db.loanDao().getAllLoans().first().map { l ->
             JSONObject().put("id", l.id).put("bankName", l.bankName).put("loanName", l.loanName).put("totalAmount", l.totalAmount)
                 .put("paidAmount", l.paidAmount).put("installmentAmount", l.installmentAmount).put("dueDate", l.dueDate)
-                .put("dueDay", l.dueDay).put("reminderEnabled", l.reminderEnabled)
+                .put("dueDay", l.dueDay).put("reminderEnabled", l.reminderEnabled).put("kind", l.kind)
         }))
         root.put("goals", JSONArray(db.goalDao().getAllGoals().first().map { g ->
             JSONObject().put("id", g.id).put("title", g.title).put("targetAmount", g.targetAmount)
@@ -107,6 +110,19 @@ object Backup {
                 .put("personId", d.personId ?: JSONObject.NULL).put("isRepayment", d.isRepayment).put("transactionId", d.transactionId ?: JSONObject.NULL)
                 .put("dueDate", d.dueDate ?: JSONObject.NULL)
         }))
+        root.put("cheques", JSONArray(db.chequeDao().getAllNow().map { c ->
+            JSONObject().put("id", c.id).put("issued", c.issued).put("amount", c.amount).put("dueDate", c.dueDate).put("person", c.person)
+                .put("bankName", c.bankName).put("sayadi", c.sayadi).put("category", c.category).put("note", c.note).put("status", c.status)
+                .put("transactionId", c.transactionId ?: JSONObject.NULL).put("createdAt", c.createdAt)
+        }))
+        root.put("bills", JSONArray(db.billDao().getAllNow().map { b ->
+            JSONObject().put("id", b.id).put("kind", b.kind).put("title", b.title).put("billId", b.billId).put("payId", b.payId)
+                .put("amount", b.amount).put("dueDate", b.dueDate).put("periodMonths", b.periodMonths).put("bankName", b.bankName)
+                .put("lastPaidAt", b.lastPaidAt ?: JSONObject.NULL).put("enabled", b.enabled).put("createdAt", b.createdAt)
+        }))
+        root.put("snapshots", JSONArray(db.snapshotDao().getAllNow().map { n ->
+            JSONObject().put("monthKey", n.monthKey).put("netWorth", n.netWorth).put("usdToman", n.usdToman).put("gold18Toman", n.gold18Toman).put("at", n.at)
+        }))
         root.put("assets", JSONArray(db.assetDao().getAllNow().map { a ->
             JSONObject().put("id", a.id).put("code", a.code).put("name", a.name).put("kind", a.kind).put("quantity", a.quantity)
                 .put("buyPrice", a.buyPrice).put("manualPrice", a.manualPrice).put("note", a.note).put("createdAt", a.createdAt)
@@ -119,6 +135,14 @@ object Backup {
             JSONObject().put("bankName", s.bankName).put("senderNumber", s.senderNumber).put("isEnabled", s.isEnabled)
                 .put("learningStatus", s.learningStatus).put("parserVersion", s.parserVersion)
         }))
+        if (photos != null) {
+            val used = db.transactionDao().getAllTransactions().first().flatMap { it.attachmentList }.toSet()
+            val obj = JSONObject()
+            photos.listFiles()?.filter { it.name in used }?.forEach { f ->
+                obj.put(f.name, android.util.Base64.encodeToString(f.readBytes(), android.util.Base64.NO_WRAP))
+            }
+            root.put("photos", obj)
+        }
         root.toString()
     }
 
@@ -132,16 +156,27 @@ object Backup {
     }
 
     /** Replaces everything in the database with the snapshot. Returns how many transactions came back. */
-    suspend fun restore(db: AppDatabase, json: String): Int {
+    suspend fun restore(db: AppDatabase, json: String, photos: java.io.File? = null): Int {
         val root = JSONObject(json)
         if (!root.has("transactions") || !root.has("cards")) throw NotABackupException()
+        if (photos != null) withContext(Dispatchers.IO) {
+            root.optJSONObject("photos")?.let { obj ->
+                photos.mkdirs()
+                obj.keys().forEach { name ->
+                    if (name.matches(Regex("[A-Za-z0-9_.-]+"))) {
+                        runCatching { java.io.File(photos, name).writeBytes(android.util.Base64.decode(obj.getString(name), android.util.Base64.NO_WRAP)) }
+                    }
+                }
+            }
+        }
         withContext(Dispatchers.IO) { db.clearAllTables() }
         var count = 0
         db.withTransaction {
             root.optJSONArray("cards").each { o ->
                 db.bankCardDao().insertCard(
                     BankCard(o.getInt("id"), o.getString("bankName"), o.optString("cardNumber"), o.getLong("balance"),
-                        o.optString("cardHolderName", "کاربر تراز"), o.optString("accountType", AccountType.BANK))
+                        o.optString("cardHolderName", "کاربر تراز"), o.optString("accountType", AccountType.BANK),
+                        o.optLong("creditLimit"), o.optInt("dueDay"))
                 )
             }
             root.optJSONArray("transactions").each { o ->
@@ -150,7 +185,7 @@ object Backup {
                         id = o.getInt("id"), title = o.getString("title"), amount = o.getLong("amount"), category = o.getString("category"),
                         date = o.getLong("date"), isExpense = o.getBoolean("isExpense"), bankName = o.getString("bankName"),
                         type = o.optString("type", TransactionType.EXPENSE), transferGroupId = o.optStringOrNull("transferGroupId"),
-                        loanId = o.optIntOrNull("loanId")
+                        loanId = o.optIntOrNull("loanId"), tags = o.optString("tags"), attachments = o.optString("attachments")
                     )
                 )
                 count++
@@ -158,7 +193,8 @@ object Backup {
             root.optJSONArray("loans").each { o ->
                 db.loanDao().insertLoan(
                     Loan(o.getInt("id"), o.getString("bankName"), o.getString("loanName"), o.getLong("totalAmount"), o.getLong("paidAmount"),
-                        o.getLong("installmentAmount"), o.optString("dueDate"), o.optInt("dueDay", 1), o.optBoolean("reminderEnabled", true))
+                        o.getLong("installmentAmount"), o.optString("dueDate"), o.optInt("dueDay", 1), o.optBoolean("reminderEnabled", true),
+                        o.optString("kind", LoanKind.LOAN))
                 )
             }
             root.optJSONArray("goals").each { o ->
@@ -193,6 +229,25 @@ object Backup {
                         o.optIntOrNull("personId"), o.optBoolean("isRepayment"), o.optIntOrNull("transactionId"), o.optLongOrNull("dueDate"))
                 )
             }
+            root.optJSONArray("cheques").each { o ->
+                db.chequeDao().insert(
+                    Cheque(o.getInt("id"), o.getBoolean("issued"), o.getLong("amount"), o.getLong("dueDate"), o.optString("person"),
+                        o.optString("bankName"), o.optString("sayadi"), o.optString("category", "سایر"), o.optString("note"),
+                        o.optString("status", ChequeStatus.PENDING), o.optIntOrNull("transactionId"), o.optLong("createdAt", System.currentTimeMillis()))
+                )
+            }
+            root.optJSONArray("bills").each { o ->
+                db.billDao().insert(
+                    Bill(o.getInt("id"), o.getString("kind"), o.getString("title"), o.optString("billId"), o.optString("payId"),
+                        o.optLong("amount"), o.getLong("dueDate"), o.optInt("periodMonths", 2), o.optString("bankName"),
+                        o.optLongOrNull("lastPaidAt"), o.optBoolean("enabled", true), o.optLong("createdAt", System.currentTimeMillis()))
+                )
+            }
+            root.optJSONArray("snapshots").each { o ->
+                db.snapshotDao().insert(
+                    NetWorthSnapshot(o.getInt("monthKey"), o.getLong("netWorth"), o.getLong("usdToman"), o.getLong("gold18Toman"), o.getLong("at"))
+                )
+            }
             root.optJSONArray("assets").each { o ->
                 db.assetDao().insert(
                     Asset(o.getInt("id"), o.getString("code"), o.getString("name"), o.getString("kind"), o.getDouble("quantity"),
@@ -222,12 +277,16 @@ object Backup {
      * Transactions as CSV with a UTF-8 BOM so Excel shows the Persian text
      * correctly; dates in both Jalali and ISO for sorting.
      */
-    suspend fun transactionsCsv(db: AppDatabase): ByteArray = withContext(Dispatchers.IO) {
+    suspend fun transactionsCsv(db: AppDatabase): ByteArray =
+        csvOf(withContext(Dispatchers.IO) { db.transactionDao().getAllTransactions().first() })
+
+    /** The given transactions as CSV (the filtered list on the Transactions screen). */
+    suspend fun csvOf(list: List<Transaction>): ByteArray = withContext(Dispatchers.Default) {
         fun cell(v: String) = "\"" + v.replace("\"", "\"\"") + "\""
         val sb = StringBuilder()
-        sb.append("تاریخ,تاریخ میلادی,عنوان,دسته,حساب,نوع,مبلغ (تومان)\n")
+        sb.append("تاریخ,تاریخ میلادی,عنوان,دسته,حساب,نوع,مبلغ (تومان),برچسب\n")
         val iso = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
-        for (t in db.transactionDao().getAllTransactions().first()) {
+        for (t in list) {
             val j = com.example.utils.JalaliDate.fromTimestamp(t.date)
             val kind = when {
                 t.type == TransactionType.TRANSFER -> "انتقال"
@@ -240,7 +299,8 @@ object Backup {
                 .append(cell(t.category)).append(',')
                 .append(cell(t.bankName)).append(',')
                 .append(cell(kind)).append(',')
-                .append(if (t.isExpense) -t.amount else t.amount).append('\n')
+                .append(if (t.isExpense) -t.amount else t.amount).append(',')
+                .append(cell(t.tags)).append('\n')
         }
         byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()) + sb.toString().toByteArray(Charsets.UTF_8)
     }

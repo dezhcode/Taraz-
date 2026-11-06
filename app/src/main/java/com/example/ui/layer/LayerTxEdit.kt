@@ -33,6 +33,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import coil.compose.AsyncImage
+import com.example.data.Attachments
+import com.example.data.attachmentList
+import com.example.data.tagList
 import com.example.data.BankCard
 import com.example.data.Category
 import com.example.data.Transaction
@@ -53,8 +70,32 @@ fun LayerTxEditSheet(
     categories: List<Category>,
     onDismiss: () -> Unit,
     onSave: (Transaction) -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    tagSuggestions: List<String> = emptyList()
 ) {
+    val context = LocalContext.current
+    var tags by remember { mutableStateOf(tx.tagList) }
+    var photos by remember { mutableStateOf(tx.attachmentList) }
+    var added by remember { mutableStateOf(listOf<String>()) }
+    var newTag by remember { mutableStateOf("") }
+    var addingTag by remember { mutableStateOf(false) }
+    var viewing by remember { mutableStateOf<String?>(null) }
+    var cameraFile by remember { mutableStateOf<java.io.File?>(null) }
+    fun attach(uri: Uri?) {
+        if (uri == null) return
+        Attachments.save(context, uri)?.let { photos = photos + it; added = added + it }
+    }
+    val pickLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { attach(it) }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val f = cameraFile
+        if (ok && f != null) { attach(Uri.fromFile(f)); f.delete() }
+        cameraFile = null
+    }
+    val close = {
+        // photos picked but never saved don't linger on disk
+        added.forEach { Attachments.delete(context, it) }
+        onDismiss()
+    }
     var amountText by remember { mutableStateOf(money(tx.amount)) }
     var category by remember { mutableStateOf(tx.category) }
     var account by remember { mutableStateOf(tx.bankName) }
@@ -66,7 +107,8 @@ fun LayerTxEditSheet(
     var saved by remember { mutableStateOf(false) }
 
     val amount = parseAmount(amountText)
-    val dirty = amount != tx.amount || category != tx.category || account != tx.bankName || title != tx.title || date != tx.date
+    val dirty = amount != tx.amount || category != tx.category || account != tx.bankName || title != tx.title || date != tx.date ||
+        tags != tx.tagList || photos != tx.attachmentList
     val canSave = dirty && amount > 0 && title.isNotBlank()
     val typeLabel = when {
         tx.isTransfer -> "انتقال"
@@ -78,7 +120,7 @@ fun LayerTxEditSheet(
 
     LayerSheet(
         title = "جزئیات تراکنش",
-        onDismiss = onDismiss,
+        onDismiss = close,
         closeLabel = "بستن",
         topGap = 110.dp,
         bottomBar = {
@@ -92,7 +134,14 @@ fun LayerTxEditSheet(
                 }
             }
             BigButton(if (dirty) "ذخیره تغییرات" else "تغییری نداده‌اید", enabled = canSave) {
-                onSave(tx.copy(amount = amount, category = category, bankName = account, title = title.trim(), date = date))
+                onSave(
+                    tx.copy(
+                        amount = amount, category = category, bankName = account, title = title.trim(), date = date,
+                        tags = tags.joinToString(","), attachments = photos.joinToString(",")
+                    )
+                )
+                (tx.attachmentList - photos.toSet()).forEach { Attachments.delete(context, it) }
+                added = emptyList()
                 saved = true
             }
             if (askDelete) {
@@ -181,11 +230,101 @@ fun LayerTxEditSheet(
             LField(title, { title = it }, "عنوان تراکنش")
         }
 
+        // برچسب‌ها
+        Text("برچسب‌ها", style = lt(13.sp, color = L.Muted))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            tags.forEach { t ->
+                Row(
+                    Modifier.height(32.dp).clip(PillShape).background(L.PrimarySoft).clickable { tags = tags - t }.padding(horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("# $t", style = lt(12.sp, FontWeight.Bold, L.PrimaryText))
+                    Icon(Icons.Default.Close, "حذف برچسب $t", tint = L.PrimaryText, modifier = Modifier.padding(start = 4.dp).size(14.dp))
+                }
+            }
+            (tagSuggestions - tags.toSet()).take(6).forEach { t ->
+                Box(
+                    Modifier.height(32.dp).clip(PillShape).background(L.Chip).clickable { tags = tags + t }.padding(horizontal = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) { Text("+ $t", style = lt(12.sp, color = L.Muted)) }
+            }
+            if (addingTag) {
+                Box(
+                    Modifier.height(32.dp).width(140.dp).clip(PillShape).background(L.Surface).border(1.dp, L.Primary, PillShape).padding(horizontal = 10.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    BasicTextField(
+                        newTag, { v -> newTag = v.replace(",", "").take(24) }, singleLine = true,
+                        textStyle = lt(12.sp), cursorBrush = SolidColor(L.Primary),
+                        keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = {
+                            val t = newTag.trim()
+                            if (t.isNotEmpty() && t !in tags) tags = tags + t
+                            newTag = ""; addingTag = false
+                        })
+                    )
+                }
+            } else {
+                Box(
+                    Modifier.height(32.dp).clip(PillShape).border(1.dp, L.Line, PillShape).clickable { addingTag = true }.padding(horizontal = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) { Text("+ برچسب تازه", style = lt(12.sp, FontWeight.SemiBold, L.Primary)) }
+            }
+        }
+
+        // عکس‌ها (فاکتور، کارت گارانتی)
+        Text("عکس‌ها", style = lt(13.sp, color = L.Muted))
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            photos.forEach { name ->
+                Box(Modifier.size(76.dp).clip(RoundedCornerShape(14.dp)).background(L.Chip).clickable { viewing = name }) {
+                    AsyncImage(
+                        model = Attachments.file(context, name), contentDescription = "عکس پیوست",
+                        contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()
+                    )
+                    Box(
+                        Modifier.align(Alignment.TopStart).padding(4.dp).size(22.dp).clip(PillShape).background(Color(0x99000000))
+                            .clickable { photos = photos - name },
+                        contentAlignment = Alignment.Center
+                    ) { Icon(Icons.Default.Close, "حذف عکس", tint = Color.White, modifier = Modifier.size(14.dp)) }
+                }
+            }
+            if (photos.size < 6) {
+                PhotoAddTile("دوربین") {
+                    val (f, uri) = Attachments.cameraTarget(context)
+                    cameraFile = f
+                    runCatching { cameraLauncher.launch(uri) }
+                }
+                PhotoAddTile("گالری") { runCatching { pickLauncher.launch("image/*") } }
+            }
+        }
+
         if (locked) {
             Text("انتقال بین حساب‌ها قابل ویرایش نیست؛ اگر اشتباه شده حذفش کنید و دوباره ثبت کنید.", style = lt(12.sp, color = L.Muted, lineHeight = 20.sp))
         }
     }
+    viewing?.let { name ->
+        Dialog(onDismissRequest = { viewing = null }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            Box(Modifier.fillMaxSize().background(Color.Black).clickable { viewing = null }, contentAlignment = Alignment.Center) {
+                AsyncImage(
+                    model = Attachments.file(context, name), contentDescription = "عکس پیوست",
+                    contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth()
+                )
+                Text("برای بستن لمس کنید", style = lt(12.sp, color = Color(0xB3FFFFFF)), modifier = Modifier.align(Alignment.BottomCenter).padding(24.dp))
+            }
+        }
+    }
     if (showDatePicker) {
         JalaliDatePickerSheet(initial = date, onDismiss = { showDatePicker = false }, onPick = { date = it })
+    }
+}
+
+@Composable
+private fun PhotoAddTile(label: String, onClick: () -> Unit) {
+    Column(
+        Modifier.size(76.dp).clip(RoundedCornerShape(14.dp)).border(1.dp, L.Line, RoundedCornerShape(14.dp)).clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
+    ) {
+        Text("+", style = lt(20.sp, FontWeight.Light, L.Primary))
+        Text(label, style = lt(11.sp, color = L.Muted))
     }
 }

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,6 +48,7 @@ import com.example.data.BankCard
 import com.example.data.Category
 import com.example.data.Transaction
 import com.example.data.countsAsExpense
+import com.example.data.countsAsIncome
 import com.example.data.isTransfer
 import com.example.utils.JalaliDate
 
@@ -61,8 +63,13 @@ fun LayerTransactionsScreen(
     onTransactionClick: (Transaction) -> Unit,
     modifier: Modifier = Modifier,
     recurringCount: Int = 0,
-    onOpenRecurring: () -> Unit = {}
+    onOpenRecurring: () -> Unit = {},
+    onExport: (List<Transaction>) -> Unit = {},
+    billsDue: Int = 0,
+    onOpenBills: () -> Unit = {}
 ) {
+    var filter by remember { mutableStateOf(TxFilter()) }
+    var showFilter by remember { mutableStateOf(false) }
     val todayStart = startOfDay(System.currentTimeMillis())
     val selected = startOfDay(selectedDay)
     // هفته‌ای که روز انتخاب‌شده در آن است (پنجرهٔ ۷ روزه که به امروز یا قبل‌تر ختم می‌شود)
@@ -78,8 +85,9 @@ fun LayerTransactionsScreen(
     val weekSpend = days.sumOf { spendOf(it) }
     val maxSpend = days.maxOf { spendOf(it) }.coerceAtLeast(1L)
 
+    Box(modifier.fillMaxSize()) {
     Column(
-        modifier
+        Modifier
             .fillMaxSize()
             .background(L.Bg)
             .verticalScroll(rememberScrollState())
@@ -96,6 +104,11 @@ fun LayerTransactionsScreen(
                     style = lt(13.sp, color = L.Muted)
                 )
             }
+            Box(
+                Modifier.padding(end = 8.dp).size(40.dp).clip(ButtonShape).background(if (filter.active) L.Primary else L.PrimarySoft)
+                    .clickable { showFilter = true }.semantics { contentDescription = "فیلتر" },
+                contentAlignment = Alignment.Center
+            ) { Icon(Icons.Default.FilterList, null, tint = if (filter.active) Color.White else L.PrimaryText, modifier = Modifier.size(20.dp)) }
             Row(
                 Modifier.height(40.dp).clip(ButtonShape).background(L.PrimarySoft)
                     .clickable { searching = !searching; if (!searching) query = "" }
@@ -124,6 +137,34 @@ fun LayerTransactionsScreen(
                 )
             }
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.Chevron, modifier = Modifier.size(18.dp))
+        }
+
+        if (filter.active && !searching) {
+            val hits = transactions.filter { filter.matches(it) }.sortedByDescending { it.date }
+            val spent = hits.filter { it.countsAsExpense }.sumOf { it.amount }
+            val earned = hits.filter { it.countsAsIncome }.sumOf { it.amount }
+            Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.fillMaxWidth().cardSurface(18.dp).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(filter.summary(), style = lt(12.sp, color = L.Muted), maxLines = 2)
+                    Text("${fa(hits.size)} تراکنش", style = lt(17.sp, FontWeight.Bold))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (spent > 0) Text("هزینه ${money(spent)}", style = lt(13.sp, FontWeight.SemiBold, L.RedText))
+                        if (earned > 0) Text("درآمد ${money(earned)}", style = lt(13.sp, FontWeight.SemiBold, L.Green))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SoftButton("خروجی اکسل", height = 36.dp) { onExport(hits) }
+                        SoftButton("پاک کردن فیلتر", height = 36.dp) { filter = TxFilter() }
+                    }
+                }
+                hits.take(200).forEach { tx ->
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("${weekdayName(tx.date)} ${JalaliDate.fromTimestamp(tx.date).formatShort()} · ${timeOfDay(tx.date)}", style = lt(11.sp, color = L.Muted))
+                        TransactionCard(tx, cards, categories) { onTransactionClick(tx) }
+                    }
+                }
+                if (hits.size > 200) Text("۲۰۰ تراکنش اول نشان داده شد؛ همه در خروجی اکسل هستند.", style = lt(12.sp, color = L.Muted))
+            }
+            return@Column
         }
 
         if (searching) {
@@ -253,4 +294,7 @@ fun LayerTransactionsScreen(
             }
         }
     }
+    }
+    if (showFilter) TxFilterSheet(filter, transactions, cards, categories, onDismiss = { showFilter = false }, onApply = { filter = it })
 }
+

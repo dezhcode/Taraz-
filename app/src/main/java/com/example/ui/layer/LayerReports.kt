@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -40,6 +41,7 @@ import com.example.data.FinancialGoal
 import com.example.data.Transaction
 import com.example.data.countsAsExpense
 import com.example.data.countsAsIncome
+import com.example.data.tagList
 import com.example.utils.JalaliDate
 import java.util.Locale
 
@@ -205,6 +207,43 @@ fun LayerReportsScreen(
         ) {
             Text("سال من · مرور ${fa(JalaliDate.today().year)}", style = lt(14.sp, FontWeight.Bold), modifier = Modifier.weight(1f))
             Text("ببینید", style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText))
+        }
+
+        // برچسب‌ها: جمع هزینهٔ هر برچسب از اول
+        val tagTotals = remember(transactions) {
+            transactions.filter { it.countsAsExpense && it.tags.isNotBlank() }
+                .flatMap { t -> t.tagList.map { it to t } }
+                .groupBy({ it.first }, { it.second })
+                .map { (tag, list) -> Triple(tag, list.sumOf { it.amount }, list.sortedByDescending { it.date }) }
+                .sortedByDescending { it.second }
+        }
+        if (tagTotals.isNotEmpty()) {
+            var openTag by remember { mutableStateOf<String?>(null) }
+            LayerCard(padding = 16.dp) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
+                    Text("برچسب‌ها", style = lt(14.sp, FontWeight.Bold))
+                    Text("جمع هزینه از ابتدا", style = lt(12.sp, color = L.Muted))
+                }
+                tagTotals.take(8).forEach { (tag, total, list) ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 10.dp).clip(RoundedCornerShape(12.dp))
+                            .clickable { openTag = if (openTag == tag) null else tag }.padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("# $tag", style = lt(14.sp, FontWeight.SemiBold, L.PrimaryText), modifier = Modifier.weight(1f))
+                        Text("${fa(list.size)} مورد · ${money(total)} تومان", style = lt(13.sp, color = L.Muted))
+                    }
+                    if (openTag == tag) {
+                        list.take(6).forEach { t ->
+                            Row(Modifier.fillMaxWidth().padding(start = 12.dp, top = 4.dp)) {
+                                Text("${JalaliDate.fromTimestamp(t.date).formatShort()} · ${t.title}", style = lt(12.sp), maxLines = 1, modifier = Modifier.weight(1f))
+                                Text(money(t.amount), style = lt(12.sp, FontWeight.SemiBold, L.RedText))
+                            }
+                        }
+                        if (list.size > 6) Text("برای دیدن همه، در تراکنش‌ها با این برچسب فیلتر کنید.", style = lt(11.sp, color = L.Muted), modifier = Modifier.padding(start = 12.dp, top = 4.dp))
+                    }
+                }
+            }
         }
 
         // دسته‌ها

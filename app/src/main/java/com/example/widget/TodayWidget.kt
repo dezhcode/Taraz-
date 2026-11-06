@@ -17,6 +17,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+/** Actions from the app-icon shortcuts and the widget's buttons. */
+object QuickAction {
+    const val ADD_EXPENSE = "ir.taraz.finance.ADD_EXPENSE"
+    const val ADD_INCOME = "ir.taraz.finance.ADD_INCOME"
+    const val VOICE = "ir.taraz.finance.VOICE_ENTRY"
+}
+
 /**
  * Home-screen widget: today's spending (against the daily budget, if one is
  * set) and the nearest unpaid instalment. Tapping it opens Taraz.
@@ -85,6 +92,19 @@ class TodayWidget : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             views.setOnClickPendingIntent(R.id.widget_root, open)
+            // دکمه‌های ثبت سریع: مستقیم صفحهٔ ثبت باز می‌شود
+            listOf(
+                R.id.widget_add_expense to QuickAction.ADD_EXPENSE,
+                R.id.widget_add_income to QuickAction.ADD_INCOME,
+                R.id.widget_voice to QuickAction.VOICE
+            ).forEachIndexed { i, (viewId, action) ->
+                val pi = PendingIntent.getActivity(
+                    context, 10 + i,
+                    Intent(context, MainActivity::class.java).setAction(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                views.setOnClickPendingIntent(viewId, pi)
+            }
             ids.forEach { manager.updateAppWidget(it, views) }
         }
 

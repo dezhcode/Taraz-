@@ -35,6 +35,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -79,18 +80,23 @@ fun LayerAddSheet(
     transactions: List<Transaction>,
     startAsExpense: Boolean = true,
     onDismiss: () -> Unit,
-    onSave: (title: String, amount: Long, category: String, isExpense: Boolean, bankName: String, date: Long?) -> Unit,
+    onSave: (title: String, amount: Long, category: String, isExpense: Boolean, bankName: String, date: Long?, tags: List<String>) -> Unit,
     onTransfer: (from: String, to: String, amount: Long) -> Unit,
     persons: List<com.example.data.Person> = emptyList(),
     personBalances: Map<Int, Long> = emptyMap(),
     onPersonMoney: (personId: Int, amount: Long, outgoing: Boolean, account: String?, note: String) -> Unit = { _, _, _, _, _ -> },
     isListening: Boolean = false,
-    onVoice: ((com.example.ui.FinanceViewModel.EntryDraft) -> Unit) -> Unit = {}
+    onVoice: ((com.example.ui.FinanceViewModel.EntryDraft) -> Unit) -> Unit = {},
+    startWithVoice: Boolean = false,
+    tagSuggestions: List<String> = emptyList()
 ) {
     BackHandler(onBack = onDismiss)
     // تاریخی که از جملهٔ «دیروز…» آمده؛ null یعنی همین الان
     var dateOverride by remember { mutableStateOf<Long?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var tags by remember { mutableStateOf(listOf<String>()) }
+    var addingTag by remember { mutableStateOf(false) }
+    var newTag by remember { mutableStateOf("") }
     var helperMsg by remember { mutableStateOf<String?>(null) }
     // اگر این پول برای یک شخص بود (قرض دادن/گرفتن یا پس دادن)، در حساب همان شخص ثبت می‌شود
     var personId by remember { mutableStateOf<Int?>(null) }
@@ -123,6 +129,15 @@ fun LayerAddSheet(
     val micLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
     ) { granted -> if (granted) onVoice { applyDraft(it) } else helperMsg = "برای ثبت صوتی، دسترسی میکروفون لازم است." }
+    // از میان‌بر «بگو و ثبت کن»: همان اول گوش بدهد
+    LaunchedEffect(startWithVoice) {
+        if (startWithVoice) {
+            val ok = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (ok) { helperMsg = "بگویید، مثلاً «۸۰ تومن ناهار»"; onVoice { applyDraft(it) } }
+            else micLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     val suggestion = remember(transactions) { findSuggestion(transactions) }
 
@@ -291,6 +306,36 @@ fun LayerAddSheet(
                             )
                         }
                     }
+                    // برچسب‌ها (مثلاً «سفر شمال»)
+                    Text("برچسب", style = lt(12.sp, FontWeight.SemiBold, L.Muted), modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        (tags + tagSuggestions).distinct().forEach { t ->
+                            val on = t in tags
+                            LChip("# $t", on) { tags = if (on) tags - t else tags + t }
+                        }
+                        LChip("+ برچسب تازه", false) { addingTag = true }
+                    }
+                    if (addingTag) {
+                        Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(
+                                Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(14.dp)).background(L.Chip).padding(horizontal = 14.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                if (newTag.isEmpty()) Text("مثلاً سفر شمال", style = lt(13.sp, color = L.Muted))
+                                BasicTextField(
+                                    value = newTag, onValueChange = { newTag = it.replace(",", "").take(30) }, singleLine = true,
+                                    textStyle = lt(14.sp), cursorBrush = SolidColor(L.Primary),
+                                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = "برچسب تازه" }
+                                )
+                            }
+                            SoftButton("افزودن", height = 44.dp) {
+                                val t = newTag.trim()
+                                if (t.isNotEmpty() && t !in tags) tags = tags + t
+                                newTag = ""; addingTag = false
+                            }
+                        }
+                    }
+
                     if (persons.isNotEmpty()) {
                         Text(
                             if (type == EntryType.EXPENSE) "به کسی دادید؟" else "از کسی گرفتید؟",
@@ -366,7 +411,7 @@ fun LayerAddSheet(
                             onPersonMoney(pid, n, type == EntryType.EXPENSE, account, note)
                         } else {
                             val cat = category ?: typeCats.firstOrNull()?.name ?: if (type == EntryType.INCOME) "درآمد" else "سایر"
-                            onSave(note.ifBlank { cat }, n, cat, type == EntryType.EXPENSE, account ?: "کیف پول", dateOverride)
+                            onSave(note.ifBlank { cat }, n, cat, type == EntryType.EXPENSE, account ?: "کیف پول", dateOverride, tags)
                         }
                         onDismiss()
                     },

@@ -57,6 +57,7 @@ import com.example.data.Category
 import com.example.data.Loan
 import com.example.data.PendingTransaction
 import com.example.data.Transaction
+import com.example.data.tagList
 import com.example.data.countsAsExpense
 import com.example.data.isTransfer
 import com.example.utils.JalaliDate
@@ -555,7 +556,11 @@ internal fun TransactionCard(
         Column(Modifier.weight(1f)) {
             Text(tx.title, style = lt(14.sp, FontWeight.Medium), maxLines = 1)
             Text(
-                if (tx.isTransfer) "انتقال · در جمع هزینه نیست" else "${tx.category} · ${tx.bankName}",
+                buildString {
+                    append(if (tx.isTransfer) "انتقال · در جمع هزینه نیست" else "${tx.category} · ${tx.bankName}")
+                    tx.tagList.firstOrNull()?.let { append(" · #$it") }
+                    if (tx.attachments.isNotBlank()) append(" · 📎")
+                },
                 style = lt(12.sp, color = L.Muted),
                 maxLines = 1
             )

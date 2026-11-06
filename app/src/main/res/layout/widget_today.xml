@@ -50,4 +50,47 @@
         android:textColor="#FF2250F4"
         android:textDirection="rtl"
         android:textSize="12sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:layoutDirection="rtl"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_add_expense"
+            android:layout_width="0dp"
+            android:layout_height="34dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_btn_primary"
+            android:gravity="center"
+            android:text="+ هزینه"
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_add_income"
+            android:layout_width="0dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_btn_soft"
+            android:gravity="center"
+            android:text="+ درآمد"
+            android:textColor="#FF2250F4"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/widget_voice"
+            android:layout_width="40dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/widget_btn_soft"
+            android:contentDescription="ثبت صوتی"
+            android:padding="7dp"
+            android:src="@drawable/ic_widget_mic" />
+    </LinearLayout>
 </LinearLayout>

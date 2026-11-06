@@ -141,9 +141,12 @@ interface GoalDao {
         RecurringTransaction::class,
         Debt::class,
         Person::class,
-        Asset::class
+        Asset::class,
+        Cheque::class,
+        Bill::class,
+        NetWorthSnapshot::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -161,6 +164,9 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun debtDao(): DebtDao
     abstract fun personDao(): PersonDao
     abstract fun assetDao(): AssetDao
+    abstract fun chequeDao(): ChequeDao
+    abstract fun billDao(): BillDao
+    abstract fun snapshotDao(): SnapshotDao
 
     companion object {
         @Volatile
@@ -231,6 +237,33 @@ abstract class AppDatabase : RoomDatabase() {
                     "CREATE TABLE IF NOT EXISTS assets (" +
                     "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, code TEXT NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL, " +
                     "quantity REAL NOT NULL, buyPrice INTEGER NOT NULL, manualPrice INTEGER NOT NULL, note TEXT NOT NULL, createdAt INTEGER NOT NULL)"
+                )
+            }
+        }
+
+        /** v11: tags and photos on transactions, credit cards, instalment purchases, cheques, bills, monthly net worth. */
+        val MIGRATION_10_11 = object : androidx.room.migration.Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE transactions ADD COLUMN tags TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE transactions ADD COLUMN attachments TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE bank_cards ADD COLUMN creditLimit INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE bank_cards ADD COLUMN dueDay INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE loans ADD COLUMN kind TEXT NOT NULL DEFAULT 'loan'")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS cheques (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, issued INTEGER NOT NULL, amount INTEGER NOT NULL, dueDate INTEGER NOT NULL, " +
+                    "person TEXT NOT NULL, bankName TEXT NOT NULL, sayadi TEXT NOT NULL, category TEXT NOT NULL, note TEXT NOT NULL, " +
+                    "status TEXT NOT NULL, transactionId INTEGER, createdAt INTEGER NOT NULL)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS bills (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, billId TEXT NOT NULL, payId TEXT NOT NULL, " +
+                    "amount INTEGER NOT NULL, dueDate INTEGER NOT NULL, periodMonths INTEGER NOT NULL, bankName TEXT NOT NULL, " +
+                    "lastPaidAt INTEGER, enabled INTEGER NOT NULL, createdAt INTEGER NOT NULL)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS net_worth_snapshots (" +
+                    "monthKey INTEGER PRIMARY KEY NOT NULL, netWorth INTEGER NOT NULL, usdToman INTEGER NOT NULL, gold18Toman INTEGER NOT NULL, at INTEGER NOT NULL)"
                 )
             }
         }
@@ -374,7 +407,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "fidar_finance_database"
                 )
                 .addCallback(AppDatabaseCallback(scope))
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                 // Only the first test builds (v1-3) have no migration. Every later
                 // version must have one: a destructive fallback wiped users' money
                 // records silently whenever a migration was forgotten.

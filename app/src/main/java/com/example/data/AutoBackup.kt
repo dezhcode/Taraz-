@@ -73,7 +73,7 @@ object AutoBackup {
         try {
             val tree = Uri.parse(treeStr)
             val db = AppDatabase.getDatabase(c, CoroutineScope(Dispatchers.IO))
-            val bytes = Backup.encrypt(Backup.snapshot(db), password)
+            val bytes = Backup.encrypt(Backup.snapshot(db, Attachments.dir(c)), password)
             val d = JalaliDate.today()
             val name = PREFIX + "%04d-%02d-%02d.taraz".format(java.util.Locale.US, d.year, d.month, d.day)
             val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
