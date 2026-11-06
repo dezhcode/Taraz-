@@ -66,10 +66,12 @@ fun LayerTransactionsScreen(
     onOpenRecurring: () -> Unit = {},
     onExport: (List<Transaction>) -> Unit = {},
     billsDue: Int = 0,
-    onOpenBills: () -> Unit = {}
+    onOpenBills: () -> Unit = {},
+    // فیلتر و شیتش در سطح برنامه نگه داشته می‌شوند تا شیت روی منوی پایین باز شود
+    filter: TxFilter = TxFilter(),
+    onFilterChange: (TxFilter) -> Unit = {},
+    onOpenFilter: () -> Unit = {}
 ) {
-    var filter by remember { mutableStateOf(TxFilter()) }
-    var showFilter by remember { mutableStateOf(false) }
     val todayStart = startOfDay(System.currentTimeMillis())
     val selected = startOfDay(selectedDay)
     // هفته‌ای که روز انتخاب‌شده در آن است (پنجرهٔ ۷ روزه که به امروز یا قبل‌تر ختم می‌شود)
@@ -106,7 +108,7 @@ fun LayerTransactionsScreen(
             }
             Box(
                 Modifier.padding(end = 8.dp).size(40.dp).clip(ButtonShape).background(if (filter.active) L.Primary else L.PrimarySoft)
-                    .clickable { showFilter = true }.semantics { contentDescription = "فیلتر" },
+                    .clickable(onClick = onOpenFilter).semantics { contentDescription = "فیلتر" },
                 contentAlignment = Alignment.Center
             ) { Icon(Icons.Default.FilterList, null, tint = if (filter.active) Color.White else L.PrimaryText, modifier = Modifier.size(20.dp)) }
             Row(
@@ -171,7 +173,7 @@ fun LayerTransactionsScreen(
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         SoftButton("خروجی اکسل", height = 36.dp) { onExport(hits) }
-                        SoftButton("پاک کردن فیلتر", height = 36.dp) { filter = TxFilter() }
+                        SoftButton("پاک کردن فیلتر", height = 36.dp) { onFilterChange(TxFilter()) }
                     }
                 }
                 hits.take(200).forEach { tx ->
@@ -313,6 +315,5 @@ fun LayerTransactionsScreen(
         }
     }
     }
-    if (showFilter) TxFilterSheet(filter, transactions, cards, categories, onDismiss = { showFilter = false }, onApply = { filter = it })
 }
 

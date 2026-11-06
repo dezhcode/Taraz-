@@ -198,6 +198,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 
                 // ─── خانهٔ قابل چیدن: ابزارها، «یک نگاه» و «پیش رو» ───
                 var homeLayoutOpen by remember { mutableStateOf(false) }
+                var txFilter by remember { mutableStateOf(com.example.ui.layer.TxFilter()) }
+                var txFilterOpen by remember { mutableStateOf(false) }
                 var allToolsOpen by remember { mutableStateOf(false) }
                 var billToPay by remember { mutableStateOf<com.example.data.Bill?>(null) }
                 var loansSegment by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableIntStateOf(0) }
@@ -828,6 +830,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             recurringCount = recurringItems.count { it.enabled },
                                                             onOpenRecurring = { openSub("recurring") },
                                                             billsDue = com.example.ui.layer.billsDueSoon(bills),
+                                                            filter = txFilter,
+                                                            onFilterChange = { txFilter = it },
+                                                            onOpenFilter = { txFilterOpen = true },
                                                             onOpenBills = { openSub("bills") },
                                                             onExport = { list ->
                                                                 viewModel.exportCsvOf(list) { bytes, _ ->
@@ -1078,6 +1083,16 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 com.example.ui.layer.ShareReportSheet(transactions, ts, onDismiss = { shareMonthTs = null })
                             }
 
+                            if (txFilterOpen) {
+                                com.example.ui.layer.TxFilterSheet(
+                                    current = txFilter,
+                                    transactions = transactions,
+                                    cards = cards,
+                                    categories = categories,
+                                    onDismiss = { txFilterOpen = false },
+                                    onApply = { txFilter = it }
+                                )
+                            }
                             if (homeLayoutOpen) {
                                 com.example.ui.layer.HomeLayoutSheet(
                                     layout = homeLayout,
