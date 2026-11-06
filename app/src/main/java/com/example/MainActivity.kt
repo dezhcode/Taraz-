@@ -108,7 +108,6 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 val liveVoiceState by viewModel.liveVoiceState.collectAsStateWithLifecycle()
                 val isDictating by viewModel.isDictating.collectAsStateWithLifecycle()
                 val dictationAmplitude by viewModel.dictationAmplitude.collectAsStateWithLifecycle()
-                val speakingMessageId by viewModel.speakingMessageId.collectAsStateWithLifecycle()
 
                 // Core financial states
                 val transactions by viewModel.transactions.collectAsStateWithLifecycle()
@@ -935,8 +934,6 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                  isDictating = isDictating,
                                                  dictationAmplitude = dictationAmplitude,
                                                  onToggleDictation = { onText -> viewModel.toggleVoiceDictation(onText) },
-                                                 speakingMessageId = speakingMessageId,
-                                                 onSpeakMessage = { viewModel.speakChatMessage(it) },
                                                  onStartLiveVoice = { viewModel.startLiveVoiceCall() },
                                                  onMicPermissionDenied = { viewModel.reportMicPermissionDenied() },
                                                  onNewChat = { viewModel.resetVisibleChat() }
