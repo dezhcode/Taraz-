@@ -130,7 +130,7 @@ fun LayerCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     Column(
-        modifier.padding(horizontal = 20.dp).fillMaxWidth().cardSurface(radius).padding(padding),
+        Modifier.padding(horizontal = 20.dp).then(modifier).fillMaxWidth().cardSurface(radius).padding(padding),
         content = content
     )
 }

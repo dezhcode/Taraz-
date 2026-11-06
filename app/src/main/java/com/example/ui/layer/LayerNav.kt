@@ -98,6 +98,7 @@ fun LayerNavBar(
             modifier = Modifier
                 .weight(1f)
                 .height(64.dp)
+                .tourTarget("nav.bar")
                 .shadow(16.dp, PillShape, ambientColor = Color(0x1F0E1116), spotColor = Color(0x1F0E1116))
                 .clip(PillShape)
                 .background(L.Surface)
@@ -139,6 +140,7 @@ fun LayerNavBar(
         Box(
             modifier = Modifier
                 .size(64.dp)
+                .tourTarget("nav.add")
                 .shadow(14.dp, PillShape, ambientColor = Color(0x592250F4), spotColor = Color(0x592250F4))
                 .clip(PillShape)
                 .background(L.Primary)

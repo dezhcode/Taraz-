@@ -133,6 +133,7 @@ fun LayerHomeScreen(
 ) {
     val now = System.currentTimeMillis()
     val todayStart = startOfDay(now)
+    ScreenTour("home", Tours.home)
 
     Column(
         modifier = modifier
@@ -151,11 +152,11 @@ fun LayerHomeScreen(
                 Text("سلام ${userName.ifBlank { "دوست من" }}", style = lt(22.sp, FontWeight.Bold))
                 Text("${weekdayName(now)} ${JalaliDate.today().formatShort()}", style = lt(13.sp, color = L.Muted))
             }
-            HeaderButton("جستجو", onOpenSearch) {
+            HeaderButton("جستجو", onOpenSearch, Modifier.tourTarget("home.search")) {
                 Icon(Icons.Default.Search, null, tint = L.Ink, modifier = Modifier.size(22.dp))
             }
             Spacer(Modifier.width(8.dp))
-            HeaderButton("تنظیمات", onOpenSettings) {
+            HeaderButton("تنظیمات", onOpenSettings, Modifier.tourTarget("home.settings")) {
                 Icon(Icons.Default.Tune, null, tint = L.Ink, modifier = Modifier.size(22.dp))
             }
             Spacer(Modifier.width(8.dp))
@@ -188,7 +189,7 @@ fun LayerHomeScreen(
             owe = glance.owe,
             onOpenAccounts = onOpenAccounts,
             onOpenObligations = onOpenObligations,
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp)
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp).tourTarget("home.card")
         )
 
         // ── بخش‌ها به چیدمان کاربر
@@ -247,7 +248,7 @@ private fun SectionTitle(title: String, trailing: String? = null, onTrailing: ((
 private fun GlanceCard(g: HomeGlance, onOpenReports: () -> Unit, onOpenObligations: () -> Unit) {
     // مبلغ‌ها کامل نوشته می‌شوند؛ برای همین هر مورد یک ردیف کامل دارد نه یک ستون باریک
     Column(
-        Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp).fillMaxWidth().cardSurface(22.dp)
+        Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp).fillMaxWidth().tourTarget("home.glance").cardSurface(22.dp)
             .padding(horizontal = 6.dp, vertical = 6.dp)
     ) {
         GlanceRow(
@@ -770,9 +771,9 @@ internal fun TransactionCard(
 }
 
 @Composable
-internal fun HeaderButton(label: String, onClick: () -> Unit, content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
+internal fun HeaderButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
     Box(
-        Modifier
+        modifier
             .size(48.dp)
             .shadow(1.dp, RoundedCornerShape(16.dp), ambientColor = Color(0x0F0E1116), spotColor = Color(0x0F0E1116))
             .clip(RoundedCornerShape(16.dp))

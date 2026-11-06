@@ -114,6 +114,7 @@ fun LayerReportsScreen(
     val rangeText = if (isCurrentMonth) "۱ تا ${fa(date.let { JalaliDate.today().day })} ${date.monthName} ${fa(date.year)}"
     else "${date.formatMonthYear()}، تمام ماه"
 
+    ScreenTour("reports", Tours.reports)
     Column(
         modifier.fillMaxSize().background(L.Bg)
             .verticalScroll(rememberScrollState()).statusBarsPadding().padding(bottom = NavClearance),
@@ -123,7 +124,7 @@ fun LayerReportsScreen(
             title = "گزارش ${date.monthName}",
             subtitle = rangeText,
             trailing = {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.tourTarget("rep.month"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     MonthStepper(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "ماه قبل", true) { offset-- }
                     MonthStepper(Icons.AutoMirrored.Filled.KeyboardArrowRight, "ماه بعد", !isCurrentMonth) { offset++ }
                 }
@@ -131,7 +132,7 @@ fun LayerReportsScreen(
         )
 
         // پس‌انداز
-        LayerCard {
+        LayerCard(modifier = Modifier.tourTarget("rep.saved")) {
             Text(if (isCurrentMonth) "پس‌انداز تا امروز" else "پس‌انداز این ماه", style = lt(13.sp, color = L.Muted))
             Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FitText(

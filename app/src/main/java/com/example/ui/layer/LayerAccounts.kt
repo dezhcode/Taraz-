@@ -123,6 +123,7 @@ fun LayerAccountsScreen(
 ) {
     // چشم سراسری: همهٔ مبلغ‌های این صفحه را با هم پنهان می‌کند
     var hideAmounts by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    ScreenTour("accounts", Tours.accounts)
     LayerScreen(
         title = "حساب‌ها",
         trailing = {
@@ -140,11 +141,11 @@ fun LayerAccountsScreen(
         subtitle = if (cards.isEmpty()) "هنوز حسابی ندارید" else "${fa(cards.size)} حساب · برای مشاهدهٔ جزئیات، روی حساب ضربه بزنید",
         onBack = onBack,
         bottomBar = {
-            BigButton("افزودن حساب", onClick = onAdd)
+            BigButton("افزودن حساب", Modifier.tourTarget("acc.actions"), onClick = onAdd)
             if (cards.size >= 2) SoftBigButton("انتقال بین حساب‌ها", onClick = onTransfer)
         }
     ) {
-        Column(Modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(Modifier.padding(horizontal = 24.dp).tourTarget("acc.total"), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text("موجودی کل", style = lt(13.sp, color = L.Muted))
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(if (hideAmounts) "••••••" else money(totalBalance), style = lt(38.sp, FontWeight.Light, letterSpacing = (-1.5).sp))
@@ -153,7 +154,7 @@ fun LayerAccountsScreen(
         }
         // دارایی‌ها (ارز، طلا، رمزارز، صندوق) با قیمت روز
         Row(
-            Modifier.padding(horizontal = 20.dp).fillMaxWidth().cardSurface(18.dp).clickable(onClick = onOpenAssets)
+            Modifier.padding(horizontal = 20.dp).fillMaxWidth().tourTarget("acc.assets").cardSurface(18.dp).clickable(onClick = onOpenAssets)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)

@@ -72,6 +72,7 @@ fun LayerTransactionsScreen(
     onFilterChange: (TxFilter) -> Unit = {},
     onOpenFilter: () -> Unit = {}
 ) {
+    ScreenTour("transactions", Tours.transactions)
     val todayStart = startOfDay(System.currentTimeMillis())
     val selected = startOfDay(selectedDay)
     // هفته‌ای که روز انتخاب‌شده در آن است (پنجرهٔ ۷ روزه که به امروز یا قبل‌تر ختم می‌شود)
@@ -107,12 +108,12 @@ fun LayerTransactionsScreen(
                 )
             }
             Box(
-                Modifier.padding(end = 8.dp).size(40.dp).clip(ButtonShape).background(if (filter.active) L.Primary else L.PrimarySoft)
+                Modifier.padding(end = 8.dp).size(40.dp).tourTarget("tx.filter").clip(ButtonShape).background(if (filter.active) L.Primary else L.PrimarySoft)
                     .clickable(onClick = onOpenFilter).semantics { contentDescription = "فیلتر" },
                 contentAlignment = Alignment.Center
             ) { Icon(Icons.Default.FilterList, null, tint = if (filter.active) Color.White else L.PrimaryText, modifier = Modifier.size(20.dp)) }
             Row(
-                Modifier.height(40.dp).clip(ButtonShape).background(L.PrimarySoft)
+                Modifier.height(40.dp).tourTarget("tx.search").clip(ButtonShape).background(L.PrimarySoft)
                     .clickable { searching = !searching; if (!searching) query = "" }
                     .padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -125,7 +126,7 @@ fun LayerTransactionsScreen(
 
         // تراکنش‌های تکراری (اجاره، حقوق، اشتراک‌ها)
         Row(
-            Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp).fillMaxWidth().cardSurface(16.dp)
+            Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp).fillMaxWidth().tourTarget("tx.recurring").cardSurface(16.dp)
                 .clickable(onClick = onOpenRecurring).padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -222,7 +223,7 @@ fun LayerTransactionsScreen(
         }
 
         // ── انتخاب روز
-        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp).fillMaxWidth().cardSurface(22.dp).padding(10.dp)) {
+        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp).fillMaxWidth().tourTarget("tx.week").cardSurface(22.dp).padding(10.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 days.forEach { start ->
                     val on = start == selected

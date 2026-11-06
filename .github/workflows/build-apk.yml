@@ -111,6 +111,12 @@ jobs:
           ls -la out
           rm -f "$RUNNER_TEMP/release.jks"
 
+      - name: Tour screenshots
+        continue-on-error: true
+        run: |
+          if [ -f ./gradlew ]; then chmod +x ./gradlew; ./gradlew testDebugUnitTest --tests 'com.example.shots.*' -Proborazzi.test.record=true; else gradle testDebugUnitTest --tests 'com.example.shots.*' -Proborazzi.test.record=true; fi
+          ls -la app/build/tourshots || true
+
       - name: Publish APK to GitHub Release
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
@@ -122,3 +128,4 @@ jobs:
           files: |
             app/build/outputs/apk/debug/*.apk
             out/*.apk
+            app/build/tourshots/*.png

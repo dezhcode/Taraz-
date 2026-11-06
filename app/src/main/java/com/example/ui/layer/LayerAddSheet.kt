@@ -119,6 +119,7 @@ fun LayerAddSheet(
     WatchNew(categories, { it.id }) { c -> if (c.isIncome == (type == EntryType.INCOME)) category = c.name }
     WatchNew(persons, { it.id }) { personId = it.id }
     val creators = LocalCreators.current
+    ScreenTour("add", Tours.add)
 
     fun applyDraft(d: com.example.ui.FinanceViewModel.EntryDraft) {
         if (d.amount > 0) amount = d.amount.toString()
@@ -162,7 +163,7 @@ fun LayerAddSheet(
             Box(Modifier.align(Alignment.CenterHorizontally).width(40.dp).height(5.dp).clip(PillShape).background(L.Handle))
 
             Row(Modifier.fillMaxWidth().padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Row(Modifier.clip(PillShape).background(L.Chip).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(Modifier.tourTarget("add.type").clip(PillShape).background(L.Chip).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     EntryType.entries.forEach { t ->
                         val on = t == type
                         Box(
@@ -212,7 +213,7 @@ fun LayerAddSheet(
                 }
 
                 // مبلغ
-                Column(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 6.dp).tourTarget("add.amount"), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         money(n),
                         style = lt(54.sp, FontWeight.Normal, if (n == 0L) L.Placeholder else if (type == EntryType.INCOME) L.Green else L.Ink, letterSpacing = (-1.5).sp)
@@ -256,7 +257,7 @@ fun LayerAddSheet(
                     val rows = (shown.map { it as Any? } +
                         (if (!showAllCats && typeCats.size > 4) listOf(null) else emptyList()) +
                         (if (showNew) listOf(NEW_TILE) else emptyList())).chunked(5)
-                    Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.padding(top = 10.dp).tourTarget("add.cats"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         rows.forEach { row ->
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 row.forEach { item ->
@@ -424,7 +425,7 @@ fun LayerAddSheet(
             val transferOk = type != EntryType.TRANSFER || (account != null && transferTo != null && account != transferTo)
             val enabled = n > 0 && transferOk
             Box(
-                Modifier.padding(top = 10.dp).fillMaxWidth().height(56.dp).clip(PillShape)
+                Modifier.padding(top = 10.dp).fillMaxWidth().height(56.dp).tourTarget("add.save").clip(PillShape)
                     .background(if (enabled) L.Primary else L.PrimaryDisabled)
                     .clickable(enabled = enabled) {
                         val pid = personId

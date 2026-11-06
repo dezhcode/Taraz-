@@ -364,7 +364,13 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                     )
                 }
 
-                CompositionLocalProvider(com.example.ui.layer.LocalCreators provides creators) {
+                // راهنمای گام‌به‌گام صفحه‌ها (بار اول هر صفحه)
+                val tourState = remember { com.example.ui.layer.TourState() }
+
+                CompositionLocalProvider(
+                    com.example.ui.layer.LocalCreators provides creators,
+                    com.example.ui.layer.LocalTour provides tourState
+                ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = com.example.ui.layer.L.Bg
@@ -1270,6 +1276,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     onBack = { viewModel.setSmsAssistantSheetOpen(false) }
                                 )
                             }
+
+                            // لایهٔ راهنما بالای همهٔ صفحه‌ها و برگه‌ها
+                            com.example.ui.layer.TourHost(tourState)
 
                             // برگرداندن حذف (۶ ثانیه)
                             val undoOffer by viewModel.undo.collectAsStateWithLifecycle()

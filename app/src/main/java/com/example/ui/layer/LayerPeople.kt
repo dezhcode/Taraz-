@@ -90,6 +90,7 @@ fun LayerObligationsScreen(
     val chequesOut = pendingCheques.filter { it.issued }.sumOf { it.amount }
     val chequesIn = pendingCheques.filter { !it.issued }.sumOf { it.amount }
     val owedToMe = balances.values.filter { it > 0 }.sum() + chequesIn
+    ScreenTour("obligations", Tours.obligations)
 
     Column(
         modifier.fillMaxSize().background(L.Bg)
@@ -100,7 +101,7 @@ fun LayerObligationsScreen(
             Text("وام‌ها، خریدهای اقساطی، اشخاص و چک‌ها", style = lt(13.sp, color = L.Muted))
         }
 
-        Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp).fillMaxWidth().tourTarget("obl.summary"), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f).cardSurface(18.dp).padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("بدهکار", style = lt(12.sp, color = L.Muted))
                 FitText(money(loanLeft + iOwePeople + chequesOut + creditUsed), lt(20.sp, FontWeight.Bold, L.RedText))
@@ -128,7 +129,7 @@ fun LayerObligationsScreen(
 
         LSegmented(
             listOf("اقساط", "اشخاص", "چک‌ها"), current, { ownSegment = it; onSegment(it) },
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp)
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp).tourTarget("obl.tabs")
         )
 
         when (current) {

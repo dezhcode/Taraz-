@@ -396,6 +396,22 @@ fun LayerSettingsScreen(
                 )
             }
         }
+        SettingsGroup("راهنما") {
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            val tour = LocalTour.current
+            var tourReset by remember { mutableStateOf(false) }
+            NavRow(
+                "نمایش دوبارهٔ راهنمای صفحه‌ها",
+                if (tourReset) "فعال شد" else null,
+                divider = false,
+                valueColor = L.GreenText,
+                onClick = {
+                    TourPrefs.resetAll(ctx)
+                    tour?.let { it.resetTick++ }
+                    tourReset = true
+                }
+            )
+        }
         SettingsGroup("امنیت") {
             SwitchRow("قفل با اثر انگشت", "هر بار که تراز باز می‌شود", biometricEnabled, onBiometricChange)
             NavRow("آزمایش صفحهٔ قفل", null, divider = false, onClick = onTestLock)
