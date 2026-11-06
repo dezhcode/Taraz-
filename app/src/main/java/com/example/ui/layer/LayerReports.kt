@@ -31,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -225,6 +226,9 @@ fun LayerReportsScreen(
             Text("ببینید", style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText))
         }
 
+        // جریان پول: درآمد ماه کجا رفت
+        if (cur.income > 0 || cur.expense > 0) MoneyFlowCard(cur.income, cur.expense, byCategory)
+
         // برچسب‌ها: جمع هزینهٔ هر برچسب از اول
         val tagTotals = remember(transactions) {
             transactions.filter { it.countsAsExpense && it.tags.isNotBlank() }
@@ -375,5 +379,60 @@ private fun MonthStepper(icon: androidx.compose.ui.graphics.vector.ImageVector, 
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, null, tint = if (enabled) L.PrimaryText else L.Placeholder, modifier = Modifier.size(22.dp))
+    }
+}
+
+/**
+ * جریان پول ماه: درآمد بالا، و زیرش همان مقدار بین دسته‌های خرج و پس‌انداز تقسیم می‌شود.
+ * اگر خرج از درآمد بیشتر باشد، قسمت اضافه «از جیب قبلی» نشان داده می‌شود.
+ */
+@Composable
+private fun MoneyFlowCard(income: Long, expense: Long, byCategory: List<Pair<String, Long>>) {
+    val palette = listOf(L.Primary, L.Amber, Color(0xFF7A5AA8), Color(0xFF0E9490), L.Chevron)
+    val top = byCategory.take(4)
+    val rest = byCategory.drop(4).sumOf { it.second }
+    val parts = buildList {
+        top.forEachIndexed { i, (n, v) -> add(Triple(n, v, palette[i])) }
+        if (rest > 0) add(Triple("سایر دسته‌ها", rest, palette[4]))
+        if (income > expense) add(Triple("پس‌انداز", income - expense, L.Green))
+    }
+    val whole = maxOf(income, expense).coerceAtLeast(1)
+    LayerCard(padding = 16.dp) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            Text("جریان پول", style = lt(14.sp, FontWeight.Bold), modifier = Modifier.weight(1f))
+            Text(
+                if (income >= expense) "${fa((((income - expense) * 100) / income.coerceAtLeast(1)).toInt())}٪ درآمد ماند"
+                else "${millions(expense - income)} بیشتر از درآمد",
+                style = lt(12.sp, FontWeight.SemiBold, if (income >= expense) L.GreenText else L.RedText)
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        // درآمد
+        Text("درآمد ${millions(income)}", style = lt(12.sp, color = L.Muted))
+        Box(
+            Modifier.padding(top = 4.dp).fillMaxWidth((income.toFloat() / whole).coerceIn(0.02f, 1f)).height(14.dp)
+                .clip(RoundedCornerShape(7.dp)).background(L.Green.copy(alpha = 0.35f))
+        )
+        Spacer(Modifier.height(10.dp))
+        // به کجا رفت
+        Text("به کجا رفت", style = lt(12.sp, color = L.Muted))
+        Row(Modifier.padding(top = 4.dp).fillMaxWidth().height(14.dp).clip(RoundedCornerShape(7.dp)), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            parts.forEach { (_, v, c) -> Box(Modifier.weight(v.toFloat().coerceAtLeast(1f)).height(14.dp).background(c)) }
+            val used = parts.sumOf { it.second }
+            if (used < whole) Spacer(Modifier.weight((whole - used).toFloat()))
+        }
+        Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            parts.forEach { (n, v, c) ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(10.dp).clip(RoundedCornerShape(3.dp)).background(c))
+                    Text(n, style = lt(13.sp), modifier = Modifier.padding(start = 8.dp).weight(1f), maxLines = 1)
+                    Text(millions(v), style = lt(13.sp, FontWeight.SemiBold))
+                    Text(
+                        "${fa(((v * 100) / whole).toInt())}٪", style = lt(12.sp, color = L.Muted),
+                        modifier = Modifier.padding(start = 8.dp).width(40.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End
+                    )
+                }
+            }
+        }
     }
 }

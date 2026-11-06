@@ -57,7 +57,10 @@ interface PendingTransactionDao {
     suspend fun getPendingTransactions(): List<PendingTransaction>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertPendingTransaction(tx: PendingTransaction)
+    suspend fun insertPendingTransaction(tx: PendingTransaction): Long
+
+    @Query("SELECT * FROM pending_transactions WHERE id = :id")
+    suspend fun getById(id: Int): PendingTransaction?
 
     @Update
     suspend fun updatePendingTransaction(tx: PendingTransaction)

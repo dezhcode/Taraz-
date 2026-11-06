@@ -33,6 +33,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Sms
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -127,7 +128,8 @@ fun LayerHomeScreen(
     onTool: (String) -> Unit = {},
     onOpenAllTools: () -> Unit = {},
     onOpenLayout: () -> Unit = {},
-    onOpenObligations: () -> Unit = {}
+    onOpenObligations: () -> Unit = {},
+    onOpenSearch: () -> Unit = {}
 ) {
     val now = System.currentTimeMillis()
     val todayStart = startOfDay(now)
@@ -149,6 +151,10 @@ fun LayerHomeScreen(
                 Text("سلام ${userName.ifBlank { "دوست من" }}", style = lt(22.sp, FontWeight.Bold))
                 Text("${weekdayName(now)} ${JalaliDate.today().formatShort()}", style = lt(13.sp, color = L.Muted))
             }
+            HeaderButton("جستجو", onOpenSearch) {
+                Icon(Icons.Default.Search, null, tint = L.Ink, modifier = Modifier.size(22.dp))
+            }
+            Spacer(Modifier.width(8.dp))
             HeaderButton("تنظیمات", onOpenSettings) {
                 Icon(Icons.Default.Tune, null, tint = L.Ink, modifier = Modifier.size(22.dp))
             }

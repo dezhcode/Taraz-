@@ -36,12 +36,7 @@ class SmsReceiver : BroadcastReceiver() {
                 for ((address, body, sentAt) in messages) {
                     val receivedAt = if (sentAt > 0) sentAt else System.currentTimeMillis()
                     when (val outcome = SmsIngest.process(db, address, body, receivedAt)) {
-                        is SmsIngest.Outcome.Pending -> NotificationHelper.showNotification(
-                            appContext,
-                            "تراکنش تازه از ${outcome.bankName}",
-                            "${NotificationHelper.formatAmount(outcome.tx.amount)} تومان " +
-                                (if (outcome.tx.isExpense) "برداشت" else "واریز") + " — برای تأیید بزنید."
-                        )
+                        is SmsIngest.Outcome.Pending -> SmsQuickAction.notify(appContext, outcome.tx, outcome.bankName)
                         is SmsIngest.Outcome.Unknown -> NotificationHelper.showNotification(
                             appContext,
                             "پیامک تازه از ${outcome.bankName} خوانده نشد",

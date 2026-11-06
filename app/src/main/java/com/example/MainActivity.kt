@@ -203,7 +203,22 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 var allToolsOpen by remember { mutableStateOf(false) }
                 var billToPay by remember { mutableStateOf<com.example.data.Bill?>(null) }
                 var creditToRepay by remember { mutableStateOf<com.example.data.BankCard?>(null) }
+                var searchOpen by remember { mutableStateOf(false) }
                 var loansSegment by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableIntStateOf(0) }
+
+                // صفحهٔ پشتیبان رمز پشتیبان خودکار را دارد؛ با قفل روشن، اول هویت تأیید شود
+                fun openBackupGuarded() {
+                    val act = this@MainActivity
+                    if (biometricEnabled && com.example.utils.BiometricHelper.isBiometricAvailable(act)) {
+                        com.example.utils.BiometricHelper.showBiometricPrompt(
+                            activity = act,
+                            title = "پشتیبان تراز",
+                            subtitle = "برای دیدن پشتیبان و رمز آن، هویت‌تان را تأیید کنید",
+                            onSuccess = { openSub("backup") },
+                            onError = { msg -> android.widget.Toast.makeText(act, msg, android.widget.Toast.LENGTH_SHORT).show() }
+                        )
+                    } else openSub("backup")
+                }
 
                 fun runTool(id: String) {
                     when (id) {
@@ -237,8 +252,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                         "year" -> openSub("year")
                         "share" -> shareMonthTs = System.currentTimeMillis()
                         "assistant" -> isAiSheetOpen = true
-                        "search" -> viewModel.setTab(Tab.TRANSACTIONS)
-                        "backup" -> openSub("backup")
+                        "search" -> searchOpen = true
+                        "backup" -> openBackupGuarded()
                     }
                 }
 
@@ -449,7 +464,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         onAlertsChange = { viewModel.setAlertsEnabled(it) },
                                         onTestLock = { viewModel.lockApp() },
                                         onOpenSms = { openSub("sms_setup") },
-                                        onOpenBackup = { openSub("backup") },
+                                        onOpenBackup = { openBackupGuarded() },
                                         onTestServer = { cb -> viewModel.testAiServerConnection(cb) },
                                         onLogout = {
                                             subStack.clear()
@@ -777,6 +792,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             onOpenAllTools = { allToolsOpen = true },
                                                             onOpenLayout = { homeLayoutOpen = true },
                                                             onOpenObligations = { loansSegment = 0; viewModel.setTab(Tab.LOANS) },
+                                                            onOpenSearch = { searchOpen = true },
                                                             userName = userProfile?.name.orEmpty(),
                                                             cards = cards,
                                                             totalBalance = totalBalance,
@@ -1112,6 +1128,23 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     onToggle = { viewModel.toggleHomeTool(it) },
                                     onRun = { id -> allToolsOpen = false; homeLayoutOpen = false; runTool(id) },
                                     onDismiss = { allToolsOpen = false }
+                                )
+                            }
+                            if (searchOpen) {
+                                com.example.ui.layer.HomeSearchSheet(
+                                    transactions = transactions,
+                                    cards = cards,
+                                    categories = categories,
+                                    persons = persons,
+                                    balances = personBalances,
+                                    bills = bills,
+                                    cheques = cheques,
+                                    onTool = { runTool(it) },
+                                    onTransaction = { selectedTransactionForEdit = it },
+                                    onPerson = { selectedPersonId = it.id; openSub("person_detail") },
+                                    onBills = { openSub("bills") },
+                                    onCheque = { chequeEditing = it; chequeSheetOpen = true },
+                                    onDismiss = { searchOpen = false }
                                 )
                             }
                             creditToRepay?.let { c ->

@@ -481,10 +481,10 @@ fun ProposedActionCard(
     onCancel: (String) -> Unit
 ) {
     val actionColor = when {
-        action.isApproved -> SuccessGreen
+        action.isApproved -> com.example.ui.layer.L.Green
         action.isCancelled -> Color.Gray
-        action.type.contains("delete") -> ErrorRed
-        else -> EmeraldPrimary
+        action.type.contains("delete") -> com.example.ui.layer.L.RedText
+        else -> com.example.ui.layer.L.Primary
     }
     
     val actionLabel = when (action.type) {
@@ -504,7 +504,7 @@ fun ProposedActionCard(
 
     Card(
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
+        colors = CardDefaults.cardColors(containerColor = com.example.ui.layer.L.Surface),
         border = BorderStroke(1.dp, com.example.ui.layer.L.Line),
         modifier = Modifier
             .fillMaxWidth()
@@ -543,7 +543,7 @@ fun ProposedActionCard(
                     text = actionLabel,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
-                        color = NavySecondary
+                        color = com.example.ui.layer.L.Ink
                     )
                 )
             }
@@ -552,7 +552,7 @@ fun ProposedActionCard(
             
             Text(
                 text = action.description,
-                style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFF475569)),
+                style = MaterialTheme.typography.bodyMedium.copy(color = com.example.ui.layer.L.Muted),
                 modifier = Modifier.fillMaxWidth()
             )
             
@@ -566,7 +566,7 @@ fun ProposedActionCard(
                     ) {
                         Button(
                             onClick = { onApprove(messageId) },
-                            colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
+                            colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.layer.L.Primary),
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
                                 .weight(1f)
@@ -585,7 +585,7 @@ fun ProposedActionCard(
                         
                         OutlinedButton(
                             onClick = { onCancel(messageId) },
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = com.example.ui.layer.L.RedText),
                             shape = RoundedCornerShape(12.dp),
                             border = BorderStroke(1.dp, com.example.ui.layer.L.Line),
                             modifier = Modifier
@@ -615,7 +615,7 @@ fun ProposedActionCard(
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = "Approved",
-                            tint = SuccessGreen,
+                            tint = com.example.ui.layer.L.Green,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -633,20 +633,20 @@ fun ProposedActionCard(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color(0xFFF1F5F9), RoundedCornerShape(8.dp))
+                            .background(com.example.ui.layer.L.Chip, RoundedCornerShape(8.dp))
                             .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Cancel,
                             contentDescription = "Cancelled",
-                            tint = Color(0xFF64748B),
+                            tint = com.example.ui.layer.L.Muted,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             "این پیشنهاد توسط شما لغو شد.",
                             style = MaterialTheme.typography.bodyMedium.copy(
-                                color = Color(0xFF334155),
+                                color = com.example.ui.layer.L.Ink,
                                 fontWeight = FontWeight.Bold
                             )
                         )
@@ -659,7 +659,7 @@ fun ProposedActionCard(
 
 @Composable
 fun RichMarkdownContent(text: String, isUser: Boolean) {
-    val textColor = if (isUser) Color.White else NavySecondary
+    val textColor = if (isUser) Color.White else com.example.ui.layer.L.Ink
     val lines = text.split("\n")
     var i = 0
     
@@ -765,19 +765,19 @@ fun RenderTable(lines: List<String>, isUser: Boolean) {
             .fillMaxWidth()
             .padding(vertical = 8.dp),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
+        colors = CardDefaults.cardColors(containerColor = com.example.ui.layer.L.Surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(1.dp, IceSlate)
+        border = BorderStroke(1.dp, com.example.ui.layer.L.Line)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             rows.forEachIndexed { rowIndex, cells ->
                 val isHeader = rowIndex == 0
                 val rowBg = if (isHeader) {
-                    EmeraldPrimary.copy(alpha = 0.08f)
+                    com.example.ui.layer.L.Primary.copy(alpha = 0.08f)
                 } else if (rowIndex % 2 == 0) {
-                    IceSlate.copy(alpha = 0.3f)
+                    com.example.ui.layer.L.Line.copy(alpha = 0.3f)
                 } else {
-                    SurfaceWhite
+                    com.example.ui.layer.L.Surface
                 }
                 
                 Row(
@@ -794,12 +794,12 @@ fun RenderTable(lines: List<String>, isUser: Boolean) {
                             style = if (isHeader) {
                                 MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.ExtraBold, 
-                                    color = EmeraldPrimary,
+                                    color = com.example.ui.layer.L.Primary,
                                     fontSize = 13.sp
                                 )
                             } else {
                                 MaterialTheme.typography.bodyMedium.copy(
-                                    color = NavySecondary,
+                                    color = com.example.ui.layer.L.Ink,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Normal
                                 )
@@ -812,13 +812,13 @@ fun RenderTable(lines: List<String>, isUser: Boolean) {
                                 modifier = Modifier
                                     .width(1.dp)
                                     .height(16.dp)
-                                    .background(IceSlate)
+                                    .background(com.example.ui.layer.L.Line)
                             )
                         }
                     }
                 }
                 if (rowIndex < rows.size - 1) {
-                    HorizontalDivider(color = IceSlate, thickness = 0.5.dp)
+                    HorizontalDivider(color = com.example.ui.layer.L.Line, thickness = 0.5.dp)
                 }
             }
         }
@@ -827,9 +827,9 @@ fun RenderTable(lines: List<String>, isUser: Boolean) {
 
 @Composable
 fun RenderAlertCard(text: String, isActive: Boolean) {
-    val bgColor = if (isActive) SuccessGreen.copy(alpha = 0.1f) else SlateGray.copy(alpha = 0.1f)
-    val borderColor = if (isActive) SuccessGreen else SlateGray
-    val iconColor = if (isActive) SuccessGreen else SlateGray
+    val bgColor = if (isActive) com.example.ui.layer.L.Green.copy(alpha = 0.1f) else com.example.ui.layer.L.Muted.copy(alpha = 0.1f)
+    val borderColor = if (isActive) com.example.ui.layer.L.Green else com.example.ui.layer.L.Muted
+    val iconColor = if (isActive) com.example.ui.layer.L.Green else com.example.ui.layer.L.Muted
     val labelText = if (isActive) "اعلان فعال" else "اعلان غیرفعال"
     
     Row(
@@ -868,7 +868,7 @@ fun RenderAlertCard(text: String, isActive: Boolean) {
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = parseInlineFormatting(text, isUser = false),
-                style = MaterialTheme.typography.bodyMedium.copy(color = NavySecondary)
+                style = MaterialTheme.typography.bodyMedium.copy(color = com.example.ui.layer.L.Ink)
             )
         }
     }
@@ -881,9 +881,9 @@ fun RenderHighlightCard(text: String, isUser: Boolean = false) {
             .fillMaxWidth()
             .padding(vertical = 6.dp),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
+        colors = CardDefaults.cardColors(containerColor = com.example.ui.layer.L.Surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = BorderStroke(1.dp, IceSlate)
+        border = BorderStroke(1.dp, com.example.ui.layer.L.Line)
     ) {
         Row(
             modifier = Modifier
@@ -897,13 +897,13 @@ fun RenderHighlightCard(text: String, isUser: Boolean = false) {
                     .width(4.dp)
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(2.dp))
-                    .background(EmeraldPrimary)
+                    .background(com.example.ui.layer.L.Primary)
             )
             Spacer(modifier = Modifier.width(12.dp))
             Text(
                 text = parseInlineFormatting(text, isUser),
                 style = MaterialTheme.typography.bodyLarge.copy(
-                    color = NavySecondary,
+                    color = com.example.ui.layer.L.Ink,
                     lineHeight = 22.sp
                 )
             )
@@ -939,7 +939,7 @@ fun RenderList(items: List<String>, textColor: Color, isUser: Boolean) {
                 Text(
                     text = "•",
                     style = MaterialTheme.typography.bodyLarge.copy(
-                        color = EmeraldPrimary,
+                        color = com.example.ui.layer.L.Primary,
                         fontWeight = FontWeight.Bold
                     ),
                     modifier = Modifier.padding(end = 8.dp)
@@ -979,7 +979,7 @@ fun parseInlineFormatting(text: String, isUser: Boolean = false): AnnotatedStrin
                     val boldContent = afterFirstMarker.substring(0, secondMarkerIndex)
                     withStyle(style = SpanStyle(
                         fontWeight = FontWeight.ExtraBold, 
-                        color = if (isUser) Color.White else NavySecondary
+                        color = if (isUser) Color.White else com.example.ui.layer.L.Ink
                     )) {
                         append(boldContent)
                     }
@@ -996,8 +996,8 @@ fun parseInlineFormatting(text: String, isUser: Boolean = false): AnnotatedStrin
                     val codeContent = afterFirstMarker.substring(0, secondMarkerIndex)
                     withStyle(style = SpanStyle(
                         fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                        color = EmeraldPrimary,
-                        background = IceSlate
+                        color = com.example.ui.layer.L.Primary,
+                        background = com.example.ui.layer.L.Line
                     )) {
                         append(codeContent)
                     }
@@ -1050,8 +1050,8 @@ fun AiTypingIndicator() {
 
     Card(
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
-        border = BorderStroke(1.dp, EmeraldPrimary.copy(alpha = 0.25f)),
+        colors = CardDefaults.cardColors(containerColor = com.example.ui.layer.L.Surface),
+        border = BorderStroke(1.dp, com.example.ui.layer.L.Primary.copy(alpha = 0.25f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = Modifier
             .fillMaxWidth()
@@ -1066,12 +1066,12 @@ fun AiTypingIndicator() {
                 modifier = Modifier
                     .size(32.dp)
                     .clip(CircleShape)
-                    .background(EmeraldPrimary.copy(alpha = 0.12f)),
+                    .background(com.example.ui.layer.L.Primary.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(18.dp),
-                    color = EmeraldPrimary,
+                    color = com.example.ui.layer.L.Primary,
                     strokeWidth = 2.dp
                 )
             }
@@ -1082,7 +1082,7 @@ fun AiTypingIndicator() {
                 Text(
                     text = "دستیار مالی تراز در حال تحلیل و پاسخ‌دهی...",
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        color = NavySecondary,
+                        color = com.example.ui.layer.L.Ink,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.5.sp
                     )
@@ -1091,7 +1091,7 @@ fun AiTypingIndicator() {
                 Text(
                     text = "لطفاً چند لحظه شکیبا باشید",
                     style = MaterialTheme.typography.labelSmall.copy(
-                        color = SlateGray,
+                        color = com.example.ui.layer.L.Muted,
                         fontSize = 11.sp
                     )
                 )
@@ -1107,19 +1107,19 @@ fun AiTypingIndicator() {
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(EmeraldPrimary.copy(alpha = dot1Alpha))
+                        .background(com.example.ui.layer.L.Primary.copy(alpha = dot1Alpha))
                 )
                 Box(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(EmeraldPrimary.copy(alpha = dot2Alpha))
+                        .background(com.example.ui.layer.L.Primary.copy(alpha = dot2Alpha))
                 )
                 Box(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(EmeraldPrimary.copy(alpha = dot3Alpha))
+                        .background(com.example.ui.layer.L.Primary.copy(alpha = dot3Alpha))
                 )
             }
         }

@@ -182,4 +182,44 @@ class MoneyFlowTest {
         assertEquals(1, next.month)
         assertEquals("قبوض", repo.allTransactions.first().first().category)
     }
+
+    @Test
+    fun deletingAClearedChequesMoneyMakesItPendingAgainAndUndoBringsItBack() = runBlocking {
+        repo.saveCheque(com.example.data.Cheque(issued = true, amount = 2_000_000, dueDate = 0, person = "رضا", bankName = "ملت"))
+        repo.setChequeStatus(repo.allCheques.first().first(), com.example.data.ChequeStatus.CLEARED)
+        assertEquals(8_000_000L, balance("ملت"))
+        val gone = repo.deleteTransaction(repo.allTransactions.first().first())
+        assertEquals(10_000_000L, balance("ملت"))
+        val c = repo.allCheques.first().first()
+        assertEquals(com.example.data.ChequeStatus.PENDING, c.status)
+        assertNull(c.transactionId)
+        repo.restore(gone)
+        assertEquals(8_000_000L, balance("ملت"))
+        assertEquals(com.example.data.ChequeStatus.CLEARED, repo.allCheques.first().first().status)
+    }
+
+    @Test
+    fun deletingABillPaymentMakesTheBillDueAgain() = runBlocking {
+        val due = com.example.utils.JalaliDate.toTimestamp(1405, 1, 15)
+        repo.saveBill(com.example.data.Bill(kind = "گاز", title = "گاز", dueDate = due, periodMonths = 2))
+        repo.payBill(repo.allBills.first().first(), 300_000, "ملت")
+        val paid = com.example.utils.JalaliDate.fromTimestamp(repo.allBills.first().first().dueDate)
+        assertEquals(3, paid.month)
+        val gone = repo.deleteTransaction(repo.allTransactions.first().first())
+        val bill = repo.allBills.first().first()
+        assertEquals(due, bill.dueDate)
+        assertNull(bill.lastPaidAt)
+        assertEquals(10_000_000L, balance("ملت"))
+        repo.restore(gone)
+        assertEquals(3, com.example.utils.JalaliDate.fromTimestamp(repo.allBills.first().first().dueDate).month)
+    }
+
+    @Test
+    fun aCreditCardRepaymentIsATransferNotSpending() = runBlocking {
+        repo.insertCard(BankCard(bankName = "اعتباری", balance = -3_000_000, accountType = com.example.data.AccountType.CREDIT, creditLimit = 20_000_000))
+        repo.insertTransfer("ملت", "اعتباری", 3_000_000)
+        assertEquals(0L, balance("اعتباری"))
+        assertEquals(7_000_000L, balance("ملت"))
+        assertTrue(repo.allTransactions.first().none { it.type == TransactionType.EXPENSE })
+    }
 }

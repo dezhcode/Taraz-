@@ -55,6 +55,10 @@
         </receiver>
 
         <receiver
+            android:name=".data.SmsQuickAction"
+            android:exported="false" />
+
+        <receiver
             android:name=".data.SmsReceiver"
             android:exported="true"
             android:permission="android.permission.BROADCAST_SMS">

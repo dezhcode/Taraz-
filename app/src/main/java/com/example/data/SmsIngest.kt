@@ -129,8 +129,8 @@ object SmsIngest {
             smsBodyHash = hash,
             balance = toToman(found.balance, body)
         )
-        db.pendingTransactionDao().insertPendingTransaction(tx)
-        return Outcome.Pending(tx, sender.bankName)
+        val id = db.pendingTransactionDao().insertPendingTransaction(tx).toInt()
+        return Outcome.Pending(tx.copy(id = id), sender.bankName)
     }
 
     /**

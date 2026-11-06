@@ -44,7 +44,8 @@ object NotificationHelper {
         title: String,
         message: String,
         notificationId: Int? = null,
-        action: String? = null
+        action: String? = null,
+        buttons: List<Pair<String, PendingIntent>> = emptyList()
     ) {
         // Ensure channel is created
         createNotificationChannel(context)
@@ -69,6 +70,7 @@ object NotificationHelper {
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setVibrate(longArrayOf(1000, 1000, 1000))
+        buttons.forEach { (label, pi) -> builder.addAction(0, label, pi) }
 
         try {
             with(NotificationManagerCompat.from(context)) {
