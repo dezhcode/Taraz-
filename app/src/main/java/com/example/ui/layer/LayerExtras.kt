@@ -83,12 +83,50 @@ fun CategoryBudgetSheet(category: Category, spent: Long, onDismiss: () -> Unit, 
 
 // ───────────────────────── تراکنش‌های تکراری ─────────────────────────
 
+/** خرجی که در چند ماه گذشته تقریباً با همان مبلغ هر ماه تکرار شده (اشتراک، اینترنت، اجاره…) */
+data class RecurringCandidate(val title: String, val amount: Long, val category: String, val bankName: String, val day: Int, val months: Int)
+
+fun detectRecurringCandidates(
+    transactions: List<Transaction>,
+    existing: List<RecurringTransaction>,
+    now: Long = System.currentTimeMillis()
+): List<RecurringCandidate> {
+    val since = shiftJalaliMonth(now, -6)
+    val known = existing.map { it.title.trim() }.toSet()
+    fun norm(t: String) = t.filter { !it.isDigit() && it !in "۰۱۲۳۴۵۶۷۸۹" }.replace(Regex("\\s+"), " ").trim().lowercase()
+    return transactions
+        .filter { it.countsAsExpense && it.date >= since && norm(it.title).length >= 2 }
+        .groupBy { norm(it.title) }
+        .mapNotNull { (_, list) ->
+            val sorted = list.map { it.amount }.sorted()
+            val median = sorted[sorted.size / 2]
+            // همان مبلغ با ۱۰٪ اختلاف
+            val similar = list.filter { kotlin.math.abs(it.amount - median) <= median / 10 }
+            val byMonth = similar.groupBy { JalaliDate.fromTimestamp(it.date).monthKey() }
+            // دست‌کم سه ماه، و ماهی یکی دو بار (خرید روزانه حساب نمی‌شود)
+            if (byMonth.size < 3 || byMonth.values.any { it.size > 2 }) return@mapNotNull null
+            val title = similar.maxByOrNull { it.date }!!.title.trim()
+            if (title in known) return@mapNotNull null
+            val days = similar.map { JalaliDate.fromTimestamp(it.date).day }.sorted()
+            RecurringCandidate(
+                title = title,
+                amount = median,
+                category = similar.groupingBy { it.category }.eachCount().maxByOrNull { it.value }!!.key,
+                bankName = similar.groupingBy { it.bankName }.eachCount().maxByOrNull { it.value }!!.key,
+                day = days[days.size / 2],
+                months = byMonth.size
+            )
+        }
+        .sortedByDescending { it.amount }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LayerRecurringScreen(
     items: List<RecurringTransaction>,
     cards: List<BankCard>,
     categories: List<Category>,
+    transactions: List<Transaction> = emptyList(),
     onBack: () -> Unit,
     onAdd: (title: String, amount: Long, category: String, isExpense: Boolean, bank: String, day: Int) -> Unit,
     onToggle: (RecurringTransaction, Boolean) -> Unit,
@@ -103,6 +141,33 @@ fun LayerRecurringScreen(
     ) {
         if (cards.isEmpty()) {
             Callout("اول یک حساب بسازید", "تراکنش تکراری روی یکی از حساب‌ها ثبت می‌شود.", L.AmberSoft, L.AmberInk, Modifier.padding(horizontal = 20.dp))
+        }
+        val candidates = remember(transactions, items) { detectRecurringCandidates(transactions, items) }
+        if (candidates.isNotEmpty()) {
+            SectionTitle("پیدا شد: این‌ها هر ماه تکرار شده‌اند")
+            LayerCard(radius = 20.dp, padding = 0.dp) {
+                candidates.take(6).forEachIndexed { i, c ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(c.title, style = lt(14.sp, FontWeight.SemiBold), maxLines = 1)
+                            Text("${fa(c.months)} ماه اخیر · حدود روز ${fa(c.day)} · ${c.bankName}", style = lt(12.sp, color = L.Muted), maxLines = 1)
+                        }
+                        Text(money(c.amount), style = lt(14.sp, FontWeight.SemiBold))
+                        SoftButton("افزودن", height = 34.dp) {
+                            onAdd(c.title, c.amount, c.category, true, c.bankName, c.day)
+                        }
+                    }
+                    if (i < minOf(candidates.size, 6) - 1) Box(Modifier.padding(horizontal = 14.dp).fillMaxWidth().height(1.dp).background(L.Line))
+                }
+            }
+            Text(
+                "اگر اشتراکی را دیگر لازم ندارید، لغوش کنید؛ ${money(candidates.sumOf { it.amount })} تومان در ماه از این‌ها می‌رود.",
+                style = lt(12.sp, color = L.Muted, lineHeight = 21.sp), modifier = Modifier.padding(horizontal = 24.dp)
+            )
         }
         if (items.isEmpty()) {
             Text(

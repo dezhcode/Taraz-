@@ -559,6 +559,135 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    // ─── ثبت صوتی و عکس رسید ───
+
+    /** آنچه از جملهٔ گفته‌شده یا عکس رسید فهمیده شد؛ هر فیلد ممکن است خالی باشد */
+    data class EntryDraft(
+        val isExpense: Boolean = true,
+        val amount: Long = 0,
+        val title: String? = null,
+        val category: String? = null,
+        val account: String? = null,
+        val personName: String? = null,
+        val date: Long? = null
+    )
+
+    /**
+     * جملهٔ کاربر («دیروز ۲۰۰ تومن به علی قرض دادم»، «۸۰ تومن ناهار») را با همان دستیار
+     * به پیش‌نویس تراکنش تبدیل می‌کند؛ اگر دستیار در دسترس نبود، عدد را خودش می‌خواند.
+     */
+    fun parseSpokenEntry(text: String, onResult: (EntryDraft) -> Unit) {
+        viewModelScope.launch {
+            val cats = categories.value.joinToString("، ") { it.name }
+            val accounts = cards.value.joinToString("، ") { it.bankName }
+            val people = persons.value.joinToString("، ") { it.name }
+            val prompt = """
+                جملهٔ زیر را که کاربر برای ثبت یک تراکنش گفته، به JSON تبدیل کن. فقط JSON برگردان، بدون هیچ توضیح.
+                فیلدها:
+                "type": "expense" یا "income"
+                "amount": عدد به تومان (در محاوره «۸۰ تومن» یعنی ۸۰ هزار تومان، «۲ میلیون» یعنی ۲۰۰۰۰۰۰، «۵۰۰ تومن» یعنی ۵۰۰ هزار)
+                "title": عنوان کوتاه
+                "category": یکی از [$cats] یا null
+                "account": یکی از [$accounts] یا null
+                "person": اگر پول به کسی داده یا از کسی گرفته شده، نام او از [$people] یا نامی که گفته؛ وگرنه null
+                "daysAgo": اگر گفت دیروز ۱، پریروز ۲، وگرنه ۰
+                جمله: «$text»
+            """.trimIndent()
+            val draft = try {
+                val reply = aiRepository.chat(prompt).getOrNull().orEmpty()
+                val json = Regex("\\{[\\s\\S]*\\}").find(reply)?.value?.let { JSONObject(it) }
+                json?.let { o ->
+                    fun str(k: String) = o.optString(k).takeIf { it.isNotBlank() && it != "null" }
+                    val daysAgo = o.optInt("daysAgo", 0).coerceIn(0, 30)
+                    EntryDraft(
+                        isExpense = o.optString("type") != "income",
+                        amount = o.optLong("amount", 0L),
+                        title = str("title"),
+                        category = str("category"),
+                        account = str("account"),
+                        personName = str("person"),
+                        date = if (daysAgo > 0) System.currentTimeMillis() - daysAgo * 86_400_000L else null
+                    )
+                }
+            } catch (e: Exception) { null }
+            onResult(draft?.takeIf { it.amount > 0 } ?: localSpokenDraft(text))
+        }
+    }
+
+    /** خواندن ساده بدون دستیار: عدد + «هزار/میلیون/تومن» و چند کلمهٔ درآمدی */
+    private fun localSpokenDraft(text: String): EntryDraft {
+        val latin = SmsIngest.latinDigits(text).replace("٬", "").replace(",", "")
+        val m = Regex("(\\d+(?:\\.\\d+)?)\\s*(میلیون|میلیارد|هزار|تومن|تومان)?").find(latin)
+        var amount = 0L
+        if (m != null) {
+            val n = m.groupValues[1].toDoubleOrNull() ?: 0.0
+            amount = when (m.groupValues[2]) {
+                "میلیارد" -> (n * 1_000_000_000).toLong()
+                "میلیون" -> (n * 1_000_000).toLong()
+                "هزار" -> (n * 1_000).toLong()
+                // «۸۰ تومن» در محاوره یعنی ۸۰ هزار تومان
+                "تومن", "تومان" -> if (n < 10_000) (n * 1_000).toLong() else n.toLong()
+                else -> n.toLong()
+            }
+        }
+        val income = listOf("حقوق", "واریز", "گرفتم", "درآمد", "دریافت").any { text.contains(it) }
+        val title = text.replace(Regex("[0-9۰-۹٬,.]+"), "").replace(Regex("(میلیون|هزار|تومن|تومان)"), "").trim().take(40)
+        return EntryDraft(isExpense = !income, amount = amount, title = title.ifBlank { null })
+    }
+
+    /**
+     * مبلغ و تاریخ را از عکس رسید (کارت‌خوان، فروشگاه) می‌خواند. تشخیص متن روی خود گوشی است؛
+     * رسیدها معمولاً ریالی‌اند، پس اگر «تومان/Toman» نوشته نشده باشد، تقسیم بر ۱۰ می‌شود.
+     */
+    fun readReceipt(uri: android.net.Uri, onResult: (EntryDraft?, String?) -> Unit) {
+        val ctx = getApplication<Application>()
+        val image = try {
+            com.google.mlkit.vision.common.InputImage.fromFilePath(ctx, uri)
+        } catch (e: Exception) {
+            onResult(null, "عکس باز نشد."); return
+        }
+        val recognizer = com.google.mlkit.vision.text.TextRecognition.getClient(
+            com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS
+        )
+        recognizer.process(image)
+            .addOnSuccessListener { result ->
+                val draft = parseReceiptText(result.text)
+                onResult(draft, if (draft == null) "مبلغی روی رسید پیدا نشد؛ دستی وارد کنید." else null)
+                recognizer.close()
+            }
+            .addOnFailureListener {
+                onResult(null, "خواندن رسید انجام نشد.")
+                recognizer.close()
+            }
+    }
+
+    private fun parseReceiptText(raw: String): EntryDraft? {
+        val text = SmsIngest.latinDigits(raw)
+        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        val numberRe = Regex("\\d{1,3}(?:[,٬]\\d{3})+|\\d{4,12}")
+        fun numbersIn(line: String) = numberRe.findAll(line).map { it.value.replace(",", "").replace("٬", "") }
+            // شمارهٔ کارت، تاریخ و ساعت مبلغ نیستند
+            .filter { it.length in 4..12 }
+            .mapNotNull { it.toLongOrNull() }
+            .toList()
+        val keys = listOf("amount", "مبلغ", "total", "جمع", "rial", "ریال", "irr", "price")
+        val keyed = lines.filter { l -> keys.any { l.lowercase().contains(it) } && !Regex("\\d{2}:\\d{2}").containsMatchIn(l) }
+            .flatMap { numbersIn(it) }
+        val all = lines.filter { !Regex("\\d{4}[/\\-.]\\d{1,2}[/\\-.]\\d{1,2}").containsMatchIn(it) && !Regex("\\d{2}:\\d{2}").containsMatchIn(it) }
+            .flatMap { numbersIn(it) }
+        val rawAmount = keyed.maxOrNull() ?: all.maxOrNull() ?: return null
+        val toman = text.contains("تومان") || text.lowercase().contains("toman")
+        val amount = if (toman) rawAmount else rawAmount / 10
+        val date = Regex("(1[34]\\d{2})[/\\-.](\\d{1,2})[/\\-.](\\d{1,2})").find(text)?.let { m ->
+            val (y, mo, d) = m.destructured
+            runCatching {
+                val mm = mo.toInt(); val dd = d.toInt()
+                if (mm in 1..12 && dd in 1..31) com.example.utils.JalaliDate.toTimestamp(y.toInt(), mm, dd) + 12 * 3_600_000L else null
+            }.getOrNull()
+        }
+        return EntryDraft(isExpense = true, amount = amount, title = "خرید با کارت", date = date)
+    }
+
     // ─── پشتیبان و خروجی ───
 
     /** فایل پشتیبان رمزدار؛ [onDone] با بایت‌های فایل یا پیام خطا صدا زده می‌شود */
@@ -1201,13 +1330,14 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     }
 
     // Transaction management
-    fun addTransaction(title: String, amount: Long, category: String, isExpense: Boolean, bankName: String) {
+    fun addTransaction(title: String, amount: Long, category: String, isExpense: Boolean, bankName: String, date: Long? = null) {
         viewModelScope.launch {
             repository.insertTransaction(
                 Transaction(
                     title = title,
                     amount = amount,
                     category = category,
+                    date = date ?: System.currentTimeMillis(),
                     isExpense = isExpense,
                     bankName = bankName,
                     type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME

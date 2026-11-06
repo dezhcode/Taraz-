@@ -423,10 +423,20 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         items = recurringItems,
                                         cards = cards,
                                         categories = categories,
+                                        transactions = transactions,
                                         onBack = { closeSub() },
                                         onAdd = { t, a, c, e, b, d -> viewModel.addRecurring(t, a, c, e, b, d) },
                                         onToggle = { r, on -> viewModel.setRecurringEnabled(r, on) },
                                         onDelete = { viewModel.deleteRecurring(it.id) }
+                                    )
+                                }
+
+                                "year" -> {
+                                    com.example.ui.layer.LayerYearScreen(
+                                        transactions = transactions,
+                                        payments = loanPayments,
+                                        debts = debts,
+                                        onBack = { closeSub() }
                                     )
                                 }
 
@@ -651,6 +661,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             transactions = transactions,
                                                             goal = activeGoal,
                                                             onOpenGoals = { openSub("goals") },
+                                                            onOpenYear = { openSub("year") },
                                                             onAskAssistant = { prompt ->
                                                                 viewModel.prepareChatForOpening(prompt)
                                                                 isAiSheetOpen = true
@@ -733,8 +744,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     transactions = transactions,
                                     startAsExpense = initialIsExpenseForDialog,
                                     onDismiss = { isAddTransactionOpen = false },
-                                    onSave = { title, amount, category, isExpense, bankName ->
-                                        viewModel.addTransaction(title, amount, category, isExpense, bankName)
+                                    onSave = { title, amount, category, isExpense, bankName, date ->
+                                        viewModel.addTransaction(title, amount, category, isExpense, bankName, date)
                                     },
                                     onTransfer = { from, to, amount ->
                                         viewModel.transferBetweenCards(from, to, amount)
@@ -743,7 +754,12 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     personBalances = personBalances,
                                     onPersonMoney = { pid, amount, outgoing, account, note ->
                                         viewModel.recordPersonMoney(pid, amount, outgoing, account, note)
-                                    }
+                                    },
+                                    isListening = isDictating,
+                                    onVoice = { onDraft ->
+                                        viewModel.toggleVoiceDictation { spoken -> viewModel.parseSpokenEntry(spoken, onDraft) }
+                                    },
+                                    onReadReceipt = { uri, cb -> viewModel.readReceipt(uri, cb) }
                                 )
                             }
 

@@ -70,7 +70,8 @@ fun LayerReportsScreen(
     goal: FinancialGoal?,
     onOpenGoals: () -> Unit,
     onAskAssistant: (prompt: String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenYear: () -> Unit = {}
 ) {
     var offset by remember { mutableIntStateOf(0) } // ۰ = ماه جاری، منفی = ماه‌های قبل
     val now = System.currentTimeMillis()
@@ -194,6 +195,16 @@ fun LayerReportsScreen(
                     }
                 }
             }
+        }
+
+        // سال من
+        Row(
+            Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(48.dp).clip(RoundedCornerShape(14.dp))
+                .background(L.Surface).clickable(onClick = onOpenYear).padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("سال من · مرور ${fa(JalaliDate.today().year)}", style = lt(14.sp, FontWeight.Bold), modifier = Modifier.weight(1f))
+            Text("ببینید", style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText))
         }
 
         // دسته‌ها

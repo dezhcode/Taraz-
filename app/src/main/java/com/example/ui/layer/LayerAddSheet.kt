@@ -27,6 +27,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.DropdownMenu
@@ -78,13 +80,19 @@ fun LayerAddSheet(
     transactions: List<Transaction>,
     startAsExpense: Boolean = true,
     onDismiss: () -> Unit,
-    onSave: (title: String, amount: Long, category: String, isExpense: Boolean, bankName: String) -> Unit,
+    onSave: (title: String, amount: Long, category: String, isExpense: Boolean, bankName: String, date: Long?) -> Unit,
     onTransfer: (from: String, to: String, amount: Long) -> Unit,
     persons: List<com.example.data.Person> = emptyList(),
     personBalances: Map<Int, Long> = emptyMap(),
-    onPersonMoney: (personId: Int, amount: Long, outgoing: Boolean, account: String?, note: String) -> Unit = { _, _, _, _, _ -> }
+    onPersonMoney: (personId: Int, amount: Long, outgoing: Boolean, account: String?, note: String) -> Unit = { _, _, _, _, _ -> },
+    isListening: Boolean = false,
+    onVoice: ((com.example.ui.FinanceViewModel.EntryDraft) -> Unit) -> Unit = {},
+    onReadReceipt: (android.net.Uri, (com.example.ui.FinanceViewModel.EntryDraft?, String?) -> Unit) -> Unit = { _, _ -> }
 ) {
     BackHandler(onBack = onDismiss)
+    // تاریخی که از رسید یا جملهٔ «دیروز…» آمده؛ null یعنی همین الان
+    var dateOverride by remember { mutableStateOf<Long?>(null) }
+    var helperMsg by remember { mutableStateOf<String?>(null) }
     // اگر این پول برای یک شخص بود (قرض دادن/گرفتن یا پس دادن)، در حساب همان شخص ثبت می‌شود
     var personId by remember { mutableStateOf<Int?>(null) }
 
@@ -100,6 +108,30 @@ fun LayerAddSheet(
 
     val n = amount.toLongOrNull() ?: 0L
     val typeCats = categories.filter { it.isIncome == (type == EntryType.INCOME) }.sortedBy { it.sortOrder }
+
+    fun applyDraft(d: com.example.ui.FinanceViewModel.EntryDraft) {
+        if (d.amount > 0) amount = d.amount.toString()
+        type = if (d.isExpense) EntryType.EXPENSE else EntryType.INCOME
+        val cats = categories.filter { it.isIncome == !d.isExpense }
+        category = d.category?.let { c -> cats.firstOrNull { it.name == c }?.name }
+        d.title?.let { note = it.take(60) }
+        d.account?.let { a -> cards.firstOrNull { it.bankName == a || it.bankName.contains(a) || a.contains(it.bankName) }?.let { account = it.bankName } }
+        d.personName?.let { p -> persons.firstOrNull { it.name == p || it.name.contains(p) || p.contains(it.name) }?.let { personId = it.id } }
+        dateOverride = d.date
+        helperMsg = if (d.amount > 0) "پر شد؛ پیش از ثبت بررسی کنید." else "مبلغ را نفهمیدم؛ دستی وارد کنید."
+    }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val micLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted -> if (granted) onVoice { applyDraft(it) } else helperMsg = "برای ثبت صوتی، دسترسی میکروفون لازم است." }
+    val photoLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            helperMsg = "در حال خواندن رسید…"
+            onReadReceipt(uri) { d, err -> if (d != null) applyDraft(d) else helperMsg = err }
+        }
+    }
     val suggestion = remember(transactions) { findSuggestion(transactions) }
 
     Box(Modifier.fillMaxSize().background(Color(0x990E1116)).pointerInput(Unit) { detectTapGestures { onDismiss() } }) {
@@ -179,6 +211,37 @@ fun LayerAddSheet(
                 }
 
                 if (type != EntryType.TRANSFER) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
+                        Row(
+                            Modifier.height(38.dp).clip(PillShape).background(if (isListening) L.Primary else L.Chip)
+                                .clickable {
+                                    val ok = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
+                                        android.content.pm.PackageManager.PERMISSION_GRANTED
+                                    if (ok) { helperMsg = if (isListening) null else "بگویید، مثلاً «۸۰ تومن ناهار»"; onVoice { applyDraft(it) } }
+                                    else micLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                                }
+                                .padding(horizontal = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(Icons.Default.Mic, null, tint = if (isListening) Color.White else L.Ink, modifier = Modifier.size(18.dp))
+                            Text(if (isListening) "گوش می‌دهم…" else "بگویید", style = lt(13.sp, FontWeight.SemiBold, if (isListening) Color.White else L.Ink))
+                        }
+                        if (type == EntryType.EXPENSE) {
+                            Row(
+                                Modifier.height(38.dp).clip(PillShape).background(L.Chip).clickable { photoLauncher.launch("image/*") }.padding(horizontal = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(Icons.Default.ReceiptLong, null, tint = L.Ink, modifier = Modifier.size(18.dp))
+                                Text("عکس رسید", style = lt(13.sp, FontWeight.SemiBold))
+                            }
+                        }
+                    }
+                    helperMsg?.let {
+                        Text(it, style = lt(12.sp, color = L.PrimaryText), textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                    }
+                }
+
+                if (type != EntryType.TRANSFER) {
                     val shown = if (showAllCats) typeCats else typeCats.take(4)
                     val rows = (shown.map { it as Category? } + if (!showAllCats && typeCats.size > 4) listOf(null) else emptyList()).chunked(5)
                     Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -223,7 +286,13 @@ fun LayerAddSheet(
                         Box(
                             Modifier.height(44.dp).clip(RoundedCornerShape(14.dp)).background(L.Chip).padding(horizontal = 14.dp),
                             contentAlignment = Alignment.Center
-                        ) { Text("امروز، ${timeOfDay(System.currentTimeMillis())}", style = lt(13.sp, FontWeight.Medium)) }
+                        ) {
+                            Text(
+                                dateOverride?.let { com.example.utils.JalaliDate.fromTimestamp(it).formatShort() } ?: "امروز، ${timeOfDay(System.currentTimeMillis())}",
+                                style = lt(13.sp, FontWeight.Medium, if (dateOverride != null) L.Primary else L.Ink),
+                                modifier = Modifier.clickable(enabled = dateOverride != null) { dateOverride = null }
+                            )
+                        }
                     }
                     if (editingNote || note.isNotBlank()) {
                         Box(
@@ -314,7 +383,7 @@ fun LayerAddSheet(
                             onPersonMoney(pid, n, type == EntryType.EXPENSE, account, note)
                         } else {
                             val cat = category ?: typeCats.firstOrNull()?.name ?: if (type == EntryType.INCOME) "درآمد" else "سایر"
-                            onSave(note.ifBlank { cat }, n, cat, type == EntryType.EXPENSE, account ?: "کیف پول")
+                            onSave(note.ifBlank { cat }, n, cat, type == EntryType.EXPENSE, account ?: "کیف پول", dateOverride)
                         }
                         onDismiss()
                     },
