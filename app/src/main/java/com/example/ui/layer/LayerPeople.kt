@@ -74,12 +74,19 @@ fun LayerObligationsScreen(
     onAddPerson: () -> Unit,
     onAddEntry: () -> Unit,
     modifier: Modifier = Modifier,
-    onSplit: () -> Unit = {}
+    onSplit: () -> Unit = {},
+    cheques: List<com.example.data.Cheque> = emptyList(),
+    onAddCheque: () -> Unit = {},
+    onOpenCheque: (com.example.data.Cheque) -> Unit = {},
+    creditUsed: Long = 0
 ) {
     var segment by rememberSaveable { mutableIntStateOf(0) }
     val loanLeft = loans.filter { !it.isSettled }.sumOf { (it.totalAmount - it.paidAmount).coerceAtLeast(0) }
     val iOwePeople = balances.values.filter { it < 0 }.sumOf { -it }
-    val owedToMe = balances.values.filter { it > 0 }.sum()
+    val pendingCheques = cheques.filter { it.status == com.example.data.ChequeStatus.PENDING }
+    val chequesOut = pendingCheques.filter { it.issued }.sumOf { it.amount }
+    val chequesIn = pendingCheques.filter { !it.issued }.sumOf { it.amount }
+    val owedToMe = balances.values.filter { it > 0 }.sum() + chequesIn
 
     Column(
         modifier.fillMaxSize().background(L.Bg)
@@ -87,20 +94,20 @@ fun LayerObligationsScreen(
     ) {
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text("قرض و قسط", style = lt(26.sp, FontWeight.Bold))
-            Text("وام‌های بانکی و حساب‌وکتاب با آدم‌ها، یک جا", style = lt(13.sp, color = L.Muted))
+            Text("وام‌ها، خریدهای قسطی، آدم‌ها و چک‌ها، یک جا", style = lt(13.sp, color = L.Muted))
         }
 
         Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f).cardSurface(18.dp).padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("باید بپردازم", style = lt(12.sp, color = L.Muted))
-                Text(millions(loanLeft + iOwePeople), style = lt(20.sp, FontWeight.Bold, L.RedText))
+                Text(millions(loanLeft + iOwePeople + chequesOut + creditUsed), style = lt(20.sp, FontWeight.Bold, L.RedText))
                 Text(
-                    buildString {
-                        if (loanLeft > 0) append("وام ${millions(loanLeft)}")
-                        if (loanLeft > 0 && iOwePeople > 0) append(" · ")
-                        if (iOwePeople > 0) append("اشخاص ${millions(iOwePeople)}")
-                        if (isEmpty()) append("بدهی‌ای ندارید")
-                    },
+                    listOfNotNull(
+                        if (loanLeft > 0) "وام ${millions(loanLeft)}" else null,
+                        if (iOwePeople > 0) "اشخاص ${millions(iOwePeople)}" else null,
+                        if (chequesOut > 0) "چک ${millions(chequesOut)}" else null,
+                        if (creditUsed > 0) "اعتباری ${millions(creditUsed)}" else null
+                    ).joinToString(" · ").ifEmpty { "بدهی‌ای ندارید" },
                     style = lt(11.sp, color = L.Muted), maxLines = 1
                 )
             }
@@ -108,19 +115,22 @@ fun LayerObligationsScreen(
                 Text("طلب دارم", style = lt(12.sp, color = L.Muted))
                 Text(millions(owedToMe), style = lt(20.sp, FontWeight.Bold, L.Green))
                 Text(
-                    "از ${fa(balances.values.count { it > 0 })} نفر",
+                    "از ${fa(balances.values.count { it > 0 })} نفر" + if (chequesIn > 0) " · چک ${millions(chequesIn)}" else "",
                     style = lt(11.sp, color = L.Muted), maxLines = 1
                 )
             }
         }
 
         LSegmented(
-            listOf("وام‌های بانکی", "اشخاص"), segment, { segment = it },
+            listOf("اقساط", "اشخاص", "چک‌ها"), segment, { segment = it },
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp)
         )
 
-        if (segment == 0) LoansSection(loans, onAddLoan, onPay, onOpenLoan)
-        else PeopleSection(persons, balances, onOpenPerson, onAddPerson, onAddEntry, onSplit)
+        when (segment) {
+            0 -> LoansSection(loans, onAddLoan, onPay, onOpenLoan)
+            1 -> PeopleSection(persons, balances, onOpenPerson, onAddPerson, onAddEntry, onSplit)
+            else -> ChequesSection(cheques, onAddCheque, onOpenCheque)
+        }
     }
 }
 

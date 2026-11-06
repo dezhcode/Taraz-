@@ -220,8 +220,9 @@ private fun StatTile(label: String, value: String, modifier: Modifier, valueColo
 fun LayerAddLoanScreen(
     cards: List<BankCard>,
     onBack: () -> Unit,
-    onConfirm: (bankName: String, loanName: String, total: Long, paid: Long, installment: Long, dueDay: Int, reminder: Boolean) -> Unit
+    onConfirm: (bankName: String, loanName: String, total: Long, paid: Long, installment: Long, dueDay: Int, reminder: Boolean, kind: String) -> Unit
 ) {
+    var purchase by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     var bank by remember { mutableStateOf(cards.firstOrNull { !it.accountType.equals("CASH") }?.bankName.orEmpty()) }
     var totalText by remember { mutableStateOf("") }
@@ -237,21 +238,23 @@ fun LayerAddLoanScreen(
     val remainCount = if (inst > 0 && total > paid) ((total - paid + inst - 1) / inst).toInt() else 0
 
     LayerScreen(
-        title = "وام جدید",
-        subtitle = "مشخصات قرارداد وام را وارد کنید",
+        title = if (purchase) "خرید قسطی" else "وام جدید",
+        subtitle = if (purchase) "گوشی، لوازم خانه یا هر خریدی که قسطی می‌پردازید" else "مشخصات قرارداد وام را وارد کنید",
         onBack = onBack,
         bottomBar = {
-            BigButton("ثبت وام", enabled = valid) {
-                onConfirm(bank.trim(), name.trim(), total, paid, inst, day, reminder)
+            BigButton(if (purchase) "ثبت خرید قسطی" else "ثبت وام", enabled = valid) {
+                onConfirm(bank.trim(), name.trim(), total, paid, inst, day, reminder,
+                    if (purchase) com.example.data.LoanKind.PURCHASE else com.example.data.LoanKind.LOAN)
             }
         }
     ) {
         Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            LSegmented(listOf("وام بانکی", "خرید قسطی"), if (purchase) 1 else 0, { purchase = it == 1 })
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                LField(name, { name = it }, "نام وام", Modifier.weight(1f), placeholder = "مثلاً وام خودرو")
-                LField(bank, { bank = it }, "بانک", Modifier.weight(1f), placeholder = "مثلاً ملت")
+                LField(name, { name = it }, if (purchase) "چه خریدی؟" else "نام وام", Modifier.weight(1f), placeholder = if (purchase) "مثلاً یخچال" else "مثلاً وام خودرو")
+                LField(bank, { bank = it }, if (purchase) "فروشنده" else "بانک", Modifier.weight(1f), placeholder = if (purchase) "مثلاً دیجی‌کالا" else "مثلاً ملت")
             }
-            if (cards.isNotEmpty()) {
+            if (cards.isNotEmpty() && !purchase) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     cards.filter { it.accountType != "CASH" }.take(4).forEach { c ->
                         LChip(c.bankName, bank == c.bankName) { bank = c.bankName }
@@ -259,7 +262,7 @@ fun LayerAddLoanScreen(
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                LField(totalText, { totalText = groupedInput(it) }, "مبلغ کل وام", Modifier.weight(1f), placeholder = "۰",
+                LField(totalText, { totalText = groupedInput(it) }, if (purchase) "مبلغ کل اقساط" else "مبلغ کل وام", Modifier.weight(1f), placeholder = "۰",
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                 LField(instText, { instText = groupedInput(it) }, "مبلغ هر قسط", Modifier.weight(1f), placeholder = "۰",
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))

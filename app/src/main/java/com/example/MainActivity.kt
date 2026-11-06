@@ -144,6 +144,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 val prices by viewModel.prices.collectAsStateWithLifecycle()
                 val pricesRefreshing by viewModel.pricesRefreshing.collectAsStateWithLifecycle()
                 val priceErrors by viewModel.priceErrors.collectAsStateWithLifecycle()
+                val cheques by viewModel.cheques.collectAsStateWithLifecycle()
+                val bills by viewModel.bills.collectAsStateWithLifecycle()
+                val netWorthSnapshots by viewModel.netWorthSnapshots.collectAsStateWithLifecycle()
                 val assetsTotal = assets.sumOf { a ->
                     val u = if (a.manualPrice > 0) a.manualPrice else prices[a.code]?.price ?: 0L
                     kotlin.math.round(u * a.quantity).toLong()
@@ -184,6 +187,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 var entrySheetPersonId by remember { mutableStateOf<Int?>(null) }
                 var isEntrySheetOpen by remember { mutableStateOf(false) }
                 var isSplitOpen by remember { mutableStateOf(false) }
+                var chequeSheetOpen by remember { mutableStateOf(false) }
+                var chequeEditing by remember { mutableStateOf<com.example.data.Cheque?>(null) }
                 fun openSub(name: String) { subStack.add(name) }
                 fun closeSub() { if (subStack.isNotEmpty()) subStack.removeAt(subStack.lastIndex) }
 
@@ -370,8 +375,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     com.example.ui.layer.LayerAddLoanScreen(
                                         cards = cards,
                                         onBack = { closeSub() },
-                                        onConfirm = { bank, name, total, paid, inst, day, reminder ->
-                                            viewModel.addLoan(bank, name, total, paid, inst, day, reminder)
+                                        onConfirm = { bank, name, total, paid, inst, day, reminder, kind ->
+                                            viewModel.addLoan(bank, name, total, paid, inst, day, reminder, kind)
                                             closeSub()
                                         }
                                     )
@@ -464,6 +469,17 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     )
                                 }
 
+                                "bills" -> {
+                                    com.example.ui.layer.LayerBillsScreen(
+                                        bills = bills,
+                                        cards = cards,
+                                        onBack = { closeSub() },
+                                        onSave = { viewModel.saveBill(it) },
+                                        onDelete = { viewModel.deleteBill(it.id) },
+                                        onPay = { b, amount, account -> viewModel.payBill(b, amount, account) }
+                                    )
+                                }
+
                                 "year" -> {
                                     com.example.ui.layer.LayerYearScreen(
                                         transactions = transactions,
@@ -486,7 +502,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         onBack = { closeSub() },
                                         onRefresh = { force -> viewModel.refreshPrices(force) },
                                         onAdd = { assetSheetFor = null; isAssetSheetOpen = true },
-                                        onOpen = { assetSheetFor = it; isAssetSheetOpen = true }
+                                        onOpen = { assetSheetFor = it; isAssetSheetOpen = true },
+                                        snapshots = netWorthSnapshots
                                     )
                                 }
 
@@ -689,6 +706,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             onTransactionClick = { tx -> selectedTransactionForEdit = tx },
                                                             recurringCount = recurringItems.count { it.enabled },
                                                             onOpenRecurring = { openSub("recurring") },
+                                                            billsDue = com.example.ui.layer.billsDueSoon(bills),
+                                                            onOpenBills = { openSub("bills") },
                                                             onExport = { list ->
                                                                 viewModel.exportCsvOf(list) { bytes, _ ->
                                                                     if (bytes != null) {
@@ -712,7 +731,11 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             onOpenPerson = { selectedPersonId = it.id; openSub("person_detail") },
                                                             onAddPerson = { personSheetFor = null; isPersonSheetOpen = true },
                                                             onAddEntry = { entrySheetPersonId = null; isEntrySheetOpen = true },
-                                                            onSplit = { isSplitOpen = true }
+                                                            onSplit = { isSplitOpen = true },
+                                                            cheques = cheques,
+                                                            onAddCheque = { chequeEditing = null; chequeSheetOpen = true },
+                                                            onOpenCheque = { chequeEditing = it; chequeSheetOpen = true },
+                                                            creditUsed = cards.filter { it.accountType == com.example.data.AccountType.CREDIT && it.balance < 0 }.sumOf { -it.balance }
                                                         )
                                                     }
 
@@ -876,12 +899,14 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 com.example.ui.layer.LayerAddAccountSheet(
                                     existingNames = cards.map { it.bankName },
                                     onDismiss = { isAddCardOpen = false },
-                                    onConfirm = { name, cardNumber, balance, accountType ->
+                                    onConfirm = { name, cardNumber, balance, accountType, limit, dueDay ->
                                         viewModel.addCard(
                                             bankName = name,
                                             cardNumber = cardNumber,
                                             balance = balance,
-                                            accountType = accountType
+                                            accountType = accountType,
+                                            creditLimit = limit,
+                                            dueDay = dueDay
                                         )
                                         isAddCardOpen = false
                                     }
@@ -919,6 +944,19 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     onSearchFunds = { q, cb -> viewModel.searchFunds(q, cb) },
                                     onSave = { viewModel.saveAsset(it) },
                                     onDelete = { viewModel.deleteAsset(it.id) }
+                                )
+                            }
+
+                            if (chequeSheetOpen) {
+                                com.example.ui.layer.ChequeSheet(
+                                    cheque = chequeEditing,
+                                    cards = cards,
+                                    categories = categories,
+                                    personNames = persons.map { it.name },
+                                    onDismiss = { chequeSheetOpen = false; chequeEditing = null },
+                                    onSave = { viewModel.saveCheque(it) },
+                                    onStatus = { c, st, acc -> viewModel.setChequeStatus(c, st, acc) },
+                                    onDelete = { viewModel.deleteCheque(it) }
                                 )
                             }
 

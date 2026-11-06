@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -101,7 +102,8 @@ fun LayerAssetsScreen(
     onBack: () -> Unit,
     onRefresh: (force: Boolean) -> Unit,
     onAdd: () -> Unit,
-    onOpen: (Asset) -> Unit
+    onOpen: (Asset) -> Unit,
+    snapshots: List<com.example.data.NetWorthSnapshot> = emptyList()
 ) {
     LaunchedEffect(Unit) { onRefresh(false) }
     fun unit(a: Asset) = if (a.manualPrice > 0) a.manualPrice else prices[a.code]?.price ?: 0L
@@ -157,6 +159,8 @@ fun LayerAssetsScreen(
                 }
             }
         }
+
+        InflationCard(snapshots, hideAmounts)
 
         if (errors.isNotEmpty()) {
             Callout(
@@ -352,5 +356,81 @@ fun AssetSheet(
             hint = "اگر خالی بماند قیمت روز استفاده می‌شود."
         )
         Spacer(Modifier.height(4.dp))
+    }
+}
+
+private fun pct(from: Double, to: Double): String {
+    if (from <= 0.0) return "—"
+    val p = (to - from) / from * 100
+    val r = kotlin.math.round(p * 10) / 10
+    return (if (r > 0) "+" else if (r < 0) "−" else "") + fa(String.format(java.util.Locale.ENGLISH, "%.1f", kotlin.math.abs(r)).replace('.', '٫')) + "٪"
+}
+
+/**
+ * پس‌انداز در برابر تورم: دارایی خالص هر ماه به تومان، به دلار و به گرم طلا.
+ * اگر به تومان بالا رفته ولی به دلار پایین آمده، یعنی ارزش واقعی کم شده.
+ */
+@Composable
+private fun InflationCard(snapshots: List<com.example.data.NetWorthSnapshot>, hide: Boolean) {
+    val list = snapshots.filter { it.usdToman > 0 && it.gold18Toman > 0 }.sortedBy { it.monthKey }.takeLast(6)
+    LayerCard(padding = 16.dp) {
+        Text("پس‌انداز در برابر تورم", style = lt(14.sp, FontWeight.Bold))
+        if (list.size < 2) {
+            Text(
+                "تراز هر ماه با قیمت روز دلار و طلا یک عکس از دارایی خالص شما می‌گیرد. از ماه دوم اینجا می‌بینید دارایی‌تان به دلار و طلا بیشتر شده یا فقط عددش به تومان بالا رفته." +
+                    if (list.size == 1) "\nعکس ${JalaliDate.MONTH_NAMES[list[0].monthKey % 100 - 1]} گرفته شد." else "",
+                style = lt(12.sp, color = L.Muted, lineHeight = 21.sp), modifier = Modifier.padding(top = 6.dp)
+            )
+            return@LayerCard
+        }
+        val a = list.first()
+        val b = list.last()
+        val fromLabel = JalaliDate.MONTH_NAMES[a.monthKey % 100 - 1]
+        Text("از $fromLabel تا امروز", style = lt(12.sp, color = L.Muted), modifier = Modifier.padding(top = 2.dp, bottom = 8.dp))
+        val usdA = a.netWorth.toDouble() / a.usdToman
+        val usdB = b.netWorth.toDouble() / b.usdToman
+        val goldA = a.netWorth.toDouble() / a.gold18Toman
+        val goldB = b.netWorth.toDouble() / b.gold18Toman
+        listOf(
+            Triple("به تومان", pct(a.netWorth.toDouble(), b.netWorth.toDouble()), if (hide) "••••" else millions(b.netWorth)),
+            Triple("به دلار", pct(usdA, usdB), if (hide) "••••" else "${money(usdB.toLong())} دلار"),
+            Triple("به طلای ۱۸", pct(goldA, goldB), if (hide) "••••" else "${money(goldB.toLong())} گرم")
+        ).forEach { (label, change, now) ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(label, style = lt(13.sp), modifier = Modifier.weight(1f))
+                Text(now, style = lt(12.sp, color = L.Muted))
+                Text(
+                    change, style = lt(13.sp, FontWeight.Bold, if (change.startsWith("−")) L.RedText else L.Green),
+                    modifier = Modifier.padding(start = 10.dp).width(64.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End
+                )
+            }
+        }
+        // دارایی خالص به دلار در هر ماه
+        val maxUsd = list.maxOf { it.netWorth.toDouble() / it.usdToman }.coerceAtLeast(1.0)
+        Row(
+            Modifier.fillMaxWidth().height(70.dp).padding(top = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom
+        ) {
+            list.forEach { snap ->
+                val v = (snap.netWorth.toDouble() / snap.usdToman).coerceAtLeast(0.0)
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        Modifier.fillMaxWidth().height((44 * v / maxUsd).coerceAtLeast(2.0).dp)
+                            .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                            .background(if (snap == b) L.Primary else L.PrimarySoft)
+                    )
+                    Text(JalaliDate.MONTH_NAMES[snap.monthKey % 100 - 1].take(3), style = lt(10.sp, color = L.Muted), maxLines = 1)
+                }
+            }
+        }
+        val usdChange = if (usdA > 0) (usdB - usdA) / usdA else 0.0
+        Text(
+            when {
+                b.netWorth > a.netWorth && usdChange < 0 -> "عدد تومانی بالا رفته ولی به دلار کمتر شده؛ یعنی تورم از پس‌انداز جلو زده."
+                usdChange > 0 -> "ارزش واقعی دارایی‌تان بیشتر شده. خوب پیش می‌روید."
+                else -> "ارزش دارایی‌تان به دلار و طلا کم شده است."
+            },
+            style = lt(12.sp, color = L.Muted, lineHeight = 20.sp), modifier = Modifier.padding(top = 8.dp)
+        )
     }
 }

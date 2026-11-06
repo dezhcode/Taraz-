@@ -94,6 +94,9 @@ class LoanReminderWorker(
             }
 
             remindPersonDues(database, prefs)
+            runCatching { remindCheques(database, prefs) }
+            runCatching { remindBills(database, prefs) }
+            runCatching { remindCreditCards(database, prefs) }
 
             Result.success()
         } catch (e: Exception) {
@@ -126,6 +129,62 @@ class LoanReminderWorker(
                 notificationId = 9000 + d.id
             )
             prefs.edit().putBoolean(key, true).apply()
+        }
+    }
+
+    private fun notifyOnce(prefs: android.content.SharedPreferences, key: String, title: String, message: String, id: Int) {
+        if (prefs.getBoolean(key, false)) return
+        NotificationHelper.showNotification(context = applicationContext, title = title, message = message, notificationId = id)
+        prefs.edit().putBoolean(key, true).apply()
+    }
+
+    private fun whenText(days: Int) = when (days) { 0 -> "امروز"; 1 -> "فردا"; else -> "$days روز دیگر" }
+
+    /** سه روز و یک روز قبل و روز سررسید چک‌های در انتظار */
+    private suspend fun remindCheques(database: AppDatabase, prefs: android.content.SharedPreferences) {
+        for (c in database.chequeDao().pending()) {
+            val days = JalaliDate.daysUntil(c.dueDate)
+            if (days !in REMIND_ON_DAYS) continue
+            val amount = NotificationHelper.formatAmount(c.amount)
+            notifyOnce(
+                prefs, "cheque_${c.id}_${c.dueDate}_$days",
+                if (c.issued) "${whenText(days)} سررسید چک به ${c.person}" else "${whenText(days)} سررسید چک از ${c.person}",
+                if (c.issued) "$amount تومان باید در حساب ${c.bankName} باشد." else "$amount تومان؛ چک را به بانک بدهید.",
+                10_000 + c.id
+            )
+        }
+    }
+
+    /** سه روز قبل و روز موعد هر قبض */
+    private suspend fun remindBills(database: AppDatabase, prefs: android.content.SharedPreferences) {
+        for (b in database.billDao().getAllNow()) {
+            if (!b.enabled) continue
+            val days = JalaliDate.daysUntil(b.dueDate)
+            if (days !in listOf(0, 3)) continue
+            notifyOnce(
+                prefs, "bill_${b.id}_${b.dueDate}_$days",
+                "${whenText(days)} موعد قبض ${b.title.ifBlank { b.kind }}",
+                (if (b.amount > 0) "${NotificationHelper.formatAmount(b.amount)} تومان" else "مبلغ را در قبض ببینید") +
+                    if (b.billId.isNotBlank()) " · شناسه ${b.billId}" else "",
+                11_000 + b.id
+            )
+        }
+    }
+
+    /** سه روز و یک روز قبل از روز بازپرداخت کارت اعتباری، اگر بدهی دارد */
+    private suspend fun remindCreditCards(database: AppDatabase, prefs: android.content.SharedPreferences) {
+        for (c in database.bankCardDao().getAll()) {
+            if (c.accountType != com.example.data.AccountType.CREDIT || c.dueDay <= 0 || c.balance >= 0) continue
+            val due = JalaliDate.nextDueTimestamp(c.dueDay)
+            val days = JalaliDate.daysUntil(due)
+            if (days !in REMIND_ON_DAYS) continue
+            val d = JalaliDate.fromTimestamp(due)
+            notifyOnce(
+                prefs, "credit_${c.id}_${d.monthKey()}_$days",
+                "${whenText(days)} بازپرداخت ${c.bankName}",
+                "${NotificationHelper.formatAmount(-c.balance)} تومان از اعتبار استفاده شده است.",
+                12_000 + c.id
+            )
         }
     }
 

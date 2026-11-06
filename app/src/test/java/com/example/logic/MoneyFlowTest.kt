@@ -149,4 +149,37 @@ class MoneyFlowTest {
         assertTrue(repo.allTransactions.first().none { it.bankName == "ملت" })
         assertEquals(0L, balance("ملت"))
     }
+
+    @Test
+    fun aClearedChequeMovesMoneyAndUndoingItGivesItBack() = runBlocking {
+        repo.saveCheque(com.example.data.Cheque(issued = true, amount = 3_000_000, dueDate = 0, person = "صاحبخانه", bankName = "ملت"))
+        val c = repo.allCheques.first().first()
+        repo.setChequeStatus(c, com.example.data.ChequeStatus.CLEARED)
+        assertEquals(7_000_000L, balance("ملت"))
+        val cleared = repo.allCheques.first().first()
+        assertTrue(cleared.transactionId != null)
+        repo.setChequeStatus(cleared, com.example.data.ChequeStatus.PENDING)
+        assertEquals(10_000_000L, balance("ملت"))
+        assertNull(repo.allCheques.first().first().transactionId)
+        assertTrue(repo.allTransactions.first().isEmpty())
+    }
+
+    @Test
+    fun aReceivedChequeThatClearsAddsMoney() = runBlocking {
+        repo.saveCheque(com.example.data.Cheque(issued = false, amount = 500_000, dueDate = 0, person = "علی", bankName = "نقد"))
+        repo.setChequeStatus(repo.allCheques.first().first(), com.example.data.ChequeStatus.CLEARED)
+        assertEquals(1_500_000L, balance("نقد"))
+    }
+
+    @Test
+    fun payingABillSpendsAndMovesItsDueDateOnePeriod() = runBlocking {
+        val due = com.example.utils.JalaliDate.toTimestamp(1405, 11, 30)
+        repo.saveBill(com.example.data.Bill(kind = "برق", title = "برق", dueDate = due, periodMonths = 2))
+        repo.payBill(repo.allBills.first().first(), 400_000, "ملت")
+        assertEquals(9_600_000L, balance("ملت"))
+        val next = com.example.utils.JalaliDate.fromTimestamp(repo.allBills.first().first().dueDate)
+        assertEquals(1406, next.year)
+        assertEquals(1, next.month)
+        assertEquals("قبوض", repo.allTransactions.first().first().category)
+    }
 }

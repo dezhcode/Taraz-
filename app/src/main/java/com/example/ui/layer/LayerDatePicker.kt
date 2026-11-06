@@ -49,7 +49,14 @@ private fun weekColumn(ts: Long): Int {
  * روزهای آینده انتخاب نمی‌شوند.
  */
 @Composable
-fun JalaliDatePickerSheet(initial: Long, onDismiss: () -> Unit, onPick: (Long) -> Unit) {
+fun JalaliDatePickerSheet(
+    initial: Long,
+    onDismiss: () -> Unit,
+    onPick: (Long) -> Unit,
+    allowFuture: Boolean = false,
+    title: String = "تاریخ و ساعت",
+    showTime: Boolean = true
+) {
     val now = System.currentTimeMillis()
     val today = JalaliDate.today()
     val init = JalaliDate.fromTimestamp(initial)
@@ -66,16 +73,16 @@ fun JalaliDatePickerSheet(initial: Long, onDismiss: () -> Unit, onPick: (Long) -
     val vm = viewKey % 100
     val dim = JalaliDate.daysInMonth(vy, vm)
     val lead = weekColumn(JalaliDate.toTimestamp(vy, vm, 1))
-    val canNext = viewKey < today.monthKey()
+    val canNext = allowFuture || viewKey < today.monthKey()
     val picked = JalaliDate(selY, selM, selD)
 
     LayerSheet(
-        title = "تاریخ و ساعت",
+        title = title,
         onDismiss = onDismiss,
         topGap = 70.dp,
         bottomBar = {
-            BigButton("انتخاب · ${weekdayName(result())} ${picked.formatShort()}، ${fa("%02d:%02d".format(hour, minute))}") {
-                onPick(result().coerceAtMost(now)); onDismiss()
+            BigButton("انتخاب · ${weekdayName(result())} ${picked.formatShort()}" + if (showTime) "، ${fa("%02d:%02d".format(hour, minute))}" else "") {
+                onPick(if (allowFuture) result() else result().coerceAtMost(now)); onDismiss()
             }
         }
     ) {
@@ -84,8 +91,15 @@ fun JalaliDatePickerSheet(initial: Long, onDismiss: () -> Unit, onPick: (Long) -
                 selY = today.year; selM = today.month; selD = today.day; viewKey = today.monthKey()
             }
             val y = JalaliDate.fromTimestamp(now - DAY_MS)
-            LChip("دیروز", picked == y) {
-                selY = y.year; selM = y.month; selD = y.day; viewKey = y.monthKey()
+            if (allowFuture) {
+                val t = JalaliDate.fromTimestamp(now + DAY_MS)
+                LChip("فردا", picked == t) { selY = t.year; selM = t.month; selD = t.day; viewKey = t.monthKey() }
+                val w = JalaliDate.fromTimestamp(now + 7 * DAY_MS)
+                LChip("هفتهٔ بعد", picked == w) { selY = w.year; selM = w.month; selD = w.day; viewKey = w.monthKey() }
+            } else {
+                LChip("دیروز", picked == y) {
+                    selY = y.year; selM = y.month; selD = y.day; viewKey = y.monthKey()
+                }
             }
         }
         Column(
@@ -119,7 +133,7 @@ fun JalaliDatePickerSheet(initial: Long, onDismiss: () -> Unit, onPick: (Long) -
                         val day = r * 7 + c - lead + 1
                         Box(Modifier.weight(1f).height(40.dp), contentAlignment = Alignment.Center) {
                             if (day in 1..dim) {
-                                val future = vy * 10000 + vm * 100 + day > today.year * 10000 + today.month * 100 + today.day
+                                val future = !allowFuture && vy * 10000 + vm * 100 + day > today.year * 10000 + today.month * 100 + today.day
                                 val on = vy == selY && vm == selM && day == selD
                                 val isToday = vy == today.year && vm == today.month && day == today.day
                                 Box(
@@ -141,7 +155,7 @@ fun JalaliDatePickerSheet(initial: Long, onDismiss: () -> Unit, onPick: (Long) -
                 }
             }
         }
-        Row(
+        if (showTime) Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(L.Bg).padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

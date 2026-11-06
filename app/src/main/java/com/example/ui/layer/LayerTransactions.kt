@@ -139,6 +139,24 @@ fun LayerTransactionsScreen(
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.Chevron, modifier = Modifier.size(18.dp))
         }
 
+        // قبوض
+        Row(
+            Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp).fillMaxWidth().cardSurface(16.dp)
+                .clickable(onClick = onOpenBills).padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("🧾", style = lt(17.sp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("قبوض", style = lt(14.sp, FontWeight.SemiBold))
+                Text(
+                    if (billsDue > 0) "${fa(billsDue)} قبض نزدیک موعد" else "برق، آب، گاز، تلفن با یادآوری موعد",
+                    style = lt(12.sp, color = if (billsDue > 0) L.AmberInk else L.Muted)
+                )
+            }
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.Chevron, modifier = Modifier.size(18.dp))
+        }
+
         if (filter.active && !searching) {
             val hits = transactions.filter { filter.matches(it) }.sortedByDescending { it.date }
             val spent = hits.filter { it.countsAsExpense }.sumOf { it.amount }

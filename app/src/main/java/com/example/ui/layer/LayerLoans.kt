@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.BankCard
 import com.example.data.Loan
+import com.example.data.isPurchase
 import com.example.utils.JalaliDate
 
 internal fun remainingInstallments(loan: Loan): Int {
@@ -86,10 +87,10 @@ internal fun ColumnScope.LoansSection(
 
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 18.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("وام‌های بانکی", style = lt(17.sp, FontWeight.Bold))
+                Text("وام‌ها و خریدهای قسطی", style = lt(17.sp, FontWeight.Bold))
                 Text(
-                    if (active.isEmpty()) "وام فعالی ندارید"
-                    else "${fa(active.size)} وام فعال · قسط ${today.monthName} ${money(active.sumOf { it.installmentAmount })} تومان",
+                    if (active.isEmpty()) "قسط فعالی ندارید"
+                    else "${fa(active.size)} مورد فعال · قسط ${today.monthName} ${money(active.sumOf { it.installmentAmount })} تومان",
                     style = lt(12.sp, color = L.Muted)
                 )
             }
@@ -115,7 +116,7 @@ internal fun ColumnScope.LoansSection(
                 Row(verticalAlignment = Alignment.Top) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text("قسط بعدی · ${daysLabel(days)}", style = lt(12.sp, FontWeight.Bold, L.AmberText))
-                        Text("${loan.loanName} · ${loan.bankName}", style = lt(15.sp, FontWeight.SemiBold))
+                        Text((if (loan.isPurchase) "خرید قسطی · " else "") + "${loan.loanName} · ${loan.bankName}", style = lt(15.sp, FontWeight.SemiBold))
                         Text("سررسید ${weekdayName(due)} ${JalaliDate.fromTimestamp(due).formatShort()}", style = lt(12.sp, color = L.Muted))
                     }
                     Row(verticalAlignment = Alignment.Bottom) {

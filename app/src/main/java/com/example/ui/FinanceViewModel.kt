@@ -553,12 +553,76 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 val (quotes, failed) = PriceService.refresh(getApplication(), codes)
                 _prices.value = quotes
                 _priceErrors.value = failed
+                recordSnapshot()
             } catch (e: Exception) {
                 _priceErrors.value = listOf("خطا: ${e.message ?: e.javaClass.simpleName}")
             } finally {
                 _pricesRefreshing.value = false
             }
         }
+    }
+
+    // ─── دارایی خالص در برابر تورم: یک عکس در هر ماه ───
+
+    val netWorthSnapshots: StateFlow<List<NetWorthSnapshot>> = repository.allSnapshots
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** همان دارایی خالص صفحهٔ دارایی‌ها: حساب‌ها + دارایی‌ها − قرض و قسط و بدهی به اشخاص */
+    fun currentNetWorth(): Long {
+        val accounts = cards.value.sumOf { it.balance }
+        val held = assets.value.sumOf { (unitPrice(it) * it.quantity).toLong() }
+        val owed = loans.value.filter { !it.isSettled }.sumOf { (it.totalAmount - it.paidAmount).coerceAtLeast(0) } +
+            personBalances.value.values.filter { it < 0 }.sumOf { -it }
+        return accounts + held - owed
+    }
+
+    /** با قیمت‌های تازه، عکس این ماه را می‌گیرد یا به‌روز می‌کند */
+    private fun recordSnapshot() {
+        val usd = _prices.value["usd"]?.price ?: return
+        val gold = _prices.value["gold18"]?.price ?: return
+        if (usd <= 0 || gold <= 0) return
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            repository.saveSnapshot(
+                NetWorthSnapshot(com.example.utils.JalaliDate.fromTimestamp(now).monthKey(), currentNetWorth(), usd, gold, now)
+            )
+        }
+    }
+
+    // ─── چک‌ها ───
+
+    val cheques: StateFlow<List<Cheque>> = repository.allCheques
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun saveCheque(c: Cheque) {
+        if (c.amount <= 0 || c.person.isBlank()) return
+        viewModelScope.launch { repository.saveCheque(c.copy(person = c.person.trim(), sayadi = c.sayadi.filter { it.isDigit() })) }
+    }
+
+    fun deleteCheque(c: Cheque) {
+        viewModelScope.launch { repository.deleteCheque(c) }
+    }
+
+    fun setChequeStatus(c: Cheque, status: String, account: String = c.bankName) {
+        viewModelScope.launch { repository.setChequeStatus(c, status, account) }
+    }
+
+    // ─── قبوض ───
+
+    val bills: StateFlow<List<Bill>> = repository.allBills
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun saveBill(b: Bill) {
+        viewModelScope.launch { repository.saveBill(b.copy(title = b.title.trim().ifBlank { b.kind })) }
+    }
+
+    fun deleteBill(id: Int) {
+        viewModelScope.launch { repository.deleteBill(id) }
+    }
+
+    fun payBill(b: Bill, amount: Long, account: String) {
+        if (amount <= 0 || account.isBlank()) return
+        viewModelScope.launch { repository.payBill(b, amount, account) }
     }
 
     fun saveAsset(asset: Asset) {
@@ -1411,7 +1475,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         cardNumber: String,
         balance: Long,
         cardHolderName: String = "کاربر تراز",
-        accountType: String = AccountType.BANK
+        accountType: String = AccountType.BANK,
+        creditLimit: Long = 0,
+        dueDay: Int = 0
     ) {
         val clean = bankName.trim()
         if (clean.isBlank()) return
@@ -1423,7 +1489,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     cardNumber = cardNumber,
                     balance = balance,
                     cardHolderName = cardHolderName,
-                    accountType = accountType
+                    accountType = accountType,
+                    creditLimit = creditLimit,
+                    dueDay = dueDay
                 )
             )
         }
@@ -1480,7 +1548,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         paidAmount: Long,
         installmentAmount: Long,
         dueDay: Int,
-        reminderEnabled: Boolean = true
+        reminderEnabled: Boolean = true,
+        kind: String = LoanKind.LOAN
     ) {
         viewModelScope.launch {
             val day = dueDay.coerceIn(1, 31)
@@ -1493,7 +1562,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     installmentAmount = installmentAmount,
                     dueDate = "روز ${com.example.utils.JalaliDate.toPersianDigits(day)} هر ماه",
                     dueDay = day,
-                    reminderEnabled = reminderEnabled
+                    reminderEnabled = reminderEnabled,
+                    kind = kind
                 )
             )
             // Pick up a reminder that may already be within the warning window.

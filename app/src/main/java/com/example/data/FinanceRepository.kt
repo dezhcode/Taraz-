@@ -26,6 +26,9 @@ class FinanceRepository(private val db: AppDatabase) {
     private val debtDao = db.debtDao()
     private val personDao = db.personDao()
     private val assetDao = db.assetDao()
+    private val chequeDao = db.chequeDao()
+    private val billDao = db.billDao()
+    private val snapshotDao = db.snapshotDao()
 
     val allTransactions: Flow<List<Transaction>> = transactionDao.getAllTransactions()
     val allCards: Flow<List<BankCard>> = bankCardDao.getAllCards()
@@ -38,6 +41,72 @@ class FinanceRepository(private val db: AppDatabase) {
     val allDebts: Flow<List<Debt>> = debtDao.getAll()
     val allPersons: Flow<List<Person>> = personDao.getAll()
     val allAssets: Flow<List<Asset>> = assetDao.getAll()
+    val allCheques: Flow<List<Cheque>> = chequeDao.getAll()
+    val allBills: Flow<List<Bill>> = billDao.getAll()
+    val allSnapshots: Flow<List<NetWorthSnapshot>> = snapshotDao.getAll()
+
+    // ─── Cheques ───
+
+    suspend fun saveCheque(c: Cheque) = chequeDao.insert(c)
+
+    /** Deleting a cleared cheque also takes back the account transaction it made. */
+    suspend fun deleteCheque(c: Cheque) = db.withTransaction {
+        c.transactionId?.let { id -> transactionDao.getById(id)?.let { deleteTransaction(it) } }
+        chequeDao.delete(c.id)
+    }
+
+    /**
+     * Moves a cheque to [status]. Clearing records the money on [account]
+     * (out for one the user wrote, in for one they received); going back
+     * from cleared takes that transaction away again.
+     */
+    suspend fun setChequeStatus(c: Cheque, status: String, account: String = c.bankName, at: Long = System.currentTimeMillis()) =
+        db.withTransaction {
+            c.transactionId?.let { id -> transactionDao.getById(id)?.let { deleteTransaction(it) } }
+            var txId: Int? = null
+            if (status == ChequeStatus.CLEARED) {
+                txId = insertTransaction(
+                    Transaction(
+                        title = if (c.issued) "چک به ${c.person}" else "چک از ${c.person}",
+                        amount = c.amount, category = c.category, date = at,
+                        isExpense = c.issued, bankName = account
+                    )
+                ).toInt()
+            }
+            chequeDao.insert(c.copy(status = status, transactionId = txId, bankName = account))
+        }
+
+    // ─── Bills ───
+
+    suspend fun saveBill(b: Bill) = billDao.insert(b)
+
+    suspend fun deleteBill(id: Int) = billDao.delete(id)
+
+    /** Records the payment as a «قبوض» expense and moves the bill to its next period. */
+    suspend fun payBill(b: Bill, amount: Long, account: String, at: Long = System.currentTimeMillis()) = db.withTransaction {
+        insertTransaction(
+            Transaction(
+                title = "قبض ${b.title.ifBlank { b.kind }}", amount = amount, category = "قبوض",
+                date = at, isExpense = true, bankName = account
+            )
+        )
+        billDao.insert(b.copy(amount = amount, bankName = account, lastPaidAt = at, dueDate = shiftMonths(b.dueDate, b.periodMonths.coerceAtLeast(1))))
+    }
+
+    /** Same Jalali day [n] months later (clamped to the month's length). */
+    private fun shiftMonths(ts: Long, n: Int): Long {
+        val d = com.example.utils.JalaliDate.fromTimestamp(ts)
+        var y = d.year
+        var m = d.month + n
+        while (m > 12) { m -= 12; y++ }
+        val day = d.day.coerceAtMost(com.example.utils.JalaliDate.daysInMonth(y, m))
+        val timeOfDay = ts - com.example.utils.JalaliDate.toTimestamp(d.year, d.month, d.day)
+        return com.example.utils.JalaliDate.toTimestamp(y, m, day) + timeOfDay
+    }
+
+    // ─── Net worth vs inflation ───
+
+    suspend fun saveSnapshot(s: NetWorthSnapshot) = snapshotDao.insert(s)
 
     suspend fun saveAsset(asset: Asset) = assetDao.insert(asset)
 

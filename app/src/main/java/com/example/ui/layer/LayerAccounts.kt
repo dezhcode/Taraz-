@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.AccountType
 import com.example.data.BankBin
 import com.example.data.BankCard
+import com.example.data.isCredit
 import com.example.data.BankSender
 import com.example.data.Category
 import com.example.data.Transaction
@@ -184,7 +185,8 @@ fun LayerAccountsScreen(
                             Text(card.bankName, style = lt(15.sp, FontWeight.SemiBold), maxLines = 1)
                             if (card.cardNumber.length >= 4) Text("•••• ${fa(card.cardNumber.takeLast(4))}", style = lt(12.sp, color = L.Muted))
                         }
-                        if (hasAutoSms(card, senders)) StatusPill("پیامک خودکار روشن", L.GreenSoft, L.GreenText)
+                        if (card.isCredit) Text(creditUsage(card), style = lt(11.sp, color = L.Muted), maxLines = 1)
+                        else if (hasAutoSms(card, senders)) StatusPill("پیامک خودکار روشن", L.GreenSoft, L.GreenText)
                         else StatusPill("ثبت دستی", L.Chip, L.Muted)
                     }
                     Text(if (hideAmounts) "••••" else money(card.balance), style = lt(15.sp, FontWeight.SemiBold))
@@ -338,9 +340,11 @@ private fun ActionTile(label: String, icon: androidx.compose.ui.graphics.vector.
 fun LayerAddAccountSheet(
     existingNames: List<String>,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, cardNumber: String, balance: Long, accountType: String) -> Unit
+    onConfirm: (name: String, cardNumber: String, balance: Long, accountType: String, creditLimit: Long, dueDay: Int) -> Unit
 ) {
-    val types = listOf(AccountType.BANK to "کارت بانکی", AccountType.CASH to "پول نقد", AccountType.OTHER to "دیگر")
+    val types = listOf(AccountType.BANK to "کارت بانکی", AccountType.CREDIT to "اعتباری", AccountType.CASH to "نقد", AccountType.OTHER to "دیگر")
+    var limitText by remember { mutableStateOf("") }
+    var dueDay by remember { mutableStateOf(1) }
     var typeIdx by remember { mutableStateOf(0) }
     var number by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
@@ -356,16 +360,20 @@ fun LayerAddAccountSheet(
 
     val cleanName = name.trim()
     val duplicate = existingNames.any { it.equals(cleanName, ignoreCase = true) }
-    val balance = parseAmount(balanceText)
+    val credit = type == AccountType.CREDIT
+    // در کارت اعتباری «موجودی» یعنی مبلغ استفاده‌شده، که منفی ذخیره می‌شود
+    val balance = if (credit) -parseAmount(balanceText) else parseAmount(balanceText)
+    val limit = parseAmount(limitText)
     val numberDigits = number.filter { it.isDigit() }
-    val canSave = cleanName.isNotEmpty() && !duplicate && (type != AccountType.BANK || numberDigits.isEmpty() || numberDigits.length == 16)
+    val canSave = cleanName.isNotEmpty() && !duplicate && (type != AccountType.BANK || numberDigits.isEmpty() || numberDigits.length == 16) &&
+        (!credit || limit > 0)
 
     LayerSheet(
         title = "حساب جدید",
         onDismiss = onDismiss,
         bottomBar = {
             BigButton("افزودن حساب", enabled = canSave) {
-                onConfirm(cleanName, if (type == AccountType.BANK) numberDigits else "", balance, type)
+                onConfirm(cleanName, if (type == AccountType.BANK) numberDigits else "", balance, type, if (credit) limit else 0, if (credit) dueDay else 0)
             }
         }
     ) {
@@ -387,17 +395,28 @@ fun LayerAddAccountSheet(
             value = name,
             onChange = { name = it; nameTouched = true },
             label = "نام حساب",
-            placeholder = when (type) { AccountType.CASH -> "مثلاً کیف پول"; AccountType.OTHER -> "مثلاً صندوق پس‌انداز"; else -> "مثلاً بانک ملت" },
+            placeholder = when (type) {
+                AccountType.CASH -> "مثلاً کیف پول"; AccountType.OTHER -> "مثلاً صندوق پس‌انداز"
+                AccountType.CREDIT -> "مثلاً اعتباری ملت"; else -> "مثلاً بانک ملت"
+            },
             hint = if (duplicate) "حسابی با این نام دارید؛ نام دیگری بنویسید." else "در فهرست حساب‌ها با همین نام دیده می‌شود."
         )
+        if (credit) {
+            LField(
+                value = limitText, onChange = { limitText = groupedInput(it) }, label = "سقف اعتبار (تومان)", placeholder = "۰",
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+        }
         LField(
             value = balanceText,
             onChange = { balanceText = groupedInput(it) },
-            label = "موجودی فعلی (تومان)",
+            label = if (credit) "تا امروز استفاده‌شده (تومان)" else "موجودی فعلی (تومان)",
             placeholder = "۰",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            hint = "تا موجودی کل از همین حالا درست باشد."
+            hint = if (credit) "خریدها از این کارت به بدهی‌اش اضافه می‌شود؛ بازپرداخت را با «انتقال» به این کارت ثبت کنید."
+            else "تا موجودی کل از همین حالا درست باشد."
         )
+        if (credit) CreditDueDay(dueDay) { dueDay = it }
 
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(L.Bg).padding(horizontal = 12.dp, vertical = 10.dp),
@@ -414,6 +433,33 @@ fun LayerAddAccountSheet(
     }
 }
 
+/** روز بازپرداخت کارت اعتباری در هر ماه */
+@Composable
+private fun CreditDueDay(day: Int, onChange: (Int) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(L.Bg).padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("روز بازپرداخت هر ماه", style = lt(13.sp, color = L.Muted), modifier = Modifier.weight(1f))
+        Box(
+            Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(L.Surface).clickable { onChange(if (day <= 1) 30 else day - 1) },
+            contentAlignment = Alignment.Center
+        ) { Text("−", style = lt(16.sp, FontWeight.Bold)) }
+        Text(fa(day), style = lt(16.sp, FontWeight.Bold), modifier = Modifier.width(40.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Box(
+            Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(L.Surface).clickable { onChange(if (day >= 30) 1 else day + 1) },
+            contentAlignment = Alignment.Center
+        ) { Text("+", style = lt(16.sp, FontWeight.Bold)) }
+    }
+}
+
+/** «۱۲م از ۵۰م استفاده شده» برای کارت اعتباری */
+internal fun creditUsage(card: BankCard): String {
+    val used = (-card.balance).coerceAtLeast(0)
+    return "${millions(used)} از ${millions(card.creditLimit)} استفاده شده" +
+        if (card.dueDay > 0) " · بازپرداخت روز ${fa(card.dueDay)}" else ""
+}
+
 /** ویرایش حساب: نام (تراکنش‌ها هم با آن منتقل می‌شوند)، موجودی، شمارهٔ کارت و صاحب کارت */
 @Composable
 fun LayerEditAccountSheet(
@@ -426,7 +472,10 @@ fun LayerEditAccountSheet(
     val cleanName = name.trim()
     val nameTaken = !cleanName.equals(card.bankName, ignoreCase = true) &&
         existingNames.any { it.equals(cleanName, ignoreCase = true) }
-    var balanceText by remember { mutableStateOf(money(card.balance)) }
+    val credit = card.isCredit
+    var balanceText by remember { mutableStateOf(money(if (credit) -card.balance else card.balance)) }
+    var limitText by remember { mutableStateOf(money(card.creditLimit)) }
+    var dueDay by remember { mutableStateOf(card.dueDay.coerceIn(1, 30)) }
     var holder by remember { mutableStateOf(card.cardHolderName) }
     var number by remember { mutableStateOf(card.cardNumber) }
     val digits = number.filter { it.isDigit() }
@@ -438,7 +487,11 @@ fun LayerEditAccountSheet(
         onDismiss = onDismiss,
         bottomBar = {
             BigButton("ذخیره", enabled = canSave) {
-                onSave(card.copy(balance = parseAmount(balanceText), cardHolderName = holder.trim().ifEmpty { card.cardHolderName }, cardNumber = if (card.isCash) "" else digits), cleanName)
+                onSave(card.copy(
+                    balance = if (credit) -parseAmount(balanceText) else parseAmount(balanceText),
+                    creditLimit = if (credit) parseAmount(limitText) else card.creditLimit,
+                    dueDay = if (credit) dueDay else card.dueDay,
+                    cardHolderName = holder.trim().ifEmpty { card.cardHolderName }, cardNumber = if (card.isCash) "" else digits), cleanName)
             }
         }
     ) {
@@ -447,10 +500,17 @@ fun LayerEditAccountSheet(
             hint = if (nameTaken) "حساب دیگری با این نام دارید." else "تراکنش‌های این حساب هم با نام تازه نمایش داده می‌شوند."
         )
         LField(
-            value = balanceText, onChange = { balanceText = groupedInput(it) }, label = "موجودی (تومان)",
+            value = balanceText, onChange = { balanceText = groupedInput(it) }, label = if (credit) "استفاده‌شده (تومان)" else "موجودی (تومان)",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             hint = "اگر موجودی واقعی با تراز فرق دارد، اینجا درستش کنید."
         )
+        if (credit) {
+            LField(
+                value = limitText, onChange = { limitText = groupedInput(it) }, label = "سقف اعتبار (تومان)",
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+            CreditDueDay(dueDay) { dueDay = it }
+        }
         if (!card.isCash) {
             LField(
                 value = number, onChange = { number = it.filter { c -> c.isDigit() }.take(16) }, label = "شمارهٔ کارت (اختیاری)",
