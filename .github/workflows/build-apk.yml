@@ -102,6 +102,12 @@ jobs:
               *) cp "$f" out/Taraz-24.0.1-myket.apk ;;
             esac
           done
+          # نسخهٔ آزمایشی همان بیلد انتشار (کوچک‌شده با R8) با کلید ثابت دیباگ، فقط برای نصب و امتحان روی گوشی
+          if [ -f out/Taraz-24.0.1-release-unsigned.apk ] && [ -f debug.keystore ]; then
+            BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+            "$BT/apksigner" sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android \
+              --ks-key-alias androiddebugkey --out out/Taraz-24.0.1-test.apk out/Taraz-24.0.1-release-unsigned.apk
+          fi
           ls -la out
           rm -f "$RUNNER_TEMP/release.jks"
 
