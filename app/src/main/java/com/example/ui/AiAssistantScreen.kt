@@ -5,6 +5,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import com.example.ui.layer.edgeGlass
 import androidx.compose.foundation.shape.AbsoluteRoundedCornerShape
 import androidx.compose.ui.draw.drawBehind
@@ -142,14 +144,22 @@ fun AiAssistantScreen(
         if (visible.isNotEmpty()) coroutineScope.launch { listState.animateScrollToItem(visible.size) }
     }
 
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+
+    // بعد از فرستادن، کیبورد یک بار بسته می‌شود و بسته می‌ماند
     fun send(text: String) {
         if (text.isBlank() || isLoading) return
+        focusManager.clearFocus(force = true)
+        keyboard?.hide()
         onSendMessage(text.trim())
         textInput = ""
     }
 
-    // جای خالی زیر گفتگو تا آخرین پیام زیر قرص شناور نماند
-    val composerSpace = 112.dp
+    // جای خالی زیر گفتگو تا آخرین پیام زیر قرص شناور نماند؛ با بلند شدن قرص بیشتر می‌شود
+    var composerPx by remember { mutableIntStateOf(0) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val composerSpace = maxOf(112.dp, with(density) { composerPx.toDp() } + 40.dp)
 
     Column(
         modifier = Modifier
@@ -282,7 +292,8 @@ fun AiAssistantScreen(
                 }
             }
 
-            // ── قرص یک‌تکهٔ شناور: ارسال سمت راست، میکروفون سمت چپ
+            // ── قرص یک‌تکهٔ شناور: ارسال سمت راست، میکروفون سمت چپ.
+            // با متن بلندتر از بالا بزرگ می‌شود و دکمه‌ها پایین سر جایشان می‌مانند؛ بیشتر از ۵ سطر، متن اسکرول می‌شود.
             val canSend = textInput.isNotBlank() && !isLoading
             Row(
                 modifier = Modifier
@@ -290,13 +301,13 @@ fun AiAssistantScreen(
                     .imePadding()
                     .navigationBarsPadding()
                     .padding(start = 16.dp, end = 16.dp, bottom = 20.dp)
+                    .onSizeChanged { composerPx = it.height }
                     .fillMaxWidth()
-                    .heightIn(min = 64.dp)
-                    .shadow(16.dp, com.example.ui.layer.PillShape, ambientColor = Color(0x1F0E1116), spotColor = Color(0x1F0E1116))
+                    .shadow(16.dp, RoundedCornerShape(32.dp), ambientColor = Color(0x1F0E1116), spotColor = Color(0x1F0E1116))
                     .clip(RoundedCornerShape(32.dp))
                     .background(if (isDictating) L.RedSoft else L.Surface)
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .padding(8.dp),
+                verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Box(
@@ -312,40 +323,39 @@ fun AiAssistantScreen(
                     Icon(Icons.Default.ArrowUpward, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
                 }
 
-                TextField(
+                // Enter سطر تازه می‌سازد؛ ارسال فقط با دکمه
+                androidx.compose.foundation.text.BasicTextField(
                     value = textInput,
                     onValueChange = { textInput = it },
-                    enabled = !isLoading,
-                    placeholder = {
-                        Text(
-                            when {
-                                isLoading -> "دستیار در حال پاسخ دادن است…"
-                                isDictating -> "در حال شنیدن… صحبت کنید"
-                                else -> "بپرسید یا بگویید چه ثبت کنم"
-                            },
-                            style = com.example.ui.layer.lt(15.sp, color = if (isDictating) L.RedText else L.Faint),
-                            maxLines = 1
-                        )
-                    },
-                    maxLines = 4,
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Send),
-                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = { send(textInput) }),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        focusedTextColor = L.Ink,
-                        unfocusedTextColor = L.Ink,
-                        disabledTextColor = L.Faint,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        disabledIndicatorColor = Color.Transparent,
-                        cursorColor = L.Primary
+                    minLines = 1,
+                    maxLines = 5,
+                    textStyle = com.example.ui.layer.lt(15.sp, color = L.Ink, lineHeight = 24.sp),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(L.Primary),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Default
                     ),
-                    textStyle = com.example.ui.layer.lt(15.sp),
                     modifier = Modifier
                         .weight(1f)
-                        .testTag("ai_chat_text_input")
+                        .testTag("ai_chat_text_input"),
+                    decorationBox = { inner ->
+                        Box(
+                            Modifier.heightIn(min = 48.dp).padding(horizontal = 8.dp, vertical = 12.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (textInput.isEmpty()) {
+                                Text(
+                                    when {
+                                        isLoading -> "دستیار در حال پاسخ دادن است…"
+                                        isDictating -> "در حال شنیدن… صحبت کنید"
+                                        else -> "بپرسید یا بگویید چه ثبت کنم"
+                                    },
+                                    style = com.example.ui.layer.lt(15.sp, color = if (isDictating) L.RedText else L.Faint),
+                                    maxLines = 1
+                                )
+                            }
+                            inner()
+                        }
+                    }
                 )
 
                 // صدا → متن
@@ -353,7 +363,8 @@ fun AiAssistantScreen(
                     val micPulse = if (isDictating) 1f + dictationAmplitude.coerceIn(0f, 1f) * 0.15f else 1f
                     Box(
                         modifier = Modifier
-                            .size((48 * micPulse).dp)
+                            .size(48.dp)
+                            .graphicsLayer { scaleX = micPulse; scaleY = micPulse }
                             .clip(CircleShape)
                             .background(if (isDictating) L.Red else Color.Transparent)
                             .clickable(enabled = !isLoading, onClick = startDictation)
