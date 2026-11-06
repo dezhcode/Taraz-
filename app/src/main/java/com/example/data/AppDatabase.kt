@@ -146,7 +146,7 @@ interface GoalDao {
         Bill::class,
         NetWorthSnapshot::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -268,9 +268,27 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v12: رسمی‌تر شدن نام دسته‌ها («خوراک» ← «غذا»، «درآمد دیگر» ← «سایر درآمدها»).
+         * اگر کاربر از قبل دسته‌ای با نام تازه داشته باشد، چیزی تغییر نمی‌کند.
+         */
+        val MIGRATION_11_12 = object : androidx.room.migration.Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                CATEGORY_RENAMES.forEach { (old, new) ->
+                    val free = "NOT EXISTS (SELECT 1 FROM categories WHERE name = ?)"
+                    listOf("transactions", "cheques", "recurring_transactions").forEach { t ->
+                        db.execSQL("UPDATE $t SET category = ? WHERE category = ? AND $free", arrayOf<Any>(new, old, new))
+                    }
+                    db.execSQL("UPDATE categories SET name = ? WHERE name = ? AND $free", arrayOf<Any>(new, old, new))
+                }
+            }
+        }
+
+        val CATEGORY_RENAMES = listOf("خوراک" to "غذا", "درآمد دیگر" to "سایر درآمدها", "قرض و طلب" to "حساب اشخاص")
+
         /** Categories a new user starts with; the add sheet is empty without them. */
         val DEFAULT_CATEGORIES: List<Category> = listOf(
-            Category(name = "خوراک", iconKey = "food", colorHex = "#B0532F", sortOrder = 0),
+            Category(name = "غذا", iconKey = "food", colorHex = "#B0532F", sortOrder = 0),
             Category(name = "حمل‌ونقل", iconKey = "transport", colorHex = "#1D6FA3", sortOrder = 1),
             Category(name = "خرید", iconKey = "shopping", colorHex = "#7A5AA8", sortOrder = 2),
             Category(name = "قبوض", iconKey = "bill", colorHex = "#0E9490", sortOrder = 3),
@@ -279,7 +297,7 @@ abstract class AppDatabase : RoomDatabase() {
             Category(name = "قسط", iconKey = "loan", colorHex = "#5C6B73", sortOrder = 6),
             Category(name = "سایر", iconKey = "other", colorHex = "#6C7C75", sortOrder = 7),
             Category(name = "حقوق", iconKey = "wage", colorHex = "#0B7A57", isIncome = true, sortOrder = 8),
-            Category(name = "درآمد دیگر", iconKey = "saving", colorHex = "#0B7A57", isIncome = true, sortOrder = 9)
+            Category(name = "سایر درآمدها", iconKey = "saving", colorHex = "#0B7A57", isIncome = true, sortOrder = 9)
         )
 
         /** Inserts [DEFAULT_CATEGORIES] with plain SQL (onCreate, and after a full reset). */
@@ -407,7 +425,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "fidar_finance_database"
                 )
                 .addCallback(AppDatabaseCallback(scope))
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
                 // Only the first test builds (v1-3) have no migration. Every later
                 // version must have one: a destructive fallback wiped users' money
                 // records silently whenever a migration was forgotten.

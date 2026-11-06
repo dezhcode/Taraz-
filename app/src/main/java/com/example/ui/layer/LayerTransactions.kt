@@ -102,7 +102,7 @@ fun LayerTransactionsScreen(
                 val first = JalaliDate.fromTimestamp(days.first())
                 val last = JalaliDate.fromTimestamp(days.last())
                 Text(
-                    "هفتهٔ ${fa(first.day)} تا ${last.formatShort()} · خرج ${money(weekSpend)} تومان",
+                    "هفتهٔ ${fa(first.day)} تا ${last.formatShort()} · هزینه ${money(weekSpend)} تومان",
                     style = lt(13.sp, color = L.Muted)
                 )
             }
@@ -281,7 +281,7 @@ fun LayerTransactionsScreen(
                 val title = if (selected == todayStart) "امروز، ${weekdayName(selected)} ${JalaliDate.fromTimestamp(selected).formatShort()}"
                 else "${weekdayName(selected)} ${JalaliDate.fromTimestamp(selected).formatShort()}"
                 Text(title, style = lt(17.sp, FontWeight.Bold))
-                Text("خرج روز: ${money(daySpend)} تومان", style = lt(13.sp, color = L.Muted))
+                Text("هزینهٔ روز: ${money(daySpend)} تومان", style = lt(13.sp, color = L.Muted))
             }
             if (dailyBudget > 0) {
                 Box(

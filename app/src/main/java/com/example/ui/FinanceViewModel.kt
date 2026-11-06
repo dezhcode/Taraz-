@@ -374,8 +374,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         } else {
             val quad = when {
                 dBudget > 0L && tExpense > dBudget -> QuadrupleCoach("danger", 90, "امروز از بودجه مجاز عبور کرده‌اید! خریدهای غیرضروری را محدود کنید.", "مدیریت بودجه")
-                dBudget > 0L && tExpense >= (dBudget * 0.8) -> QuadrupleCoach("warning", 75, "نزدیک به سقف بودجه روزانه هستید. خرج‌های امروز را کنترل کنید.", "مشاهده بودجه")
-                tExpense > 0L && dBudget > 0L && tExpense < (dBudget * 0.5) -> QuadrupleCoach("success", 50, "امروز خرجت کمتر از میانگین بوده، عالی ادامه بده.", "ادامه روند")
+                dBudget > 0L && tExpense >= (dBudget * 0.8) -> QuadrupleCoach("warning", 75, "نزدیک به سقف بودجه روزانه هستید. هزینه‌های امروز را کنترل کنید.", "مشاهده بودجه")
+                tExpense > 0L && dBudget > 0L && tExpense < (dBudget * 0.5) -> QuadrupleCoach("success", 50, "هزینهٔ امروز کمتر از میانگین بوده است.", "ادامه روند")
                 else -> QuadrupleCoach("suggestion", 30, "با ثبت منظم تراکنش‌ها، پیشنهادهای هوشمندتر دریافت کنید.", null)
             }
             FinancialCoachInsight(
@@ -502,9 +502,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     fun reminderText(person: Person, balance: Long): String {
         val userName = userProfile.value?.name?.takeIf { it.isNotBlank() && it != "کاربر مهمان" }
         val amount = com.example.utils.JalaliDate.toPersianDigits(formatNumber(balance).replace(',', '٬'))
-        return "سلام ${person.name} عزیز، وقتت بخیر.\n" +
-            "یادآوری دوستانه دربارهٔ $amount تومانی که پیش شماست. هر وقت برایت راحت بود خبرم کن.\n" +
-            "ممنونم" + (userName?.let { "\n$it" } ?: "")
+        return "با سلام و احترام، ${person.name} گرامی\n" +
+            "یادآوری می‌شود مبلغ $amount تومان از حساب فی‌مابین نزد شما باقی مانده است. خواهشمند است در اولین فرصت نسبت به تسویه اقدام فرمایید.\n" +
+            "با سپاس" + (userName?.let { "\n$it" } ?: "")
     }
 
     /**
@@ -1985,7 +1985,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                             Transaction(
                                 title = action.txTitle ?: "تراکنش",
                                 amount = action.txAmount?.takeIf { it > 0 } ?: throw IllegalStateException("مبلغ تراکنش مشخص نیست."),
-                                category = action.txCategory ?: if (isExpense) "سایر" else "درآمد دیگر",
+                                category = action.txCategory ?: if (isExpense) "سایر" else "سایر درآمدها",
                                 isExpense = isExpense,
                                 bankName = accountForAssistant(action.txBankName),
                                 type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME

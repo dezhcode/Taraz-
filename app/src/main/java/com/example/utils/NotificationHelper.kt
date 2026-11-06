@@ -14,7 +14,7 @@ object NotificationHelper {
 
     private const val CHANNEL_ID = "taraz_notifications"
     private const val CHANNEL_NAME = "اعلان‌های هوشمند تراز"
-    private const val CHANNEL_DESC = "یادآوری اقساط و هشدارهای تحلیل دخل و خرج تراز"
+    private const val CHANNEL_DESC = "یادآوری اقساط و هشدارهای مالی تراز"
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

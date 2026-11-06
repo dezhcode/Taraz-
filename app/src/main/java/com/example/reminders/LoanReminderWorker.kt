@@ -130,8 +130,8 @@ class LoanReminderWorker(
             val whenText = if (days == 0) "امروز" else "فردا"
             NotificationHelper.showNotification(
                 context = applicationContext,
-                title = if (d.owedToMe) "$whenText موعد طلب از ${d.person}" else "$whenText موعد پس دادن به ${d.person}",
-                message = if (d.owedToMe) "$amount تومان از ${d.person} طلب دارید." else "$amount تومان به ${d.person} بدهکارید.",
+                title = if (d.owedToMe) "$whenText موعد دریافت از ${d.person}" else "$whenText موعد پرداخت به ${d.person}",
+                message = if (d.owedToMe) "مبلغ $amount تومان از ${d.person} بستانکار هستید." else "مبلغ $amount تومان به ${d.person} بدهکار هستید.",
                 notificationId = 9000 + d.id
             )
             prefs.edit().putBoolean(key, true).apply()
@@ -154,8 +154,8 @@ class LoanReminderWorker(
             val amount = NotificationHelper.formatAmount(c.amount)
             notifyOnce(
                 prefs, "cheque_${c.id}_${c.dueDate}_$days",
-                if (c.issued) "${whenText(days)} سررسید چک به ${c.person}" else "${whenText(days)} سررسید چک از ${c.person}",
-                if (c.issued) "$amount تومان باید در حساب ${c.bankName} باشد." else "$amount تومان؛ چک را به بانک بدهید.",
+                if (c.issued) "${whenText(days)} سررسید پرداخت چک به ${c.person}" else "${whenText(days)} سررسید دریافت چک از ${c.person}",
+                if (c.issued) "موجودی حساب ${c.bankName} باید دست‌کم $amount تومان باشد." else "مبلغ $amount تومان؛ چک را برای وصول به بانک ارائه کنید.",
                 10_000 + c.id
             )
         }

@@ -108,7 +108,7 @@ fun LayerYearScreen(
         ) {
             Text("سال ${fa(year)} شما", style = lt(14.sp, FontWeight.SemiBold, Color(0xD9FFFFFF)))
             Text(
-                if (saved >= 0) "${millions(saved)} پس‌انداز" else "${millions(-saved)} بیشتر از درآمد خرج شد",
+                if (saved >= 0) "${millions(saved)} پس‌انداز" else "هزینه ${millions(-saved)} تومان بیش از درآمد بود",
                 style = lt(30.sp, FontWeight.Bold, Color.White)
             )
             Text(
@@ -127,7 +127,7 @@ fun LayerYearScreen(
 
         // نمودار ماه‌ها
         LayerCard(padding = 16.dp) {
-            Text("هر ماه چقدر خرج شد", style = lt(14.sp, FontWeight.Bold))
+            Text("هزینهٔ هر ماه", style = lt(14.sp, FontWeight.Bold))
             val maxV = st.monthly.maxOf { maxOf(it.first, it.second) }.coerceAtLeast(1)
             val bestIdx = st.monthly.indices.maxByOrNull { st.monthly[it].first - st.monthly[it].second }
             Row(Modifier.padding(top = 12.dp).fillMaxWidth().height(130.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Bottom) {
@@ -154,7 +154,7 @@ fun LayerYearScreen(
         // دسته‌ها
         if (st.topCats.isNotEmpty()) {
             LayerCard(padding = 16.dp) {
-                Text("بیشترین خرج‌ها", style = lt(14.sp, FontWeight.Bold))
+                Text("بیشترین هزینه‌ها", style = lt(14.sp, FontWeight.Bold))
                 val top = st.topCats.first().second.coerceAtLeast(1)
                 Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     st.topCats.forEach { (name, sum) ->
@@ -172,12 +172,12 @@ fun LayerYearScreen(
 
         // نکته‌ها
         Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            st.biggest?.let { b -> Fact("بزرگ‌ترین خرج", "${b.title} · ${money(b.amount)} تومان", JalaliDate.fromTimestamp(b.date).formatLong()) }
-            st.busiestWeekday?.let { Fact("پرخرج‌ترین روز هفته", it, "روزی که بیشتر از بقیه خرج کردید") }
+            st.biggest?.let { b -> Fact("بزرگ‌ترین هزینه", "${b.title} · ${money(b.amount)} تومان", JalaliDate.fromTimestamp(b.date).formatLong()) }
+            st.busiestWeekday?.let { Fact("پرهزینه‌ترین روز هفته", it, "روزی با بیشترین هزینه") }
             val days = if (year == thisYear) (JalaliDate.daysUntil(System.currentTimeMillis(), JalaliDate.toTimestamp(year, 1, 1)) + 1).coerceAtLeast(1) else 365
-            Fact("خرج روزانهٔ میانگین", "${money(st.expense / days)} تومان", "در ${fa(days)} روز")
+            Fact("میانگین هزینهٔ روزانه", "${money(st.expense / days)} تومان", "در ${fa(days)} روز")
             if (st.loanPaid > 0) Fact("قسط پرداخت‌شده", "${money(st.loanPaid)} تومان", "از وام‌های بانکی")
-            if (st.lent > 0 || st.gotBack > 0) Fact("قرض به دیگران", "${money(st.lent)} تومان داده شد", "${money(st.gotBack)} تومان برگشت")
+            if (st.lent > 0 || st.gotBack > 0) Fact("حساب اشخاص", "پرداخت ${money(st.lent)} تومان", "دریافت ${money(st.gotBack)} تومان")
         }
     }
 }

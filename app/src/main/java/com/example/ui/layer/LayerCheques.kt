@@ -84,7 +84,7 @@ internal fun ColumnScope.ChequesSection(cheques: List<Cheque>, onAdd: () -> Unit
         ) {
             Text("هنوز چکی ثبت نکرده‌اید", style = lt(15.sp, FontWeight.Bold))
             Text(
-                "چک‌هایی را که می‌دهید یا می‌گیرید با تاریخ سررسید ثبت کنید؛ تراز سه روز و یک روز قبل یادآوری می‌کند و وقتی پاس شد، پول را روی حساب ثبت می‌کند.",
+                "چک‌های پرداختی و دریافتی را با تاریخ سررسید ثبت کنید؛ تراز سه روز و یک روز پیش از سررسید یادآوری می‌کند و پس از وصول، مبلغ را در حساب ثبت می‌کند.",
                 style = lt(13.sp, color = L.Muted, lineHeight = 23.sp)
             )
         }
@@ -94,11 +94,11 @@ internal fun ColumnScope.ChequesSection(cheques: List<Cheque>, onAdd: () -> Unit
     if (pending.isNotEmpty()) {
         Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f).cardSurface(16.dp).padding(12.dp)) {
-                Text("چک‌های داده‌شده", style = lt(12.sp, color = L.Muted))
+                Text("چک‌های پرداختی", style = lt(12.sp, color = L.Muted))
                 FitText(toman(outSum), lt(16.sp, FontWeight.Bold, L.RedText))
             }
             Column(Modifier.weight(1f).cardSurface(16.dp).padding(12.dp)) {
-                Text("چک‌های گرفته‌شده", style = lt(12.sp, color = L.Muted))
+                Text("چک‌های دریافتی", style = lt(12.sp, color = L.Muted))
                 FitText(toman(inSum), lt(16.sp, FontWeight.Bold, L.Green))
             }
         }
@@ -172,7 +172,7 @@ fun ChequeSheet(
     )
 
     LayerSheet(
-        title = if (cheque == null) "ثبت چک" else "چک ${if (cheque.issued) "به" else "از"} ${cheque.person}",
+        title = if (cheque == null) "ثبت چک" else "${if (cheque.issued) "پرداخت چک به" else "دریافت چک از"} ${cheque.person}",
         onDismiss = onDismiss,
         topGap = 40.dp,
         bottomBar = {
@@ -221,9 +221,9 @@ fun ChequeSheet(
         }
     ) {
         if (cheque != null && cheque.status == ChequeStatus.CLEARED) {
-            Callout("این چک پاس شده", "${money(cheque.amount)} تومان روی حساب ${cheque.bankName} ثبت شده است. «در انتظار» آن تراکنش را برمی‌دارد.", L.GreenSoft, L.GreenText)
+            Callout("این چک وصول شده است", "${money(cheque.amount)} تومان روی حساب ${cheque.bankName} ثبت شده است. «در انتظار» آن تراکنش را برمی‌دارد.", L.GreenSoft, L.GreenText)
         }
-        LSegmented(listOf("چکی که می‌دهم", "چکی که می‌گیرم"), if (issued) 0 else 1, {
+        LSegmented(listOf("پرداخت چک", "دریافت چک"), if (issued) 0 else 1, {
             issued = it == 0
             // دستهٔ هزینه برای چک دریافتی معنا ندارد و برعکس
             val fits = categories.filter { c -> c.isIncome == !issued }.map { c -> c.name }

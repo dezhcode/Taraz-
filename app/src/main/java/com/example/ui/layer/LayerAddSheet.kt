@@ -134,7 +134,7 @@ fun LayerAddSheet(
         if (startWithVoice && com.example.Features.VOICE) {
             val ok = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED
-            if (ok) { helperMsg = "بگویید، مثلاً «۸۰ تومن ناهار»"; onVoice { applyDraft(it) } }
+            if (ok) { helperMsg = "بفرمایید؛ مثلاً «۸۰ هزار تومان ناهار»"; onVoice { applyDraft(it) } }
             else micLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
         }
     }
@@ -223,19 +223,19 @@ fun LayerAddSheet(
                             Modifier.height(38.dp).clip(PillShape).background(if (isListening) L.Primary else L.Chip)
                                 .clickable {
                                     if (!com.example.Features.VOICE) {
-                                        helperMsg = "ثبت با صدا به زودی فعال می‌شود."
+                                        helperMsg = "ثبت صوتی به‌زودی فعال می‌شود."
                                         return@clickable
                                     }
                                     val ok = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
                                         android.content.pm.PackageManager.PERMISSION_GRANTED
-                                    if (ok) { helperMsg = if (isListening) null else "بگویید، مثلاً «۸۰ تومن ناهار»"; onVoice { applyDraft(it) } }
+                                    if (ok) { helperMsg = if (isListening) null else "بفرمایید؛ مثلاً «۸۰ هزار تومان ناهار»"; onVoice { applyDraft(it) } }
                                     else micLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
                                 }
                                 .padding(horizontal = 14.dp),
                             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(Icons.Default.Mic, null, tint = if (isListening) Color.White else L.Ink, modifier = Modifier.size(18.dp))
-                            Text(if (isListening) "گوش می‌دهم…" else "بگویید", style = lt(13.sp, FontWeight.SemiBold, if (isListening) Color.White else L.Ink))
+                            Text(if (isListening) "در حال شنیدن…" else "بگویید", style = lt(13.sp, FontWeight.SemiBold, if (isListening) Color.White else L.Ink))
                             if (!com.example.Features.VOICE) SoonBadge()
                         }
                     }
@@ -318,7 +318,7 @@ fun LayerAddSheet(
                             val on = t in tags
                             LChip("# $t", on) { tags = if (on) tags - t else tags + t }
                         }
-                        LChip("+ برچسب تازه", false) { addingTag = true }
+                        LChip("+ برچسب جدید", false) { addingTag = true }
                     }
                     if (addingTag) {
                         Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -343,7 +343,7 @@ fun LayerAddSheet(
 
                     if (persons.isNotEmpty()) {
                         Text(
-                            if (type == EntryType.EXPENSE) "به کسی دادید؟" else "از کسی گرفتید؟",
+                            if (type == EntryType.EXPENSE) "پرداخت به شخص" else "دریافت از شخص",
                             style = lt(12.sp, FontWeight.SemiBold, L.Muted), modifier = Modifier.padding(top = 12.dp, bottom = 6.dp)
                         )
                         Row(

@@ -121,7 +121,7 @@ object ReportRenderer {
 
         // دسته‌ها
         var y = top + 300
-        cv.drawText("هزینه‌ها کجا رفت؟", right, y, paint(42f, ink, bold))
+        cv.drawText("هزینه‌ها به تفکیک دسته", right, y, paint(42f, ink, bold))
         y += 40
         val card = RectF(M, y, right, y + 40 + cats.size * 112f + 20)
         cv.drawRoundRect(card, 36f, 36f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() })
@@ -192,7 +192,7 @@ fun ShareReportSheet(transactions: List<Transaction>, monthTs: Long, onDismiss: 
         topGap = 40.dp,
         bottomBar = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BigButton("عکس", Modifier.weight(1f)) { runCatching { ReportRenderer.sharePng(context, bmp) } }
+                BigButton("تصویر", Modifier.weight(1f)) { runCatching { ReportRenderer.sharePng(context, bmp) } }
                 SoftBigButton("PDF", Modifier.weight(1f), height = 54.dp) { runCatching { ReportRenderer.sharePdf(context, bmp) } }
             }
         }
@@ -234,7 +234,7 @@ fun WeeklySummarySheet(digest: WeeklyDigest.Digest, onDismiss: () -> Unit, onAsk
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(L.RedSoft).padding(12.dp)) {
-                Text("خرج هفت روز اخیر", style = lt(12.sp, color = L.RedText))
+                Text("هزینهٔ هفت روز اخیر", style = lt(12.sp, color = L.RedText))
                 Text(money(digest.spent), style = lt(19.sp, FontWeight.Bold, L.RedText))
             }
             Column(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(L.Bg).padding(12.dp)) {

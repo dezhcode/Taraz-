@@ -74,9 +74,9 @@ fun CategoryBudgetSheet(category: Category, spent: Long, onDismiss: () -> Unit, 
         }
     ) {
         LField(
-            value = text, onChange = { text = groupedInput(it) }, label = "سقف خرج در ماه (تومان)", placeholder = "۰",
+            value = text, onChange = { text = groupedInput(it) }, label = "سقف هزینهٔ ماهانه (تومان)", placeholder = "۰",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            hint = "این ماه تا الان ${money(spent)} تومان خرج شده. با رسیدن به ۸۰٪ در خانه هشدار می‌بینید."
+            hint = "هزینهٔ این ماه تاکنون ${money(spent)} تومان است. با رسیدن به ۸۰٪ سقف، در صفحهٔ خانه هشدار نمایش داده می‌شود."
         )
         Spacer(Modifier.height(4.dp))
     }
@@ -172,7 +172,7 @@ fun LayerRecurringScreen(
         }
         if (items.isEmpty()) {
             Text(
-                "مبلغ‌هایی که هر ماه تکرار می‌شوند را یک بار اینجا بنویسید؛ تراز روزش که برسد خودش ثبتشان می‌کند.",
+                "مبالغ تکرارشوندهٔ ماهانه را یک بار ثبت کنید؛ تراز در موعد مقرر آن‌ها را به‌طور خودکار ثبت می‌کند.",
                 style = lt(13.sp, color = L.Muted, lineHeight = 23.sp), modifier = Modifier.padding(horizontal = 24.dp)
             )
         } else {
@@ -207,12 +207,12 @@ fun LayerRecurringScreen(
         var dayText by remember { mutableStateOf(fa(JalaliDate.today().day)) }
         var bank by remember { mutableStateOf(cards.firstOrNull()?.bankName.orEmpty()) }
         val cats = categories.filter { it.isIncome == !isExpense }.sortedBy { it.sortOrder }
-        var category by remember(isExpense) { mutableStateOf(cats.firstOrNull()?.name ?: if (isExpense) "سایر" else "درآمد دیگر") }
+        var category by remember(isExpense) { mutableStateOf(cats.firstOrNull()?.name ?: if (isExpense) "سایر" else "سایر درآمدها") }
         val day = parseAmount(dayText).toInt()
         val amount = parseAmount(amountText)
         val ok = title.isNotBlank() && amount > 0 && day in 1..31 && bank.isNotBlank()
         LayerSheet(
-            title = "تراکنش تکراری تازه",
+            title = "تراکنش تکراری جدید",
             onDismiss = { adding = false },
             topGap = 60.dp,
             bottomBar = {
@@ -312,7 +312,7 @@ fun LayerBackupScreen(
                 }
                 if (auto.folderLabel != null && auto.hasPassword) {
                     Spacer(Modifier.height(8.dp))
-                    SoftButton(if (busy) "در حال ساخت…" else "ساخت همین حالا", height = 36.dp) { if (!busy) onAutoNow() }
+                    SoftButton(if (busy) "در حال ساخت…" else "تهیهٔ پشتیبان اکنون", height = 36.dp) { if (!busy) onAutoNow() }
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -335,7 +335,7 @@ fun LayerBackupScreen(
         }
         Text(
             "فایل پشتیبان رمزگذاری می‌شود و بدون رمز باز نمی‌شود؛ رمز را جایی یادداشت کنید، تراز آن را نگه نمی‌دارد. " +
-                "فایل را در درایو، تلگرام یا هر جای امن دیگری نگه دارید تا با گم شدن گوشی چیزی از دست نرود.",
+                "فایل را در درایو، تلگرام یا هر جای امن دیگری نگه دارید تا در صورت مفقود شدن گوشی، اطلاعات از دست نرود.",
             style = lt(12.sp, color = L.Muted, lineHeight = 21.sp), modifier = Modifier.padding(horizontal = 24.dp)
         )
         if (busy) Text("در حال انجام…", style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText), modifier = Modifier.padding(horizontal = 24.dp))

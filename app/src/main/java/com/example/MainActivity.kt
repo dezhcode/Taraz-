@@ -228,10 +228,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                         "expense" -> { initialIsExpenseForDialog = true; addWithVoice = false; isAddTransactionOpen = true }
                         "income" -> { initialIsExpenseForDialog = false; addWithVoice = false; isAddTransactionOpen = true }
                         "voice" -> if (com.example.Features.VOICE) { initialIsExpenseForDialog = true; addWithVoice = true; isAddTransactionOpen = true }
-                            else showToast("ثبت با صدا به زودی فعال می‌شود")
+                            else showToast("ثبت صوتی به‌زودی فعال می‌شود")
                         "transfer" -> isTransferOpen = true
                         "sms" -> if (com.example.Features.SMS) viewModel.setSmsAssistantSheetOpen(true)
-                            else showToast("ثبت خودکار از پیامک بانک به زودی فعال می‌شود")
+                            else showToast("ثبت خودکار از پیامک بانک به‌زودی فعال می‌شود")
                         "recurring" -> openSub("recurring")
                         "pay_loan" -> {
                             val active = loans.filter { !it.isSettled }
@@ -308,7 +308,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 }
                 val activity = context as? androidx.fragment.app.FragmentActivity
                 var lastBackPressTime by remember { mutableStateOf(0L) }
-                val exitToastMessage = "برای خروج، یک بار دیگر برگشت بزنید"
+                val exitToastMessage = "برای خروج، دکمهٔ بازگشت را دوباره بزنید"
 
                 BackHandler(enabled = screenState == Screen.MAIN) {
                     if (loanToPay != null) {
@@ -766,7 +766,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                                 }
                                                                 cheques.filter { it.status == com.example.data.ChequeStatus.PENDING && J.daysUntil(it.dueDate, now) in -30..7 }.forEach { c ->
                                                                     add(com.example.ui.layer.UpcomingItem(
-                                                                        if (c.issued) "چک" else "چک دریافتی", (if (c.issued) "به " else "از ") + c.person,
+                                                                        if (c.issued) "پرداخت چک" else "دریافت چک", (if (c.issued) "به " else "از ") + c.person,
                                                                         c.amount, c.dueDate, "پاس شد؟", if (c.issued) 2 else 3
                                                                     ) { chequeEditing = c; chequeSheetOpen = true })
                                                                 }
@@ -775,7 +775,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                                     val due = d.dueDate ?: return@forEach
                                                                     if (bal != 0L && (bal > 0) == d.owedToMe && J.daysUntil(due, now) in -7..7) add(
                                                                         com.example.ui.layer.UpcomingItem(
-                                                                            if (d.owedToMe) "طلب" else "بدهی", (if (d.owedToMe) "از " else "به ") + d.person,
+                                                                            if (d.owedToMe) "دریافت از شخص" else "پرداخت به شخص", (if (d.owedToMe) "از " else "به ") + d.person,
                                                                             kotlin.math.abs(bal), due, if (d.owedToMe) "یادآوری" else "تسویه", if (d.owedToMe) 3 else 2
                                                                         ) { selectedPersonId = d.personId; openSub("person_detail") }
                                                                     )
@@ -942,11 +942,11 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                          if (!com.example.Features.AI) {
                                              com.example.ui.layer.ComingSoonPanel(
                                                  title = "دستیار هوشمند تراز",
-                                                 body = "به‌زودی می‌توانید دربارهٔ خرج‌ها و حساب‌هایتان به زبان خودمانی بپرسید و با یک جمله تراکنش ثبت کنید.",
+                                                 body = "به‌زودی می‌توانید دربارهٔ هزینه‌ها و حساب‌های خود پرسش کنید و تراکنش‌ها را با یک جمله ثبت کنید.",
                                                  points = listOf(
-                                                     "«این ماه کجا بیشتر خرج کردم؟»",
-                                                     "«۸۰ تومن ناهار دادم» و ثبت خودکار",
-                                                     "گفتن به‌جای نوشتن (صدا به متن)"
+                                                     "تحلیل هزینه‌های ماهانه",
+                                                     "ثبت تراکنش با یک جمله",
+                                                     "تبدیل گفتار به متن"
                                                  ),
                                                  onClose = { isAiSheetOpen = false }
                                              )

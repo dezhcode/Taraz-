@@ -28,7 +28,7 @@ object WeeklyDigest {
             get() = if (prevSpent > 0) (((spent - prevSpent) * 100.0) / prevSpent).toInt() else null
 
         val title: String
-            get() = "خلاصهٔ هفته: ${amount(spent)} تومان خرج"
+            get() = "خلاصهٔ هفته: ${amount(spent)} تومان هزینه"
 
         /** The lines of the notification and of the in-app card, in order. */
         fun lines(): List<String> = buildList {
@@ -37,7 +37,7 @@ object WeeklyDigest {
             } else {
                 val ch = changePercent
                 add(
-                    "${amount(spent)} تومان خرج کردید" + when {
+                    "هزینهٔ این هفته ${amount(spent)} تومان بود" + when {
                         ch == null -> "."
                         ch > 0 -> "؛ ${fa(ch)}٪ بیشتر از هفتهٔ قبل."
                         ch < 0 -> "؛ ${fa(-ch)}٪ کمتر از هفتهٔ قبل."
@@ -45,7 +45,7 @@ object WeeklyDigest {
                     }
                 )
                 if (earned > 0) add("${amount(earned)} تومان درآمد داشتید.")
-                topCategory?.let { add("بیشترین خرج: $it با ${amount(topCategoryAmount)} تومان.") }
+                topCategory?.let { add("بیشترین هزینه: $it با ${amount(topCategoryAmount)} تومان.") }
                 biggest?.let { add("بزرگ‌ترین خرید: ${it.title} (${amount(it.amount)} تومان).") }
             }
             if (upcoming.isNotEmpty()) {
@@ -79,7 +79,7 @@ object WeeklyDigest {
                 if (due <= horizon) add(Upcoming("قسط ${l.loanName}", l.installmentAmount, due))
             }
             cheques.filter { it.status == ChequeStatus.PENDING && it.issued && it.dueDate in (now - DAY)..horizon }
-                .forEach { add(Upcoming("چک ${it.person}", it.amount, it.dueDate)) }
+                .forEach { add(Upcoming("پرداخت چک به ${it.person}", it.amount, it.dueDate)) }
             bills.filter { it.enabled && it.dueDate <= horizon }
                 .forEach { add(Upcoming("قبض ${it.title.ifBlank { it.kind }}", it.amount, it.dueDate)) }
         }.sortedBy { it.at }

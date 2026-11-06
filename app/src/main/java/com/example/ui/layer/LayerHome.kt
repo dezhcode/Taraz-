@@ -251,13 +251,13 @@ private fun GlanceCard(g: HomeGlance, onOpenReports: () -> Unit, onOpenObligatio
             .padding(horizontal = 6.dp, vertical = 6.dp)
     ) {
         GlanceRow(
-            "خرج ${JalaliDate.today().monthName}", if (g.income > 0) "درآمد این ماه ${toman(g.income)}" else "درآمدی ثبت نشده",
+            "هزینهٔ ${JalaliDate.today().monthName}", if (g.income > 0) "درآمد این ماه ${toman(g.income)}" else "درآمدی ثبت نشده",
             g.spent, L.RedText, onOpenReports
         )
         Box(Modifier.padding(horizontal = 12.dp).fillMaxWidth().height(1.dp).background(L.Line))
-        GlanceRow("بدهکار", g.oweNote.ifBlank { "بدهی‌ای ندارید" }, g.owe, if (g.owe > 0) L.Ink else L.Muted, onOpenObligations)
+        GlanceRow("بدهکار", g.oweNote.ifBlank { "بدهکاری ندارید" }, g.owe, if (g.owe > 0) L.Ink else L.Muted, onOpenObligations)
         Box(Modifier.padding(horizontal = 12.dp).fillMaxWidth().height(1.dp).background(L.Line))
-        GlanceRow("بستانکار", g.owedNote.ifBlank { "طلبی ندارید" }, g.owed, if (g.owed > 0) L.Green else L.Muted, onOpenObligations)
+        GlanceRow("بستانکار", g.owedNote.ifBlank { "بستانکاری ندارید" }, g.owed, if (g.owed > 0) L.Green else L.Muted, onOpenObligations)
         val net = g.balance + g.owed - g.owe
         Row(
             Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp))
@@ -266,7 +266,7 @@ private fun GlanceCard(g: HomeGlance, onOpenReports: () -> Unit, onOpenObligatio
         ) {
             Column(Modifier.weight(1f)) {
                 Text("اگر همه صاف شود", style = lt(13.sp, FontWeight.SemiBold))
-                Text("موجودی + طلب − بدهی", style = lt(11.sp, color = L.Muted))
+                Text("موجودی + بستانکار − بدهکار", style = lt(11.sp, color = L.Muted))
             }
             Spacer(Modifier.width(8.dp))
             FitText(toman(net), lt(15.sp, FontWeight.Bold, if (net < 0) L.RedText else L.Ink))
@@ -301,7 +301,7 @@ private fun UpcomingSection(items: List<UpcomingItem>, now: Long) {
     )
     if (items.isEmpty()) {
         Text(
-            "تا یک هفتهٔ آینده قسط، قبض یا چکی موعد ندارد.",
+            "در هفتهٔ آینده قسط، قبض یا چکی سررسید نمی‌شود.",
             style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(horizontal = 24.dp)
         )
         return
@@ -540,9 +540,9 @@ private fun WalletStack(
                 Text(
                     when {
                         pct == null && monthlyExpense > 0 -> "دریافتی‌ای ثبت نشده"
-                        pct == null -> "هنوز خرجی نشده"
-                        pct > 100 -> "${fa(pct)}٪ دریافتی؛ بیشتر از دریافتی خرج شده"
-                        else -> "${fa(pct)}٪ دریافتی خرج شده"
+                        pct == null -> "هنوز هزینه‌ای ثبت نشده"
+                        pct > 100 -> "${fa(pct)}٪ دریافتی؛ هزینه از دریافتی بیشتر است"
+                        else -> "${fa(pct)}٪ دریافتی هزینه شده"
                     },
                     style = lt(12.sp, FontWeight.SemiBold, Color.White)
                 )
@@ -617,7 +617,7 @@ private fun TodayCard(
                         .clip(RoundedCornerShape(14.dp))
                         .background(if (isToday) L.Primary else Color.Transparent)
                         .clickable { onOpenDay(start) }
-                        .semantics { contentDescription = "${weekdayName(start)}، خرج ${money(spend)} تومان" }
+                        .semantics { contentDescription = "${weekdayName(start)}، هزینه ${money(spend)} تومان" }
                         .padding(vertical = 7.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
@@ -633,7 +633,7 @@ private fun TodayCard(
         }
         Box(Modifier.padding(horizontal = 2.dp, vertical = 14.dp).fillMaxWidth().height(1.dp).background(L.Line))
         Column(Modifier.padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("خرج امروز", style = lt(13.sp, color = L.Muted))
+            Text("هزینهٔ امروز", style = lt(13.sp, color = L.Muted))
             Row(verticalAlignment = Alignment.Bottom) {
                 FitText(
                     money(todayExpense),
@@ -644,14 +644,14 @@ private fun TodayCard(
                 Text("تومان", style = lt(15.sp, FontWeight.SemiBold), modifier = Modifier.padding(bottom = 8.dp))
             }
             Text(
-                if (dailyBudget > 0) "سقف خرج روزانه: ${toman(dailyBudget)}" else "سقف روزانه ندارید",
+                if (dailyBudget > 0) "سقف هزینهٔ روزانه: ${toman(dailyBudget)}" else "سقف روزانه ندارید",
                 style = lt(12.sp, color = L.Muted)
             )
             if (dailyBudget > 0) {
                 val pct = (todayExpense.toFloat() / dailyBudget).coerceIn(0f, 1f)
                 Box(
                     Modifier.fillMaxWidth().height(8.dp).clip(PillShape).background(L.Line)
-                        .semantics { contentDescription = "${fa((pct * 100).toInt())} درصد بودجهٔ امروز خرج شده" }
+                        .semantics { contentDescription = "${fa((pct * 100).toInt())} درصد بودجهٔ امروز مصرف شده" }
                 ) {
                     Box(Modifier.fillMaxWidth(pct).fillMaxHeight().clip(PillShape).background(if (todayExpense > dailyBudget) L.Amber else L.Primary))
                 }
@@ -660,9 +660,9 @@ private fun TodayCard(
                 val left = dailyBudget - todayExpense
                 Text(
                     when {
-                        dailyBudget <= 0 -> "با تعیین سقف روزانه، تراز به شما خبر می‌دهد کی نزدیک سقف هستید."
-                        left >= 0 -> "هنوز ${toman(left)} تا سقف امروز جا دارید."
-                        else -> "${toman(-left)} بیشتر از سقف امروز خرج شده."
+                        dailyBudget <= 0 -> "با تعیین سقف روزانه، تراز نزدیک شدن به سقف را اطلاع می‌دهد."
+                        left >= 0 -> "${toman(left)} تا سقف امروز باقی مانده است."
+                        else -> "هزینهٔ امروز ${toman(-left)} از سقف بیشتر شده است."
                     },
                     style = lt(12.sp, color = if (left < 0 && dailyBudget > 0) L.AmberText else L.Muted, lineHeight = 20.sp),
                     modifier = Modifier.weight(1f)

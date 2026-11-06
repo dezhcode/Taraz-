@@ -137,7 +137,7 @@ fun LayerAccountsScreen(
                 )
             }
         },
-        subtitle = if (cards.isEmpty()) "هنوز حسابی ندارید" else "${fa(cards.size)} حساب · روی هر حساب بزنید تا جزئیاتش را ببینید",
+        subtitle = if (cards.isEmpty()) "هنوز حسابی ندارید" else "${fa(cards.size)} حساب · برای مشاهدهٔ جزئیات، روی حساب ضربه بزنید",
         onBack = onBack,
         bottomBar = {
             BigButton("افزودن حساب", onClick = onAdd)
@@ -417,7 +417,7 @@ fun LayerAddAccountSheet(
             placeholder = "۰",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             hint = if (credit) "خریدها از این کارت به بدهی‌اش اضافه می‌شود؛ بازپرداخت را با دکمهٔ «بازپرداخت» در صفحهٔ همین کارت ثبت کنید."
-            else "تا موجودی کل از همین حالا درست باشد."
+            else "تا موجودی کل از ابتدا صحیح باشد."
         )
         if (credit) CreditDueDay(dueDay) { dueDay = it }
 
@@ -500,12 +500,12 @@ fun LayerEditAccountSheet(
     ) {
         LField(
             value = name, onChange = { name = it }, label = "نام حساب",
-            hint = if (nameTaken) "حساب دیگری با این نام دارید." else "تراکنش‌های این حساب هم با نام تازه نمایش داده می‌شوند."
+            hint = if (nameTaken) "حساب دیگری با این نام دارید." else "تراکنش‌های این حساب نیز با نام جدید نمایش داده می‌شوند."
         )
         LField(
             value = balanceText, onChange = { balanceText = groupedInput(it) }, label = if (credit) "استفاده‌شده (تومان)" else "موجودی (تومان)",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            hint = "اگر موجودی واقعی با تراز فرق دارد، اینجا درستش کنید."
+            hint = "در صورت مغایرت موجودی واقعی با تراز، آن را در این بخش اصلاح کنید."
         )
         if (credit) {
             LField(

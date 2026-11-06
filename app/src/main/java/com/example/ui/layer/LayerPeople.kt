@@ -97,7 +97,7 @@ fun LayerObligationsScreen(
     ) {
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text("قرض و قسط", style = lt(26.sp, FontWeight.Bold))
-            Text("وام‌ها، خریدهای قسطی، آدم‌ها و چک‌ها، یک جا", style = lt(13.sp, color = L.Muted))
+            Text("وام‌ها، خریدهای اقساطی، اشخاص و چک‌ها", style = lt(13.sp, color = L.Muted))
         }
 
         Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -109,7 +109,7 @@ fun LayerObligationsScreen(
                     listOfNotNull(
                         if (loanLeft > 0) "وام ${millions(loanLeft)}" else null,
                         if (iOwePeople > 0) "اشخاص ${millions(iOwePeople)}" else null,
-                        if (chequesOut > 0) "چک ${millions(chequesOut)}" else null,
+                        if (chequesOut > 0) "چک پرداختی ${millions(chequesOut)}" else null,
                         if (creditUsed > 0) "اعتباری ${millions(creditUsed)}" else null
                     ).joinToString("\n").ifEmpty { "بدهی‌ای ندارید" },
                     style = lt(11.sp, color = L.Muted, lineHeight = 17.sp), modifier = Modifier.padding(top = 4.dp)
@@ -120,7 +120,7 @@ fun LayerObligationsScreen(
                 FitText(money(owedToMe), lt(20.sp, FontWeight.Bold, L.Green))
                 Text("تومان", style = lt(11.sp, color = L.Muted))
                 Text(
-                    "از ${fa(balances.values.count { it > 0 })} نفر" + if (chequesIn > 0) "\nچک ${millions(chequesIn)}" else "",
+                    "از ${fa(balances.values.count { it > 0 })} نفر" + if (chequesIn > 0) "\nچک دریافتی ${millions(chequesIn)}" else "",
                     style = lt(11.sp, color = L.Muted, lineHeight = 17.sp), modifier = Modifier.padding(top = 4.dp)
                 )
             }
@@ -168,14 +168,14 @@ private fun ColumnScope.PeopleSection(
             Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp).fillMaxWidth().height(42.dp).clip(ButtonShape)
                 .background(L.Surface).clickable(onClick = onSplit),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
-        ) { Text("تقسیم یک خرج جمعی (شام، سفر، خرید)", style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText)) }
+        ) { Text("تقسیم هزینهٔ گروهی (شام، سفر، خرید)", style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText)) }
     }
 
     if (persons.isEmpty()) {
         Column(Modifier.fillMaxWidth().padding(start = 28.dp, end = 28.dp, top = 28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("هنوز کسی را اضافه نکرده‌اید", style = lt(15.sp, FontWeight.Bold))
+            Text("هنوز شخصی اضافه نشده است", style = lt(15.sp, FontWeight.Bold))
             Text(
-                "برای هر دوست، عضو خانواده یا فامیل یک حساب باز کنید تا قرض‌ها و پس‌دادن‌ها جدا جدا ثبت شود و همیشه بدانید چه کسی به چه کسی بدهکار است.",
+                "برای هر یک از دوستان، اعضای خانواده یا بستگان یک حساب ایجاد کنید تا بستانکاری و بدهکاری با هر شخص جداگانه ثبت شود و مانده‌حساب همواره مشخص باشد.",
                 style = lt(13.sp, color = L.Muted, lineHeight = 23.sp)
             )
         }
@@ -210,11 +210,11 @@ private fun BalanceLabel(balance: Long) {
         when {
             balance > 0 -> {
                 Text(money(balance), style = lt(15.sp, FontWeight.Bold, L.Green))
-                Text("طلب من", style = lt(11.sp, color = L.GreenText))
+                Text("بستانکار", style = lt(11.sp, color = L.GreenText))
             }
             balance < 0 -> {
                 Text(money(-balance), style = lt(15.sp, FontWeight.Bold, L.RedText))
-                Text("بدهی من", style = lt(11.sp, color = L.RedText))
+                Text("بدهکار", style = lt(11.sp, color = L.RedText))
             }
             else -> Text("تسویه", style = lt(13.sp, FontWeight.SemiBold, L.Muted))
         }
@@ -314,7 +314,7 @@ fun LayerPersonDetailScreen(
         SectionTitle("ریز حساب")
         LayerCard(radius = 20.dp, padding = 0.dp) {
             if (mine.isEmpty()) {
-                Text("هنوز چیزی ثبت نشده.", style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(16.dp))
+                Text("هنوز موردی ثبت نشده است.", style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(16.dp))
             } else {
                 mine.forEachIndexed { i, d ->
                     Row(
@@ -349,7 +349,7 @@ fun LayerPersonDetailScreen(
             }
         }
         Text(
-            "بستانکار (+) یعنی پولی به این شخص دادید، بدهکار (−) یعنی پولی از او گرفتید.",
+            "بستانکار (+): مبلغ پرداختی به این شخص؛ بدهکار (−): مبلغ دریافتی از این شخص.",
             style = lt(11.sp, color = L.Muted, lineHeight = 19.sp), modifier = Modifier.padding(horizontal = 24.dp)
         )
 
@@ -361,7 +361,7 @@ fun LayerPersonDetailScreen(
 
     if (settling) {
         AccountChoiceSheet(
-            title = if (balance > 0) "${person.name} همهٔ ${money(balance)} تومان را داد؟" else "همهٔ ${money(-balance)} تومان را به ${person.name} دادید؟",
+            title = if (balance > 0) "${person.name} همهٔ ${money(balance)} تومان را داد؟" else "آیا کل مبلغ ${money(-balance)} تومان به ${person.name} پرداخت شد؟",
             question = if (balance > 0) "به کدام حساب واریز شد؟" else "از کدام حساب پرداخت شد؟",
             cards = cards,
             confirm = "تسویه شد",
@@ -387,7 +387,7 @@ fun LayerPersonDetailScreen(
             bottomBar = { BigButton("بله، حذف شود", background = L.RedText) { onDelete(); askDelete = false } }
         ) {
             Text(
-                "${person.name} و ریز حسابش پاک می‌شود. تراکنش‌هایی که روی حساب‌های بانکی ثبت شده‌اند می‌مانند، چون آن پول واقعاً جابه‌جا شده است.",
+                "${person.name} و ریز حسابش پاک می‌شود. تراکنش‌هایی که روی حساب‌های بانکی ثبت شده‌اند می‌مانند، زیرا آن مبالغ واقعاً جابه‌جا شده‌اند.",
                 style = lt(13.sp, color = L.Muted, lineHeight = 23.sp)
             )
         }
@@ -525,8 +525,8 @@ fun PersonEntrySheet(
         LSegmented(EntryKind.entries.map { it.label }, kind.ordinal, { kind = EntryKind.entries[it] })
         val who = person?.name ?: "این شخص"
         Text(
-            if (kind.owedToMe) "پولی به $who دادید؛ $who به همین مبلغ به شما بدهکار می‌شود (یا از بدهی شما کم می‌شود)."
-            else "پولی از $who گرفتید؛ شما به همین مبلغ به $who بدهکار می‌شوید (یا از طلب شما کم می‌شود).",
+            if (kind.owedToMe) "مبلغی به $who پرداخت کرده‌اید؛ به همین میزان بستانکار می‌شوید (یا از بدهی شما کسر می‌شود)."
+            else "مبلغی از $who دریافت کرده‌اید؛ به همین میزان بدهکار می‌شوید (یا از بستانکاری شما کسر می‌شود).",
             style = lt(12.sp, color = L.Muted, lineHeight = 20.sp)
         )
 
@@ -541,7 +541,7 @@ fun PersonEntrySheet(
             style = lt(11.sp, color = L.Muted, lineHeight = 19.sp)
         )
         if (!isRepayment) {
-            Text(if (kind.owedToMe) "کی پس می‌دهد؟" else "کی باید پس بدهید؟", style = lt(13.sp, FontWeight.SemiBold))
+            Text(if (kind.owedToMe) "موعد دریافت" else "موعد پرداخت", style = lt(13.sp, FontWeight.SemiBold))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(null to "بدون موعد", 7 to "یک هفته", 14 to "دو هفته", 30 to "یک ماه", 90 to "سه ماه").forEach { (d, label) ->
                     LChip(label, dueDays == d) { dueDays = d }
@@ -578,7 +578,7 @@ fun SplitExpenseSheet(
     val ok = total > 0 && picked.isNotEmpty() && account != null
 
     LayerSheet(
-        title = "تقسیم خرج جمعی",
+        title = "تقسیم هزینهٔ گروهی",
         onDismiss = onDismiss,
         topGap = 40.dp,
         bottomBar = {

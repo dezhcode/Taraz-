@@ -159,7 +159,7 @@ private fun BillSheet(bill: Bill?, onDismiss: () -> Unit, onSave: (Bill) -> Unit
     val clipboard = LocalClipboardManager.current
 
     LayerSheet(
-        title = if (bill == null) "قبض تازه" else bill.title.ifBlank { bill.kind },
+        title = if (bill == null) "قبض جدید" else bill.title.ifBlank { bill.kind },
         onDismiss = onDismiss,
         topGap = 50.dp,
         bottomBar = {

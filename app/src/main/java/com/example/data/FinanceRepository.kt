@@ -67,7 +67,7 @@ class FinanceRepository(private val db: AppDatabase) {
             if (status == ChequeStatus.CLEARED) {
                 txId = insertTransaction(
                     Transaction(
-                        title = if (c.issued) "چک به ${c.person}" else "چک از ${c.person}",
+                        title = if (c.issued) "پرداخت چک به ${c.person}" else "دریافت چک از ${c.person}",
                         amount = c.amount, category = c.category, date = at,
                         isExpense = c.issued, bankName = account
                     )
@@ -407,15 +407,13 @@ class FinanceRepository(private val db: AppDatabase) {
         var txId: Int? = null
         if (!account.isNullOrBlank()) {
             val title = when {
-                !isRepayment && owedToMe -> "قرض به ${person.name}"
-                !isRepayment -> "قرض از ${person.name}"
-                owedToMe -> "پس دادن به ${person.name}"
-                else -> "پس گرفتن از ${person.name}"
+                owedToMe -> "پرداخت به ${person.name}"
+                else -> "دریافت از ${person.name}"
             }
             txId = insertTransaction(
                 Transaction(
                     title = if (note.isNotBlank()) "$title · $note" else title,
-                    amount = amount, category = "قرض و طلب", date = at,
+                    amount = amount, category = "حساب اشخاص", date = at,
                     // Lending or paying back takes money out; borrowing or getting it back brings it in.
                     isExpense = owedToMe, bankName = account, type = TransactionType.TRANSFER
                 )

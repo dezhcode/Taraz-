@@ -327,7 +327,7 @@ fun LayerPaySheet(
                 Row(Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(L.PrimarySoft).padding(horizontal = 12.dp, vertical = 10.dp)) {
                     Icon(Icons.Default.Info, null, tint = L.PrimaryText, modifier = Modifier.size(18.dp).padding(top = 2.dp))
                     Spacer(Modifier.width(10.dp))
-                    Text("تراز فقط این پرداخت را در حساب‌های شما ثبت می‌کند؛ پولی از کارت بانکی برداشت نمی‌شود.", style = lt(12.sp, color = L.Info, lineHeight = 21.sp))
+                    Text("تراز فقط این پرداخت را در حساب‌های شما ثبت می‌کند؛ مبلغی از کارت بانکی برداشت نمی‌شود.", style = lt(12.sp, color = L.Info, lineHeight = 21.sp))
                 }
                 Spacer(Modifier.weight(1f))
                 PrimaryButton("تأیید و ثبت پرداخت", Modifier.fillMaxWidth().height(54.dp)) {

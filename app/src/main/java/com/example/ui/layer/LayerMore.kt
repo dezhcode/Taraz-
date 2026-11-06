@@ -74,7 +74,7 @@ fun LayerBudgetSheet(current: Long, avgDaily: Long, onDismiss: () -> Unit, onSav
     val presets = listOf(500_000L to "۵۰۰ هزار", 1_000_000L to "۱ میلیون", 1_200_000L to "۱٫۲ میلیون", 2_000_000L to "۲ میلیون")
 
     LayerSheet(
-        title = "سقف خرج روزانه",
+        title = "سقف هزینهٔ روزانه",
         onDismiss = onDismiss,
         topGap = 130.dp,
         bottomBar = {
@@ -97,7 +97,7 @@ fun LayerBudgetSheet(current: Long, avgDaily: Long, onDismiss: () -> Unit, onSav
                     textStyle = lt(54.sp, FontWeight.Light, letterSpacing = (-1.5).sp).copy(textAlign = TextAlign.Center),
                     cursorBrush = SolidColor(L.Primary),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = "سقف خرج روزانه به تومان" }
+                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = "سقف هزینهٔ روزانه به تومان" }
                 )
             }
             Text(if (value == 0L) "تومان در روز" else NumberToPersianWords.convert(value) + " تومان در روز", style = lt(13.sp, color = L.Muted))
@@ -120,8 +120,8 @@ fun LayerBudgetSheet(current: Long, avgDaily: Long, onDismiss: () -> Unit, onSav
             ) {
                 Icon(Icons.Default.AutoAwesome, null, tint = L.PrimaryText, modifier = Modifier.size(18.dp))
                 Text(
-                    "میانگین خرج روزانهٔ شما در ۳۰ روز گذشته ${money(avgDaily)} تومان بوده." +
-                        if (saveMonthly > 0) " با این سقف، ماهی حدود ${money(saveMonthly)} تومان کمتر خرج می‌کنید." else "",
+                    "میانگین هزینهٔ روزانهٔ شما در ۳۰ روز گذشته ${money(avgDaily)} تومان بوده است." +
+                        if (saveMonthly > 0) " با این سقف، ماهانه حدود ${money(saveMonthly)} تومان صرفه‌جویی می‌شود." else "",
                     style = lt(12.sp, color = L.Info, lineHeight = 23.sp)
                 )
             }
@@ -202,7 +202,7 @@ fun LayerGoalsScreen(
                     }
                 }
                 Row(Modifier.padding(top = 14.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BigButton("افزودن پول", Modifier.weight(1f), height = 48.dp) { moneyFor = main to true }
+                    BigButton("افزودن مبلغ", Modifier.weight(1f), height = 48.dp) { moneyFor = main to true }
                     Box(
                         Modifier.height(48.dp).clip(RoundedCornerShape(14.dp)).background(L.PrimarySoft).clickable { moneyFor = main to false }.padding(horizontal = 18.dp),
                         contentAlignment = Alignment.Center
@@ -266,7 +266,7 @@ fun LayerGoalsScreen(
             }
         ) {
             LField(amount, { amount = groupedInput(it) }, "مبلغ (تومان)", placeholder = "۰", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                hint = "تا الان ${money(goal.currentAmount)} از ${money(goal.targetAmount)} تومان جمع شده.")
+                hint = "تاکنون ${money(goal.currentAmount)} از ${money(goal.targetAmount)} تومان پس‌انداز شده است.")
         }
     }
 }
@@ -289,7 +289,7 @@ private fun LayerAddGoalSheet(onDismiss: () -> Unit, onSave: (String, Long, Long
     ) {
         LField(title, { title = it }, "نام هدف", placeholder = "مثلاً سفر شمال")
         LField(target, { target = groupedInput(it) }, "مبلغ هدف (تومان)", placeholder = "۰", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-        LField(current, { current = groupedInput(it) }, "تا حالا جمع کرده‌اید (اختیاری)", placeholder = "۰", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+        LField(current, { current = groupedInput(it) }, "مبلغ پس‌انداز فعلی (اختیاری)", placeholder = "۰", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
         Text("تا کی؟", style = lt(13.sp, FontWeight.SemiBold))
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(3 to "۳ ماه", 6 to "۶ ماه", 12 to "یک سال", 24 to "دو سال", null to "بدون موعد").forEach { (m, label) ->
@@ -331,7 +331,7 @@ fun goalPlan(goal: FinancialGoal, transactions: List<Transaction>, now: Long = S
     }
     val gap = perMonth - avgSaved.coerceAtLeast(0)
     // دسته‌ای که بیشترین خرج اختیاری را دارد (قسط و قبوض را نمی‌شود کم کرد)
-    val fixed = setOf("قسط", "قبوض", "انتقال", "قرض و طلب")
+    val fixed = setOf("قسط", "قبوض", "انتقال", "حساب اشخاص")
     val byCat = withData.flatMap { it.third }.filter { it.countsAsExpense && it.category !in fixed }
         .groupBy { it.category }.mapValues { (_, l) -> l.sumOf { it.amount } / withData.size }
         .toList().sortedByDescending { it.second }
@@ -341,7 +341,7 @@ fun goalPlan(goal: FinancialGoal, transactions: List<Transaction>, now: Long = S
         "میانگین پس‌انداز شما ماهی ${money(avgSaved.coerceAtLeast(0))} است و ${money(gap)} کم دارید. " +
             "اگر از «${top.first}» (ماهی حدود ${money(top.second)}) ${fa(pct)}٪ کم کنید به موقع می‌رسید" +
             if (pct >= 100) "؛ یا موعد را عقب‌تر بیندازید." else "."
-    } else "ماهی ${money(gap)} بیشتر از روند فعلی لازم است؛ موعد را عقب‌تر بیندازید یا از خرج‌ها کم کنید."
+    } else "ماهانه ${money(gap)} تومان بیش از روند فعلی لازم است؛ موعد را تمدید کنید یا هزینه‌ها را کاهش دهید."
     return GoalPlan(headline, advice, false)
 }
 
@@ -511,7 +511,7 @@ fun LayerCategoriesScreen(
         bottomBar = { BigButton("دستهٔ جدید", onClick = onAdd) }
     ) {
         Text(
-            "روی هر دسته بزنید تا نام، آیکن، رنگ یا بودجهٔ ماهانه‌اش را عوض کنید.",
+            "روی هر دسته بزنید تا نام، آیکن، رنگ یا بودجهٔ ماهانهٔ آن را تغییر دهید.",
             style = lt(12.sp, color = L.Muted), modifier = Modifier.padding(horizontal = 24.dp)
         )
         listOf(false to "هزینه‌ها", true to "درآمدها").forEach { (income, label) ->
@@ -585,7 +585,7 @@ fun LayerAddCategoryScreen(
 
     LayerScreen(
         title = if (existing == null) "دستهٔ جدید" else "ویرایش «${existing.name}»",
-        subtitle = if (existing == null) "نام، آیکن و رنگ را انتخاب کنید" else "تراکنش‌های این دسته هم با نام تازه نمایش داده می‌شوند",
+        subtitle = if (existing == null) "نام، آیکن و رنگ را انتخاب کنید" else "تراکنش‌های این دسته نیز با نام جدید نمایش داده می‌شوند",
         onBack = onBack,
         bottomBar = {
             BigButton(if (existing == null) "ساخت دسته" else "ذخیره", enabled = name.isNotBlank() && !taken) {
@@ -680,7 +680,7 @@ fun LayerNotificationsScreen(
 
     LayerScreen(
         title = "اعلان‌ها",
-        subtitle = if (count == 0) "چیز تازه‌ای نیست" else "${fa(count)} مورد برای امروز",
+        subtitle = if (count == 0) "مورد جدیدی وجود ندارد" else "${fa(count)} مورد برای امروز",
         onBack = onBack
     ) {
         if (count == 0) {
@@ -688,7 +688,7 @@ fun LayerNotificationsScreen(
                 Box(Modifier.size(80.dp).clip(CircleShape).background(L.NavSelected), contentAlignment = Alignment.Center) {
                     Icon(Icons.Default.Notifications, null, tint = L.Primary, modifier = Modifier.size(36.dp))
                 }
-                Text("همه‌چیز مرتب است", style = lt(16.sp, FontWeight.Bold))
+                Text("موردی برای بررسی وجود ندارد", style = lt(16.sp, FontWeight.Bold))
             }
         } else {
             Text("امروز", style = lt(13.sp, FontWeight.Bold, L.Muted), modifier = Modifier.padding(horizontal = 24.dp))
@@ -708,16 +708,16 @@ fun LayerNotificationsScreen(
             }
             if (budgetPct >= 0) {
                 NotifItem(
-                    L.Chip, L.Ink, "${fa(budgetPct)}٪ سقف امروز خرج شده",
-                    if (todayExpense <= dailyBudget) "هنوز ${money(dailyBudget - todayExpense)} تومان جا دارید" else "${money(todayExpense - dailyBudget)} تومان از سقف گذشته‌اید",
+                    L.Chip, L.Ink, "${fa(budgetPct)}٪ سقف امروز مصرف شده",
+                    if (todayExpense <= dailyBudget) "${money(dailyBudget - todayExpense)} تومان تا سقف امروز باقی مانده است" else "${money(todayExpense - dailyBudget)} تومان از سقف گذشته‌اید",
                     null, {}
                 )
             }
         }
-        SectionTitle("چه چیزی خبرم کند؟", Modifier.padding(top = 8.dp))
+        SectionTitle("موارد اطلاع‌رسانی", Modifier.padding(top = 8.dp))
         LayerCard(radius = 20.dp, padding = 0.dp) {
             Column(Modifier.padding(horizontal = 16.dp)) {
-                SwitchRow("اعلان‌ها و یادآوری اقساط", "یک روز قبل از سررسید و هنگام ثبت‌های تازه", alertsEnabled, onAlertsChange, divider = false)
+                SwitchRow("اعلان‌ها و یادآوری اقساط", "یک روز قبل از سررسید و هنگام ثبت موارد جدید", alertsEnabled, onAlertsChange, divider = false)
             }
         }
     }

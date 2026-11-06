@@ -271,7 +271,7 @@ fun LayerReportsScreen(
         // دسته‌ها
         LayerCard(padding = 16.dp) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-                Text("هزینه‌ها کجا رفت؟", style = lt(14.sp, FontWeight.Bold))
+                Text("هزینه‌ها به تفکیک دسته", style = lt(14.sp, FontWeight.Bold))
                 Text("از ${toman(cur.expense)}", style = lt(12.sp, color = L.Muted))
             }
             if (top.isEmpty()) {
@@ -316,9 +316,9 @@ fun LayerReportsScreen(
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text("هنوز هدفی نگذاشته‌اید", style = lt(14.sp, FontWeight.Bold))
-                        Text("یک هدف پس‌انداز بگذارید تا پیشرفتش را اینجا ببینید.", style = lt(12.sp, color = L.Muted))
+                        Text("یک هدف پس‌انداز تعیین کنید تا پیشرفت آن در این بخش نمایش داده شود.", style = lt(12.sp, color = L.Muted))
                     }
-                    SoftButton("هدف تازه", 36.dp, onOpenGoals)
+                    SoftButton("هدف جدید", 36.dp, onOpenGoals)
                 }
             } else {
                 val frac = if (goal.targetAmount > 0) goal.currentAmount.toFloat() / goal.targetAmount else 0f
@@ -417,7 +417,7 @@ private fun MoneyFlowCard(income: Long, expense: Long, byCategory: List<Pair<Str
         )
         Spacer(Modifier.height(10.dp))
         // به کجا رفت
-        Text("به کجا رفت", style = lt(12.sp, color = L.Muted))
+        Text("محل مصرف", style = lt(12.sp, color = L.Muted))
         Row(Modifier.padding(top = 4.dp).fillMaxWidth().height(14.dp).clip(RoundedCornerShape(7.dp)), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             parts.forEach { (_, v, c) -> Box(Modifier.weight(v.toFloat().coerceAtLeast(1f)).height(14.dp).background(c)) }
             val used = parts.sumOf { it.second }

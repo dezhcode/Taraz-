@@ -268,24 +268,24 @@ fun LayerTxEditSheet(
                 Box(
                     Modifier.height(32.dp).clip(PillShape).border(1.dp, L.Line, PillShape).clickable { addingTag = true }.padding(horizontal = 10.dp),
                     contentAlignment = Alignment.Center
-                ) { Text("+ برچسب تازه", style = lt(12.sp, FontWeight.SemiBold, L.Primary)) }
+                ) { Text("+ برچسب جدید", style = lt(12.sp, FontWeight.SemiBold, L.Primary)) }
             }
         }
 
         // عکس‌ها (فاکتور، کارت گارانتی)
-        Text("عکس‌ها", style = lt(13.sp, color = L.Muted))
+        Text("تصاویر", style = lt(13.sp, color = L.Muted))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             photos.forEach { name ->
                 Box(Modifier.size(76.dp).clip(RoundedCornerShape(14.dp)).background(L.Chip).clickable { viewing = name }) {
                     AsyncImage(
-                        model = Attachments.file(context, name), contentDescription = "عکس پیوست",
+                        model = Attachments.file(context, name), contentDescription = "تصویر پیوست",
                         contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()
                     )
                     Box(
                         Modifier.align(Alignment.TopStart).padding(4.dp).size(22.dp).clip(PillShape).background(Color(0x99000000))
                             .clickable { photos = photos - name },
                         contentAlignment = Alignment.Center
-                    ) { Icon(Icons.Default.Close, "حذف عکس", tint = Color.White, modifier = Modifier.size(14.dp)) }
+                    ) { Icon(Icons.Default.Close, "حذف تصویر", tint = Color.White, modifier = Modifier.size(14.dp)) }
                 }
             }
             if (photos.size < 6) {
@@ -306,7 +306,7 @@ fun LayerTxEditSheet(
         Dialog(onDismissRequest = { viewing = null }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
             Box(Modifier.fillMaxSize().background(Color.Black).clickable { viewing = null }, contentAlignment = Alignment.Center) {
                 AsyncImage(
-                    model = Attachments.file(context, name), contentDescription = "عکس پیوست",
+                    model = Attachments.file(context, name), contentDescription = "تصویر پیوست",
                     contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth()
                 )
                 Text("برای بستن لمس کنید", style = lt(12.sp, color = Color(0xB3FFFFFF)), modifier = Modifier.align(Alignment.BottomCenter).padding(24.dp))

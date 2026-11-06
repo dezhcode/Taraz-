@@ -76,7 +76,7 @@ fun HomeLayoutSheet(
         topGap = 40.dp
     ) {
         Text(
-            "کارت موجودی همیشه بالای صفحه است. بقیه را روشن و خاموش کنید و با فلش‌ها جابه‌جا کنید.",
+            "کارت موجودی همیشه بالای صفحه است. سایر بخش‌ها را فعال یا غیرفعال کنید و با پیکان‌ها جابه‌جا کنید.",
             style = lt(12.sp, color = L.Muted, lineHeight = 21.sp)
         )
         Text("بخش‌های صفحه", style = lt(13.sp, FontWeight.Bold, L.Muted), modifier = Modifier.padding(top = 4.dp))
@@ -150,7 +150,7 @@ fun AllToolsSheet(
     val full = pinned.size >= HomeTools.MAX_PINNED
 
     LayerSheet(title = "همهٔ ابزارها", onDismiss = onDismiss, closeLabel = "بستن", topGap = 40.dp) {
-        LField(query, { query = it }, "جستجوی ابزار", placeholder = "قبض، چک، قرض…")
+        LField(query, { query = it }, "جستجوی ابزار", placeholder = "قبض، چک، اقساط…")
         Text(
             if (full) "«ابزارهای من» پر است؛ برای ستاره زدن یکی را بردارید." else "با ستاره هر ابزار را به «ابزارهای من» در صفحهٔ خانه می‌برید.",
             style = lt(12.sp, color = if (full) L.AmberInk else L.Muted, lineHeight = 20.sp)

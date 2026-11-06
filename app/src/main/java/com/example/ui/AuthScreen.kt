@@ -140,14 +140,14 @@ fun AuthScreen(
                                 modifier = Modifier.size(64.dp).testTag("auth_logo")
                             )
                             Text("به تراز خوش آمدید", style = lt(26.sp, FontWeight.Bold), modifier = Modifier.padding(top = 8.dp))
-                            Text("حساب‌ها، اقساط و خرج روزانه‌تان را یک‌جا ببینید.", style = lt(14.sp, color = L.Muted, lineHeight = 26.sp))
+                            Text("حساب‌ها، اقساط و هزینه‌های روزانهٔ خود را یک‌جا مدیریت کنید.", style = lt(14.sp, color = L.Muted, lineHeight = 26.sp))
                         }
                         Spacer(Modifier.height(28.dp))
                         LField(fullName, { fullName = it; errorMessage = null }, "نام شما", placeholder = "مثلاً مریم")
                         if (!com.example.Features.LOGIN) {
                             // ورود با شماره فعلاً خاموش است: فقط نام، و همه‌چیز روی همین گوشی
                             Text(
-                                "اطلاعات شما فقط روی همین گوشی ذخیره می‌شود. ورود با شمارهٔ موبایل به زودی اضافه می‌شود.",
+                                "اطلاعات شما فقط روی همین دستگاه ذخیره می‌شود. ورود با شمارهٔ موبایل به‌زودی فعال می‌شود.",
                                 style = lt(12.sp, color = L.Muted, lineHeight = 20.sp), modifier = Modifier.padding(top = 10.dp)
                             )
                             Spacer(Modifier.height(32.dp))
@@ -287,12 +287,12 @@ private fun OnboardingPager(onFinish: () -> Unit, onLogin: () -> Unit) {
     val titles = listOf(
         "همهٔ حساب‌هایتان، یک نگاه",
         "قسط، چک و قبض سر موعد",
-        "پول کجا رفت؟ گزارش ماه"
+        "گزارش ماهانهٔ هزینه‌ها"
     )
     val bodies = listOf(
-        "کارت‌ها، پول نقد و اقساط کنار هم؛ با روزشماری که نشان می‌دهد امروز چقدر جا دارید.",
-        "پیش از هر سررسید یادآوری می‌گیرید و پرداخت را با یک لمس ثبت می‌کنید.",
-        "هزینه‌ها به تفکیک دسته، مقایسه با ماه قبل و پیشرفت هدف پس‌انداز؛ همه با عدد کامل."
+        "کارت‌ها، وجه نقد و اقساط در یک صفحه؛ همراه با نمایش باقی‌ماندهٔ سقف هزینهٔ امروز.",
+        "پیش از هر سررسید یادآوری دریافت می‌کنید و پرداخت را با یک لمس ثبت می‌کنید.",
+        "هزینه‌ها به تفکیک دسته، مقایسه با ماه قبل و پیشرفت هدف پس‌انداز."
     )
     val last = page == 2
 
@@ -334,7 +334,7 @@ private fun OnboardingPager(onFinish: () -> Unit, onLogin: () -> Unit) {
                             listOf(
                                 Triple("قسط وام", "۳ روز دیگر", "۴٬۲۰۰٬۰۰۰"),
                                 Triple("قبض برق", "فردا", "۳۸۵٬۰۰۰"),
-                                Triple("چک به علی", "۱۵ آذر", "۲۰٬۰۰۰٬۰۰۰")
+                                Triple("پرداخت چک به علی", "۱۵ آذر", "۲۰٬۰۰۰٬۰۰۰")
                             ).forEachIndexed { i, (t, d, a) ->
                                 Row(
                                     Modifier.fillMaxWidth().cardSurface(18.dp).padding(horizontal = 14.dp, vertical = 12.dp),
@@ -350,7 +350,7 @@ private fun OnboardingPager(onFinish: () -> Unit, onLogin: () -> Unit) {
                         }
                         else -> {
                             Column(Modifier.fillMaxWidth().cardSurface(18.dp).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                listOf("خوراک" to 0.9f, "رفت‌وآمد" to 0.55f, "قبوض" to 0.35f, "تفریح" to 0.2f).forEach { (n, f) ->
+                                listOf("غذا" to 0.9f, "حمل‌ونقل" to 0.55f, "قبوض" to 0.35f, "تفریح" to 0.2f).forEach { (n, f) ->
                                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         Text(n, style = lt(12.sp, FontWeight.SemiBold))
                                         Box(Modifier.fillMaxWidth().height(8.dp).clip(CircleShape).background(L.Line)) {
@@ -376,7 +376,7 @@ private fun OnboardingPager(onFinish: () -> Unit, onLogin: () -> Unit) {
                 )
             }
         }
-        BigButton(if (last) "شروع کنیم" else "بعدی", height = 56.dp) { if (last) onFinish() else page++ }
+        BigButton(if (last) "شروع" else "بعدی", height = 56.dp) { if (last) onFinish() else page++ }
         if (com.example.Features.LOGIN) {
             Box(Modifier.padding(top = 8.dp).fillMaxWidth().height(46.dp).clip(RoundedCornerShape(14.dp)).clickable(onClick = onLogin), contentAlignment = Alignment.Center) {
                 Text("حساب دارم، ورود", style = lt(15.sp, FontWeight.SemiBold, L.PrimaryText))

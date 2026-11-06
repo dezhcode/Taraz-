@@ -12,5 +12,5 @@ object Features {
     /** ورود با شمارهٔ موبایل و کد پیامکی؛ خاموش یعنی فقط با نام وارد می‌شوید و داده‌ها روی گوشی می‌ماند */
     const val LOGIN = false
 
-    const val SOON = "به زودی"
+    const val SOON = "به‌زودی"
 }

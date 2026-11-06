@@ -114,7 +114,7 @@ fun HomeSearchSheet(
                 "عنوان یا مبلغ تراکنش، نام شخص، قبض یا چک، یا اسم یک ابزار مثل «چک» یا «بودجه» را بنویسید.",
                 style = lt(13.sp, color = L.Muted, lineHeight = 22.sp)
             )
-            total == 0 -> Text("چیزی پیدا نشد.", style = lt(13.sp, color = L.Muted))
+            total == 0 -> Text("موردی یافت نشد.", style = lt(13.sp, color = L.Muted))
         }
         if (tools.isNotEmpty()) SearchGroup("ابزارها", tools.size) {
             tools.take(6).forEach { t -> SearchRow(t.label, t.sub) { onDismiss(); onTool(t.id) } }
@@ -124,7 +124,7 @@ fun HomeSearchSheet(
                 val bal = balances[p.id] ?: 0L
                 SearchRow(
                     p.name, p.relation,
-                    trailing = when { bal > 0 -> "طلب ${money(bal)}"; bal < 0 -> "بدهی ${money(-bal)}"; else -> "تسویه" },
+                    trailing = when { bal > 0 -> "بستانکار ${money(bal)}"; bal < 0 -> "بدهکار ${money(-bal)}"; else -> "تسویه" },
                     trailingColor = if (bal > 0) L.Green else if (bal < 0) L.RedText else L.Muted
                 ) { onDismiss(); onPerson(p) }
             }

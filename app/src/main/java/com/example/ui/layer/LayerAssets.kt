@@ -78,7 +78,7 @@ fun parseQuantity(text: String): Double {
 private fun agoText(at: Long): String {
     val min = ((System.currentTimeMillis() - at) / 60_000).toInt()
     return when {
-        min < 1 -> "همین الان"
+        min < 1 -> "هم‌اکنون"
         min < 60 -> "${fa(min)} دقیقه پیش"
         min < 24 * 60 -> "${fa(min / 60)} ساعت پیش"
         else -> JalaliDate.fromTimestamp(at).formatShort()
@@ -134,7 +134,7 @@ fun LayerAssetsScreen(
                 Text("تومان", style = lt(14.sp), modifier = Modifier.padding(bottom = 6.dp))
             }
             Text(
-                "حساب‌ها ${millions(accountsTotal)} + دارایی‌ها ${millions(assetsTotal)}" + if (debtsTotal > 0) " − قرض و قسط ${millions(debtsTotal)}" else "",
+                "حساب‌ها ${millions(accountsTotal)} + دارایی‌ها ${millions(assetsTotal)}" + if (debtsTotal > 0) " − بدهی‌ها ${millions(debtsTotal)}" else "",
                 style = lt(12.sp, color = L.Muted)
             )
         }
@@ -167,7 +167,7 @@ fun LayerAssetsScreen(
                 "بعضی قیمت‌ها به‌روز نشد",
                 "آخرین قیمتی که داشتیم نشان داده می‌شود.\n" +
                     "اگر فیلترشکن روشن است، برای گرفتن قیمت خاموشش کنید: سایت‌های قیمت ایرانی به آی‌پی خارج جواب نمی‌دهند. " +
-                    "اگر مشکل ماند، از همین کادر عکس بگیرید و بفرستید.\n" +
+                    "در صورت تداوم مشکل، از این کادر تصویر تهیه کرده و برای پشتیبانی ارسال کنید.\n" +
                     errors.joinToString(" · "),
                 L.AmberSoft, L.AmberInk, Modifier.padding(horizontal = 20.dp)
             )
@@ -267,7 +267,7 @@ fun AssetSheet(
     val ok = qty > 0 && name.isNotBlank() && (code != null || manual > 0)
 
     LayerSheet(
-        title = if (existing == null) "دارایی تازه" else "ویرایش ${existing.name}",
+        title = if (existing == null) "دارایی جدید" else "ویرایش ${existing.name}",
         onDismiss = onDismiss,
         topGap = 40.dp,
         bottomBar = {
@@ -298,7 +298,7 @@ fun AssetSheet(
                 LField(
                     value = query, onChange = { query = it }, label = "نام یا نماد صندوق",
                     placeholder = "مثلاً عیار، طلا، کهربا، فیروزه",
-                    hint = "صندوق‌هایی که در بورس معامله می‌شوند قیمت روز دارند؛ بقیه را با قیمت دستی ثبت کنید."
+                    hint = "صندوق‌هایی که در بورس معامله می‌شوند قیمت روز دارند؛ سایر صندوق‌ها را با قیمت دستی ثبت کنید."
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SoftButton(if (searching) "در حال جست‌وجو…" else "جست‌وجو در بورس", height = 38.dp) {
@@ -306,7 +306,7 @@ fun AssetSheet(
                             searching = true
                             onSearchFunds(query) { list, err ->
                                 searching = false; results = list
-                                searchMsg = err ?: if (list.isEmpty()) "چیزی پیدا نشد." else null
+                                searchMsg = err ?: if (list.isEmpty()) "موردی یافت نشد." else null
                             }
                         }
                     }
@@ -377,8 +377,8 @@ private fun InflationCard(snapshots: List<com.example.data.NetWorthSnapshot>, hi
         Text("پس‌انداز در برابر تورم", style = lt(14.sp, FontWeight.Bold))
         if (list.size < 2) {
             Text(
-                "تراز هر ماه با قیمت روز دلار و طلا یک عکس از دارایی خالص شما می‌گیرد. از ماه دوم اینجا می‌بینید دارایی‌تان به دلار و طلا بیشتر شده یا فقط عددش به تومان بالا رفته." +
-                    if (list.size == 1) "\nعکس ${JalaliDate.MONTH_NAMES[list[0].monthKey % 100 - 1]} گرفته شد." else "",
+                "تراز هر ماه دارایی خالص شما را با قیمت روز دلار و طلا ثبت می‌کند. از ماه دوم در این بخش مشخص می‌شود که ارزش دارایی شما به دلار و طلا افزایش یافته یا تنها مبلغ تومانی آن بیشتر شده است." +
+                    if (list.size == 1) "\nارزش ${JalaliDate.MONTH_NAMES[list[0].monthKey % 100 - 1]} ثبت شد." else "",
                 style = lt(12.sp, color = L.Muted, lineHeight = 21.sp), modifier = Modifier.padding(top = 6.dp)
             )
             return@LayerCard
