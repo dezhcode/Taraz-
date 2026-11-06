@@ -18,6 +18,8 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -91,13 +93,28 @@ fun AuthScreen(
             ) {
                 // The wordmark, not a generic padlock — this is the first screen
                 // a new user sees and the only place the full logo appears.
-                Image(
-                    painter = painterResource(id = R.drawable.logo_taraz_full),
-                    contentDescription = "تراز",
-                    modifier = Modifier
-                        .height(52.dp)
-                        .testTag("auth_logo")
-                )
+                Row(
+                    modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "تراز" },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.logo_taraz_full),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .height(44.dp)
+                            .testTag("auth_logo")
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "تراز",
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = EbayDarkText,
+                            fontSize = 38.sp
+                        )
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 

@@ -4,11 +4,29 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Centered T mark taking ~70% of 108x108 with safe margins -->
-    <path
-        android:fillColor="#0B7A57"
-        android:pathData="M16,16h76v16h-76z" />
-    <path
-        android:fillColor="#0B7A57"
-        android:pathData="M46,32h16v60h-16z" />
+    <!--
+      Taraz mark («ت»: a bowl with two dots, the dots read as the pans of a scale),
+      centred in the 66dp adaptive-icon safe zone. The 100-unit source artwork is
+      scaled by 0.72 and moved so its bounding box is centred on (54, 54).
+      Drawn in white: it is the foreground over the blue background AND the
+      monochrome layer for Android 13 themed icons (the system tints by alpha).
+    -->
+    <group
+        android:scaleX="0.72"
+        android:scaleY="0.72"
+        android:translateX="18"
+        android:translateY="16.74">
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M20,48A30,30 0 0,0 80,48"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="butt"
+            android:strokeWidth="9" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M31,28a7,7 0 1,0 14,0a7,7 0 1,0 -14,0z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M55,28a7,7 0 1,0 14,0a7,7 0 1,0 -14,0z" />
+    </group>
 </vector>

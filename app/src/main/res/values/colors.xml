@@ -9,4 +9,5 @@
     <color name="white">#FFFFFFFF</color>
     <color name="taraz_green">#0B7A57</color>
     <color name="taraz_surface">#F4F7F4</color>
+    <color name="taraz_brand">#2250F4</color>
 </resources>

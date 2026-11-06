@@ -59,7 +59,7 @@ object NotificationHelper {
         )
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info) // Fallback standard system drawable for reliable rendering
+            .setSmallIcon(com.example.R.drawable.ic_stat_taraz)
             .setContentTitle(title)
             .setContentText(message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
