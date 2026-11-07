@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.BankBin
 import com.example.data.SmsIngest
+import com.example.data.isCash
 import com.example.sms.data.scanner.InboxMessage
 import com.example.sms.permission.SmsPermissionHelper
 import com.example.sms.presentation.SmsParserViewModel
@@ -502,6 +503,9 @@ fun LayerSmsSetupScreen(
     val allCards by viewModel.cards.collectAsState()
 
     var hasPermission by remember { mutableStateOf(SmsPermissionHelper.hasSmsPermissions(context)) }
+    // اگر قبلاً راه‌اندازی شده، مستقیم صفحهٔ مدیریت؛ وگرنه مرحله‌ها
+    var managing by rememberSaveable { mutableStateOf(readerEnabled && hasPermission) }
+    var step by rememberSaveable { mutableIntStateOf(0) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { p ->
         hasPermission = (p[android.Manifest.permission.READ_SMS] ?: false) && (p[android.Manifest.permission.RECEIVE_SMS] ?: false)
         if (hasPermission) {
@@ -510,9 +514,6 @@ fun LayerSmsSetupScreen(
         }
     }
 
-    // اگر قبلاً راه‌اندازی شده، مستقیم صفحهٔ مدیریت؛ وگرنه مرحله‌ها
-    var managing by rememberSaveable { mutableStateOf(readerEnabled && hasPermission) }
-    var step by rememberSaveable { mutableIntStateOf(0) }
     var cardNumber by rememberSaveable { mutableStateOf("") }
     var cardName by rememberSaveable { mutableStateOf("") }
     var tab by rememberSaveable { mutableIntStateOf(0) }
