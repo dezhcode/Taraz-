@@ -3,7 +3,8 @@ package com.example.services
 import android.content.Context
 
 object ApiConfig {
-    const val DEFAULT_BASE_URL = "https://dezhcode.pyho.ir/taraz"
+    /** سرور اختصاصی دستیار؛ تا وقتی دستیار خاموش است نشانی‌ای در برنامه نیست و هیچ درخواستی بیرون نمی‌رود */
+    val DEFAULT_BASE_URL: String = if (com.example.Features.AI) "https://dezhcode.pyho.ir/taraz" else "http://127.0.0.1"
 
     fun initialize(context: Context) {
         val aiPrefs = context.getSharedPreferences("ai_prefs", Context.MODE_PRIVATE)

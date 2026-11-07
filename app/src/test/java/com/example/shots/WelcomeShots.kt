@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.example.ui.layer.LayerPrivacyScreen
 import com.example.ui.layer.LayerTheme
 import com.example.ui.layer.TarazSplash
 import com.example.ui.layer.WelcomeIntro
@@ -42,5 +43,6 @@ class WelcomeShots {
     @Test fun intro2() = shot("3_intro_2") { WelcomeIntro(onFinish = {}, initialPage = 1) }
     @Test fun intro3() = shot("3_intro_3") { WelcomeIntro(onFinish = {}, initialPage = 2) }
     @Test fun intro4() = shot("3_intro_4") { WelcomeIntro(onFinish = {}, initialPage = 3) }
+    @Test fun privacy() = shot("4_privacy") { LayerPrivacyScreen(onBack = {}) }
     @Test fun intro5() = shot("3_intro_5") { WelcomeIntro(onFinish = {}, initialPage = 4) }
 }

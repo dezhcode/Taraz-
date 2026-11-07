@@ -180,7 +180,7 @@ class DuckRealtimeVoiceSession(
                     }
                 }
                 // مبدأ https تا getUserMedia در «secure context» مجاز باشد
-                wv.loadDataWithBaseURL("https://duck.ai/", PAGE_HTML, "text/html", "utf-8", null)
+                wv.loadDataWithBaseURL("${DuckAiClient.BASE_URL}/", PAGE_HTML, "text/html", "utf-8", null)
                 webView = wv
                 created.complete(Unit)
             } catch (e: Exception) {

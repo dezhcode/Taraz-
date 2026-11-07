@@ -57,7 +57,8 @@ class DuckAiClient(context: Context) {
 
     companion object {
         private const val TAG = "DuckAiClient"
-        const val BASE_URL = "https://duck.ai"
+        /** تا وقتی دستیار خاموش است نشانی سرویس در برنامه نیست و هیچ درخواستی بیرون نمی‌رود */
+        val BASE_URL: String = if (com.example.Features.AI) "https://duck.ai" else "http://127.0.0.1"
         const val DEFAULT_MODEL = "gpt-6-luna"
         const val USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
@@ -145,7 +146,7 @@ class DuckAiClient(context: Context) {
             .header("Accept-Language", "en-US,en;q=0.9")
             .build()
         okHttp.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) throw DuckAiException("duck.ai در دسترس نیست (HTTP ${resp.code})", resp.code)
+            if (!resp.isSuccessful) throw DuckAiException("سرویس دستیار در دسترس نیست (HTTP ${resp.code})", resp.code)
             val html = resp.body?.string().orEmpty()
             val tag = Regex("""data-version-tag="([^"]*)"""").find(html)?.groupValues?.get(1) ?: "dev"
             val sha = Regex("""data-version-sha="([^"]*)"""").find(html)?.groupValues?.get(1) ?: "hash"
@@ -266,7 +267,7 @@ class DuckAiClient(context: Context) {
         meta.put("origin", BASE_URL)
         meta.put(
             "stack",
-            "Error\nat l (https://duck.ai/dist/duckai-dist/entry.duckai.js:2:2129171)\nat async https://duck.ai/dist/duckai-dist/entry.duckai.js:2:1859809"
+            if (com.example.Features.AI) "Error\nat l (https://duck.ai/dist/duckai-dist/entry.duckai.js:2:2129171)\nat async https://duck.ai/dist/duckai-dist/entry.duckai.js:2:1859809" else ""
         )
         meta.put("duration", "58")
         proof.put("meta", meta)

@@ -363,6 +363,7 @@ fun LayerSettingsScreen(
     onTestLock: () -> Unit,
     onOpenSms: () -> Unit,
     onOpenBackup: () -> Unit,
+    onOpenPrivacy: () -> Unit,
     onTestServer: ((Boolean, String) -> Unit) -> Unit,
     onLogout: () -> Unit,
     onResetAll: () -> Unit
@@ -445,6 +446,10 @@ fun LayerSettingsScreen(
             if (serverMsg != null) {
                 Text(serverMsg!!.second, style = lt(12.sp, color = L.Muted, lineHeight = 20.sp), modifier = Modifier.padding(bottom = 12.dp))
             }
+        }
+
+        SettingsGroup("درباره") {
+            NavRow("سیاست حریم خصوصی", "داده‌ها فقط روی همین گوشی", divider = false, onClick = onOpenPrivacy)
         }
 
         LayerCard(radius = 20.dp, padding = 0.dp, modifier = Modifier.padding(top = 6.dp)) {

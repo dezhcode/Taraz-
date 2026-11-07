@@ -493,6 +493,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         onTestLock = { viewModel.lockApp() },
                                         onOpenSms = { openSub("sms_setup") },
                                         onOpenBackup = { openBackupGuarded() },
+                                        onOpenPrivacy = { openSub("privacy") },
                                         onTestServer = { cb -> viewModel.testAiServerConnection(cb) },
                                         onLogout = {
                                             subStack.clear()
@@ -503,6 +504,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                             viewModel.resetAllData()
                                         }
                                     )
+                                }
+
+                                "privacy" -> {
+                                    com.example.ui.layer.LayerPrivacyScreen(onBack = { closeSub() })
                                 }
 
                                 "sms_setup" -> {
