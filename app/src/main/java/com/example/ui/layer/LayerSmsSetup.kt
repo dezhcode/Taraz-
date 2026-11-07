@@ -241,7 +241,7 @@ private fun StepCard(s: SmsWizardState, a: SmsWizardActions) {
             Column(Modifier.padding(horizontal = 14.dp)) {
                 s.cards.forEachIndexed { i, c ->
                     LRow(
-                        c.bankName, "•••• •••• •••• ${fa(c.last4)}",
+                        c.bankName, maskedCard(c.last4),
                         divider = i < s.cards.size - 1,
                         leading = { BankDot(c.bankName) },
                         trailing = { StatusPill("ثبت شد", L.GreenSoft, L.GreenText) }
@@ -462,7 +462,7 @@ internal fun SmsManageScreen(
             Column(Modifier.padding(horizontal = 14.dp)) {
                 if (cards.isEmpty()) Text("کارتی با شمارهٔ کارت ثبت نشده است.", style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(vertical = 16.dp))
                 cards.forEachIndexed { i, c ->
-                    LRow(c.bankName, "•••• •••• •••• ${fa(c.last4)}", divider = i < cards.size - 1, leading = { BankDot(c.bankName) })
+                    LRow(c.bankName, maskedCard(c.last4), divider = i < cards.size - 1, leading = { BankDot(c.bankName) })
                 }
             }
         }
@@ -479,6 +479,9 @@ private fun SmallAction(text: String, onClick: () -> Unit) {
 }
 
 // ───────────────────────── کنترل‌کنندهٔ زنده ─────────────────────────
+
+/** شمارهٔ کارت همیشه از چپ به راست دیده می‌شود: •••• •••• •••• ۱۲۳۴ */
+private fun maskedCard(last4: String): String = "\u202A•••• •••• •••• ${fa(last4)}\u202C"
 
 private fun groupCardNumber(raw: String): String =
     SmsIngest.latinDigits(raw).filter { it.isDigit() }.take(16).chunked(4).joinToString(" ")
