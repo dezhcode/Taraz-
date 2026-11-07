@@ -35,6 +35,10 @@ interface SmsRepository {
      * Parses an incoming SMS message from a registered sender and persists it
      * as a transaction if parsing is successful.
      */
-    suspend fun processIncomingSms(sender: String, body: String): ParsedTransactionModel?
+    suspend fun processIncomingSms(
+        sender: String,
+        body: String,
+        receivedAt: Long = System.currentTimeMillis()
+    ): ParsedTransactionModel?
     suspend fun setInitialBalanceFromLatestSms(senderNumber: String, bankName: String)
 }
