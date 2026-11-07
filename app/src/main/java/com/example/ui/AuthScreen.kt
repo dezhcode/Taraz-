@@ -123,13 +123,23 @@ fun AuthScreen(
         }
     }
 
+    // معرفی برنامه (بار اول) با اجزای واقعی برنامه
+    if (!onboarded) {
+        com.example.ui.layer.WelcomeIntro(onFinish = { finishOnboarding() })
+        return
+    }
+    // بدون ورود با شماره: صفحهٔ شروع طرح «صفحه خودِ لوگو»
+    if (!com.example.Features.LOGIN) {
+        com.example.ui.layer.WelcomeStart(
+            name = fullName,
+            onNameChange = { fullName = it },
+            onStart = { viewModel.loginAsGuest(fullName.ifBlank { "کاربر تراز" }) }
+        )
+        return
+    }
+
     Box(modifier.fillMaxSize().background(L.Bg).statusBarsPadding().navigationBarsPadding().imePadding()) {
-        if (!onboarded) {
-            OnboardingPager(
-                onFinish = { finishOnboarding() },
-                onLogin = { finishOnboarding() }
-            )
-        } else {
+        run {
             AnimatedContent(targetState = step, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "auth_step") { s ->
                 if (s == 1) {
                     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState())) {
@@ -280,107 +290,4 @@ fun AuthScreen(
     }
 }
 
-/** سه اسلاید معرفی طرح نهایی؛ تصویر هر اسلاید با کامپوننت‌های ساده ساخته شده */
-@Composable
-private fun OnboardingPager(onFinish: () -> Unit, onLogin: () -> Unit) {
-    var page by remember { mutableIntStateOf(0) }
-    val titles = listOf(
-        "تمام حساب‌ها در یک نگاه",
-        "اقساط، چک‌ها و قبوض در سررسید",
-        "گزارش ماهانهٔ هزینه‌ها"
-    )
-    val bodies = listOf(
-        "کارت‌ها، وجه نقد و اقساط در یک صفحه؛ همراه با نمایش باقی‌ماندهٔ سقف هزینهٔ امروز.",
-        "پیش از هر سررسید یادآوری دریافت می‌کنید و پرداخت را با یک لمس ثبت می‌کنید.",
-        "هزینه‌ها به تفکیک دسته، مقایسه با ماه قبل و پیشرفت هدف پس‌انداز."
-    )
-    val last = page == 2
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 24.dp).padding(bottom = 28.dp)) {
-        Row(Modifier.fillMaxWidth().padding(top = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Image(painterResource(id = R.drawable.logo_taraz_app), null, modifier = Modifier.size(44.dp))
-            Spacer(Modifier.weight(1f))
-            Box(Modifier.height(40.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onFinish).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
-                Text("رد کردن", style = lt(14.sp, FontWeight.SemiBold, L.PrimaryText))
-            }
-        }
-
-        Box(Modifier.fillMaxWidth().height(380.dp), contentAlignment = Alignment.Center) {
-            AnimatedContent(targetState = page, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "onb") { p ->
-                Column(Modifier.width(300.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    when (p) {
-                        0 -> {
-                            Box(Modifier.fillMaxWidth().height(150.dp)) {
-                                Box(Modifier.padding(horizontal = 24.dp).fillMaxWidth().height(50.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xFF0F3B66)))
-                                Box(Modifier.padding(top = 8.dp, start = 12.dp, end = 12.dp).fillMaxWidth().height(50.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xFFB4232F)))
-                                Column(
-                                    Modifier.padding(top = 16.dp).fillMaxWidth().height(134.dp).clip(RoundedCornerShape(22.dp)).background(L.Primary).padding(horizontal = 18.dp, vertical = 16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Text("موجودی کل", style = lt(12.sp, color = L.OnPrimarySoft))
-                                    Text("۱۸۴٬۶۵۰٬۰۰۰", style = lt(28.sp, FontWeight.Light, Color.White, letterSpacing = (-1).sp))
-                                }
-                            }
-                            Row(
-                                Modifier.fillMaxWidth().height(70.dp).cardSurface(20.dp).padding(12.dp),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Bottom
-                            ) {
-                                listOf(30, 10, 12, 18, 9, 22, 14).forEachIndexed { i, h ->
-                                    Box(Modifier.weight(1f).height(h.dp).clip(RoundedCornerShape(4.dp)).background(if (i == 0) L.Amber else if (i == 6) L.Primary else L.BarIdle))
-                                }
-                            }
-                        }
-                        1 -> {
-                            listOf(
-                                Triple("قسط وام", "۳ روز دیگر", "۴٬۲۰۰٬۰۰۰"),
-                                Triple("قبض برق", "فردا", "۳۸۵٬۰۰۰"),
-                                Triple("پرداخت چک به علی", "۱۵ آذر", "۲۰٬۰۰۰٬۰۰۰")
-                            ).forEachIndexed { i, (t, d, a) ->
-                                Row(
-                                    Modifier.fillMaxWidth().cardSurface(18.dp).padding(horizontal = 14.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(t, style = lt(14.sp, FontWeight.SemiBold))
-                                        Text(d, style = lt(12.sp, FontWeight.SemiBold, if (i == 1) L.AmberText else L.Muted))
-                                    }
-                                    Text(a, style = lt(14.sp, FontWeight.SemiBold))
-                                }
-                            }
-                        }
-                        else -> {
-                            Column(Modifier.fillMaxWidth().cardSurface(18.dp).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                listOf("غذا" to 0.9f, "حمل‌ونقل" to 0.55f, "قبوض" to 0.35f, "تفریح" to 0.2f).forEach { (n, f) ->
-                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        Text(n, style = lt(12.sp, FontWeight.SemiBold))
-                                        Box(Modifier.fillMaxWidth().height(8.dp).clip(CircleShape).background(L.Line)) {
-                                            Box(Modifier.fillMaxWidth(f).height(8.dp).clip(CircleShape).background(L.Primary))
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Text(titles[page], style = lt(26.sp, FontWeight.Bold, lineHeight = 36.sp))
-        Text(bodies[page], style = lt(15.sp, color = L.Muted, lineHeight = 28.sp), modifier = Modifier.padding(top = 10.dp))
-        Spacer(Modifier.weight(1f))
-        Row(Modifier.fillMaxWidth().padding(bottom = 18.dp), horizontalArrangement = Arrangement.Center) {
-            for (i in 0 until 3) {
-                Box(
-                    Modifier.padding(horizontal = 3.dp).height(8.dp).width(if (i == page) 22.dp else 8.dp)
-                        .clip(CircleShape).background(if (i == page) L.Primary else L.Rail)
-                )
-            }
-        }
-        BigButton(if (last) "شروع" else "بعدی", height = 56.dp) { if (last) onFinish() else page++ }
-        if (com.example.Features.LOGIN) {
-            Box(Modifier.padding(top = 8.dp).fillMaxWidth().height(46.dp).clip(RoundedCornerShape(14.dp)).clickable(onClick = onLogin), contentAlignment = Alignment.Center) {
-                Text("حساب دارم، ورود", style = lt(15.sp, FontWeight.SemiBold, L.PrimaryText))
-            }
-        }
-    }
-}

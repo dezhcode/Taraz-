@@ -390,7 +390,7 @@ private fun MonthStepper(icon: androidx.compose.ui.graphics.vector.ImageVector, 
  * اگر خرج از درآمد بیشتر باشد، قسمت اضافه «از جیب قبلی» نشان داده می‌شود.
  */
 @Composable
-private fun MoneyFlowCard(income: Long, expense: Long, byCategory: List<Pair<String, Long>>) {
+internal fun MoneyFlowCard(income: Long, expense: Long, byCategory: List<Pair<String, Long>>) {
     val palette = listOf(L.Primary, L.Amber, Color(0xFF7A5AA8), Color(0xFF0E9490), L.Chevron)
     val top = byCategory.take(4)
     val rest = byCategory.drop(4).sumOf { it.second }

@@ -353,6 +353,11 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                     this@MainActivity.enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
                 }
                 var themeChosen by remember { mutableStateOf(com.example.ui.layer.ThemePrefs.load(context) != null) }
+                var splashDone by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+                LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(1500)
+                    splashDone = true
+                }
 
                 // «+ … جدید» در هر انتخابگر: برگهٔ ساختن روی همان صفحه باز می‌شود
                 var quickCategory by remember { mutableStateOf<Boolean?>(null) }
@@ -1310,6 +1315,13 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             }
                         }
                     }
+                
+                    // اسپلش طرح «صفحه خودِ لوگو» بلافاصله بعد از اسپلش سیستمی؛ فقط هنگام باز شدن برنامه
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = !splashDone,
+                        enter = androidx.compose.animation.EnterTransition.None,
+                        exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(380))
+                    ) { com.example.ui.layer.TarazSplash() }
                 }
                 } // LocalCreators
                 }

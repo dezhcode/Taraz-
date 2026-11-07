@@ -141,7 +141,7 @@ fun LayerObligationsScreen(
 }
 
 @Composable
-private fun ColumnScope.PeopleSection(
+internal fun ColumnScope.PeopleSection(
     persons: List<Person>,
     balances: Map<Int, Long>,
     onOpenPerson: (Person) -> Unit,

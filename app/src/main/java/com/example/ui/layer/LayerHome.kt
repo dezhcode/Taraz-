@@ -245,7 +245,7 @@ private fun SectionTitle(title: String, trailing: String? = null, onTrailing: ((
 }
 
 @Composable
-private fun GlanceCard(g: HomeGlance, onOpenReports: () -> Unit, onOpenObligations: () -> Unit) {
+internal fun GlanceCard(g: HomeGlance, onOpenReports: () -> Unit, onOpenObligations: () -> Unit) {
     // مبلغ‌ها کامل نوشته می‌شوند؛ برای همین هر مورد یک ردیف کامل دارد نه یک ستون باریک
     Column(
         Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp).fillMaxWidth().tourTarget("home.glance").cardSurface(22.dp)
@@ -295,7 +295,7 @@ private fun GlanceRow(label: String, note: String, amount: Long, color: Color, o
 }
 
 @Composable
-private fun UpcomingSection(items: List<UpcomingItem>, now: Long) {
+internal fun UpcomingSection(items: List<UpcomingItem>, now: Long) {
     SectionTitle(
         "سررسیدهای پیش رو",
         note = if (items.isEmpty()) null else "۷ روز آینده · ${fa(items.size)} مورد · ${toman(items.sumOf { it.amount })}"
@@ -471,7 +471,7 @@ private fun RecentSection(
 // ─────────────────── کیف پول ───────────────────
 
 @Composable
-private fun WalletStack(
+internal fun WalletStack(
     cards: List<BankCard>,
     totalBalance: Long,
     monthlyIncome: Long,
@@ -589,7 +589,7 @@ private fun WalletBox(label: String, value: String, modifier: Modifier, onClick:
 // ─────────────────── روزشمار امروز ───────────────────
 
 @Composable
-private fun TodayCard(
+internal fun TodayCard(
     transactions: List<Transaction>,
     todayStart: Long,
     todayExpense: Long,
