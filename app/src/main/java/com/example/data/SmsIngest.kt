@@ -1,6 +1,7 @@
 package com.example.data
 
 import com.example.sms.data.parser.CompositeParser
+import com.example.sms.data.parser.SmsFilter
 import java.security.MessageDigest
 import java.util.Locale
 
@@ -20,6 +21,8 @@ object SmsIngest {
         object NotBank : Outcome()
         /** Already seen (pending, approved or rejected). */
         object Duplicate : Outcome()
+        /** One-time code or a failed attempt: never a transaction, never stored. */
+        object Ignored : Outcome()
         data class Pending(val tx: PendingTransaction, val bankName: String) : Outcome()
         /** From a bank, but no format could read it; kept for learning. */
         data class Unknown(val bankName: String) : Outcome()
@@ -74,9 +77,30 @@ object SmsIngest {
 
     private data class Parsed(val amount: Long, val balance: Long, val card: String, val isExpense: Boolean)
 
+    /** What Taraz understands from one SMS (toman), for the preview in the sender setup. */
+    data class Preview(val amount: Long, val balance: Long, val card: String, val isExpense: Boolean)
+
+    /**
+     * Reads [body] with the built-in readers only (no learned format, no database), so the
+     * setup screen can show «تراز این پیامک را این‌طور فهمید» before a sender is saved.
+     * Null for one-time codes, failed attempts and anything the readers cannot parse.
+     */
+    fun preview(body: String, bankName: String): Preview? {
+        if (SmsFilter.isNonTransaction(body)) return null
+        val p = CompositeParser().parse(body, bankName)?.takeIf { it.amount > 0 } ?: return null
+        return Preview(
+            amount = toToman(p.amount, body),
+            balance = toToman(p.balance, body),
+            card = latinDigits(p.cardNumber).filter { it.isDigit() }.takeLast(4),
+            isExpense = p.transactionType !in INCOME_TYPES
+        )
+    }
+
     /** Reads [body] from [address] and files it as pending, unknown, or nothing. */
     suspend fun process(db: AppDatabase, address: String, body: String, receivedAt: Long): Outcome {
         val sender = findSender(db.bankSenderDao(), address)?.takeIf { it.isEnabled } ?: return Outcome.NotBank
+        // رمز یک‌بارمصرف و تراکنش ناموفق: نه ثبت می‌شوند، نه حتی در فهرست ناشناخته‌ها می‌مانند.
+        if (SmsFilter.isNonTransaction(body)) return Outcome.Ignored
         val hash = md5(body)
         if (db.pendingTransactionDao().isDuplicate(hash)) return Outcome.Duplicate
 

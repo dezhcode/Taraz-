@@ -114,23 +114,24 @@ class SmsRepositoryImpl(
         try {
             val inboxUri = android.net.Uri.parse("content://sms/inbox")
             val projection = arrayOf("body")
+            // آخرین پیامک ممکن است رمز یک‌بارمصرف باشد؛ از میان چند پیامک اخیر، اولین تراکنش واقعی را بگیر.
             val cursor = context.contentResolver.query(
                 inboxUri,
                 projection,
                 "address = ?",
                 arrayOf(senderNumber),
-                "date DESC LIMIT 1"
+                "date DESC LIMIT 8"
             )
             cursor?.use { c ->
-                if (c.moveToFirst()) {
-                    val bodyIdx = c.getColumnIndex("body")
-                    if (bodyIdx >= 0) {
-                        val body = c.getString(bodyIdx)
-                        val parsed = parser.parse(body, bankName)
-                        if (parsed != null && parsed.balance > 0) {
-                            val db = com.example.data.AppDatabase.getDatabase(context, kotlinx.coroutines.CoroutineScope(Dispatchers.IO))
-                            db.bankCardDao().updateBalance(bankName, com.example.data.SmsIngest.toToman(parsed.balance, body))
-                        }
+                val bodyIdx = c.getColumnIndex("body")
+                while (bodyIdx >= 0 && c.moveToNext()) {
+                    val body = c.getString(bodyIdx) ?: continue
+                    if (com.example.sms.data.parser.SmsFilter.isNonTransaction(body)) continue
+                    val parsed = parser.parse(body, bankName)
+                    if (parsed != null && parsed.balance > 0) {
+                        val db = com.example.data.AppDatabase.getDatabase(context, kotlinx.coroutines.CoroutineScope(Dispatchers.IO))
+                        db.bankCardDao().updateBalance(bankName, com.example.data.SmsIngest.toToman(parsed.balance, body))
+                        break
                     }
                 }
             }

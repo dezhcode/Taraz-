@@ -8,6 +8,9 @@ import com.example.data.AppDatabase
 import com.example.data.PendingTransaction
 import com.example.data.UnknownSms
 import com.example.sms.data.repository.SmsRepositoryImpl
+import com.example.data.SmsPrefs
+import com.example.sms.data.scanner.InboxMessage
+import com.example.sms.data.scanner.SmsInbox
 import com.example.sms.domain.model.BankSenderModel
 import com.example.sms.domain.usecase.GetSelectedSendersUseCase
 import com.example.sms.domain.usecase.ScanSmsUseCase
@@ -38,6 +41,49 @@ class SmsParserViewModel(application: Application) : AndroidViewModel(applicatio
     // UI state for scanned candidates from device
     private val _scannedSenders = MutableStateFlow<List<BankSenderModel>>(emptyList())
     
+    // کلید اصلی پیامک‌خوان (SmsPrefs): تا روشن نشود، هیچ پیامکی خوانده نمی‌شود
+    private val _readerEnabled = MutableStateFlow(SmsPrefs.enabled(application))
+    val readerEnabled: StateFlow<Boolean> = _readerEnabled.asStateFlow()
+
+    fun setReaderEnabled(on: Boolean) {
+        SmsPrefs.setEnabled(getApplication(), on)
+        _readerEnabled.value = on
+        if (on && com.example.sms.permission.SmsPermissionHelper.hasSmsPermissions(getApplication())) triggerScan()
+    }
+
+    // پیامک‌های اخیر برای «انتخاب سرشماره از میان پیام‌ها»
+    private val inbox = SmsInbox(application)
+    private val _recentMessages = MutableStateFlow<List<InboxMessage>>(emptyList())
+    val recentMessages: StateFlow<List<InboxMessage>> = _recentMessages.asStateFlow()
+
+    fun loadMessages(query: String = "") {
+        viewModelScope.launch { _recentMessages.value = inbox.recent(query = query) }
+    }
+
+    /**
+     * فرستندهٔ دلخواه (سرشماره) را با نام بانک ثبت می‌کند، چه در صندوق ورودی پیدا شده باشد چه نه.
+     * برمی‌گرداند: null در صورت موفقیت، وگرنه پیام خطا.
+     */
+    suspend fun addSender(rawNumber: String, bankName: String): String? {
+        val number = com.example.data.SmsIngest.latinDigits(rawNumber).trim().replace(" ", "")
+        if (number.length < 3) return "سرشماره را وارد کنید (مثلاً ۹۸۱۰۰۰۱۲۳۴ یا Melli)."
+        val name = bankName.trim().ifEmpty { "بانک ($number)" }
+        return try {
+            val existing = db.bankSenderDao().getAllSenders()
+                .firstOrNull { com.example.data.SmsIngest.sameSender(it.senderNumber, number) }
+            val model = BankSenderModel(
+                id = existing?.id ?: 0, bankName = name, senderNumber = existing?.senderNumber ?: number, isEnabled = true
+            )
+            saveSelectedSendersUseCase(listOf(model))
+            repository.setInitialBalanceFromLatestSms(model.senderNumber, name)
+            triggerScan()
+            null
+        } catch (e: Exception) {
+            Log.e("SmsParserViewModel", "Could not save the sender", e)
+            "ثبت این سرشماره انجام نشد."
+        }
+    }
+
     // Search query StateFlow
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()

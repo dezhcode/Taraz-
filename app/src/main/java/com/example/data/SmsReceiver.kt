@@ -19,6 +19,8 @@ class SmsReceiver : BroadcastReceiver() {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
         val parts = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
         if (parts.isEmpty()) return
+        // کلید اصلی پیامک‌خوان خاموش است؛ هیچ پیامکی خوانده نمی‌شود.
+        if (!SmsPrefs.enabled(context)) return
 
         // A long SMS arrives in several parts; join them per sender before reading.
         val messages = parts.filterNotNull()
