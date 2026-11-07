@@ -107,45 +107,6 @@ class SmsParserRepository(
         }
     }
 
-    // Stage 5 & Unknown Format: Learn New/Unknown Format to update parser
-    suspend fun learnNewFormatForUnknownSms(
-        sender: BankSender,
-        currentParser: BankSmsParser,
-        unknownSmsBody: String
-    ): Result<BankSmsParser> {
-        val nextVersion = currentParser.version + 1
-
-        val prompt = buildString {
-            append("شما یک موتور هوشمند استخراج الگوهای پیامکی بانک هستید.\n")
-            append("یک پیامک ناشناخته جدید دریافت شده که قالب فعلی قادر به پردازش آن نیست.\n")
-            append("وظیفه شما ارتقا و به روزرسانی الگوهای قبلی به نسخه جدید برای مچ کردن پیامک جدید در کنار پیامک‌های قبلی است.\n")
-            append("خروجی شما باید صرفا یک آبجکت معتبر JSON نسخه جدید بدون هیچگونه توضیح، کدبلاگ یا علامت اضافی باشد.\n\n")
-            append("پیامک ناشناخته جدید:\n")
-            append("$unknownSmsBody\n\n")
-            append("الگوی فعلی (نسخه ${currentParser.version}):\n")
-            append("${currentParser.templatesJson}\n\n")
-            append("فرمت دقیق خروجی JSON نسخه جدید (نسخه $nextVersion):\n")
-            append("{\n")
-            append("  \"bank\": \"${sender.bankName}\",\n")
-            append("  \"templates\": [\n")
-            append("    // الگوهای قبلی به همراه الگوی جدید اصلاح شده برای پیامک ناشناخته\n")
-            append("  ]\n")
-            append("}\n")
-        }
-
-        val aiResult = aiRepository.chat(prompt)
-        val jsonText = aiResult.getOrNull()
-
-        var parserResult = jsonText?.let { parseAiResponseToParser(sender, it, nextVersion) }
-
-        if (parserResult == null) {
-            Log.w("SmsParserRepository", "AI update failed. Performing local update fallback...")
-            parserResult = generateUpdatedFallbackParser(sender, currentParser, unknownSmsBody, nextVersion)
-        }
-
-        return Result.success(parserResult)
-    }
-
     // Offline parsing of incoming messages
     private fun parseAiResponseToParser(
         sender: BankSender,

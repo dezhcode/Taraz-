@@ -515,12 +515,16 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         viewModel = viewModel,
                                         onBack = { closeSub() },
                                         onOpenReview = { viewModel.setSmsAssistantSheetOpen(true) },
-                                        onOpenLearn = { openSub("sms_learn") }
+                                        onOpenUnread = { openSub("sms_unread") }
                                     )
                                 }
 
-                                "sms_learn" -> {
-                                    com.example.ui.layer.LayerSmsLearnScreen(viewModel = viewModel, onBack = { closeSub() })
+                                "sms_unread" -> {
+                                    com.example.ui.layer.LayerSmsUnreadScreen(
+                                        viewModel = viewModel,
+                                        onBack = { closeSub() },
+                                        onManualEntry = { closeSub(); initialIsExpenseForDialog = true; addWithVoice = false; isAddTransactionOpen = true }
+                                    )
                                 }
 
                                 "categories" -> {

@@ -56,8 +56,23 @@ class SmsParserViewModel(application: Application) : AndroidViewModel(applicatio
     private val _recentMessages = MutableStateFlow<List<InboxMessage>>(emptyList())
     val recentMessages: StateFlow<List<InboxMessage>> = _recentMessages.asStateFlow()
 
+    private val _messagesLoading = MutableStateFlow(false)
+    val messagesLoading: StateFlow<Boolean> = _messagesLoading.asStateFlow()
+
     fun loadMessages(query: String = "") {
-        viewModelScope.launch { _recentMessages.value = inbox.recent(query = query) }
+        viewModelScope.launch {
+            _messagesLoading.value = true
+            _recentMessages.value = inbox.recent(query = query)
+            _messagesLoading.value = false
+        }
+    }
+
+    fun setSenderEnabled(senderNumber: String, enabled: Boolean) {
+        viewModelScope.launch { repository.toggleSender(senderNumber, enabled) }
+    }
+
+    fun removeSender(senderNumber: String) {
+        viewModelScope.launch { repository.deleteSenderByNumber(senderNumber) }
     }
 
     /**

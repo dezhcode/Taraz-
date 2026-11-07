@@ -60,7 +60,7 @@ import com.example.sms.presentation.SmsParserViewModel
 import com.example.ui.FinanceViewModel
 import com.example.utils.JalaliDate
 
-private fun bankColor(name: String): Color = when {
+internal fun bankColor(name: String): Color = when {
     name.contains("ملت") -> Color(0xFFB4232F)
     name.contains("سامان") -> Color(0xFF0F3B66)
     name.contains("ملی") -> Color(0xFF0E6E8A)
@@ -70,157 +70,6 @@ private fun bankColor(name: String): Color = when {
     name.contains("بلو") -> Color(0xFF1E6BFF)
     else -> Color(0xFF5C6B73)
 }
-
-/**
- * پیامک‌های بانکی — طرح نهایی: وضعیت دسترسی، فهرست بانک‌ها با تیک، کادر «منتظر تأیید»،
- * و فهرست پیامک‌های ناشناخته برای آموزش قالب.
- */
-@Composable
-fun LayerSmsSetupScreen(
-    viewModel: FinanceViewModel,
-    onBack: () -> Unit,
-    onOpenReview: () -> Unit,
-    onOpenLearn: () -> Unit
-) {
-    val context = LocalContext.current
-    val smsViewModel: SmsParserViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
-    val scanned by smsViewModel.scannedSenders.collectAsState()
-    val pending by smsViewModel.pendingTransactions.collectAsState()
-    val unknown by smsViewModel.unknownSmsList.collectAsState()
-    val isLoading by smsViewModel.isLoading.collectAsState()
-    val error by smsViewModel.errorMessage.collectAsState()
-
-    var hasPermission by remember { mutableStateOf(SmsPermissionHelper.hasSmsPermissions(context)) }
-    var dirty by remember { mutableStateOf(false) }
-    var saved by remember { mutableStateOf(false) }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { p ->
-        hasPermission = (p[android.Manifest.permission.READ_SMS] ?: false) && (p[android.Manifest.permission.RECEIVE_SMS] ?: false)
-        if (hasPermission) smsViewModel.triggerScan()
-    }
-    LaunchedEffect(hasPermission) { if (hasPermission) smsViewModel.triggerScan() }
-
-    val count = scanned.count { it.isEnabled }
-
-    LayerScreen(
-        title = "پیامک‌های بانکی",
-        subtitle = "ثبت خودکار تراکنش از پیامک بانک",
-        onBack = onBack,
-        bottomBar = {
-            BigButton(
-                text = when {
-                    dirty -> "ذخیره · ${fa(count)} بانک انتخاب شده"
-                    saved -> "ذخیره شد"
-                    else -> "تغییری نداده‌اید"
-                },
-                enabled = dirty
-            ) {
-                smsViewModel.saveChoices()
-                dirty = false
-                saved = true
-            }
-        }
-    ) {
-        if (hasPermission) {
-            Row(
-                Modifier.padding(horizontal = 20.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(L.GreenSoft).padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Box(Modifier.size(36.dp).clip(CircleShape).background(L.Green), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(18.dp))
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("دسترسی به پیامک داده شده", style = lt(14.sp, FontWeight.Bold, L.GreenInk))
-                    Text("پیامک‌ها روی همین گوشی خوانده می‌شوند.", style = lt(12.sp, color = L.GreenInk2))
-                }
-            }
-        } else {
-            Callout(
-                title = "تراز اجازهٔ خواندن پیامک ندارد",
-                body = "بدون این اجازه، تراکنش‌های بانکی خودکار ثبت نمی‌شوند. پیامک‌ها فقط روی همین گوشی خوانده می‌شوند.",
-                bg = L.AmberSoft, titleColor = L.AmberInk,
-                trailing = {
-                    Box(
-                        Modifier.height(40.dp).clip(RoundedCornerShape(12.dp)).background(L.Surface)
-                            .clickable { launcher.launch(SmsPermissionHelper.REQUIRED_PERMISSIONS) }.padding(horizontal = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) { Text("اجازه می‌دهم", style = lt(13.sp, FontWeight.Bold, L.PrimaryText)) }
-                }
-            )
-        }
-
-        Row(Modifier.padding(horizontal = 24.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("پیامک کدام بانک‌ها خوانده شود؟", style = lt(15.sp, FontWeight.Bold), modifier = Modifier.weight(1f))
-            Box(
-                Modifier.height(36.dp).clip(RoundedCornerShape(10.dp)).clickable(enabled = hasPermission && scanned.isNotEmpty()) {
-                    smsViewModel.selectAllSenders(); dirty = true; saved = false
-                }.padding(horizontal = 10.dp),
-                contentAlignment = Alignment.Center
-            ) { Text("انتخاب همه", style = lt(13.sp, FontWeight.Bold, if (hasPermission) L.PrimaryText else L.Faint)) }
-        }
-
-        LayerCard(radius = 20.dp, padding = 0.dp) {
-            when {
-                !hasPermission -> Text("برای دیدن فهرست بانک‌ها، اول اجازهٔ پیامک را بدهید.", style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(16.dp))
-                isLoading -> Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CircularProgressIndicator(Modifier.size(20.dp), color = L.Primary, strokeWidth = 2.dp)
-                    Text("در حال یافتن پیامک‌های بانکی…", style = lt(13.sp, color = L.Muted))
-                }
-                error != null -> Text(error ?: "", style = lt(13.sp, FontWeight.SemiBold, L.RedText), modifier = Modifier.padding(16.dp))
-                scanned.isEmpty() -> Text("پیامک بانکی‌ای روی گوشی پیدا نشد.", style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(16.dp))
-                else -> scanned.forEachIndexed { i, s ->
-                    Row(
-                        Modifier.fillMaxWidth().heightIn56().clickable {
-                            smsViewModel.toggleSenderSelection(s.senderNumber); dirty = true; saved = false
-                        }.padding(horizontal = 14.dp)
-                            .semantics { role = Role.Checkbox; stateDescription = if (s.isEnabled) "انتخاب شده" else "انتخاب نشده"; contentDescription = s.bankName },
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(
-                            Modifier.size(24.dp).clip(RoundedCornerShape(7.dp)).background(if (s.isEnabled) L.Primary else L.Surface)
-                                .border(2.dp, if (s.isEnabled) L.Primary else L.Chevron, RoundedCornerShape(7.dp)),
-                            contentAlignment = Alignment.Center
-                        ) { if (s.isEnabled) Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(16.dp)) }
-                        LogoOrColor(remember(s.bankName) { BankLogos.assetFor(s.bankName) }, bankColor(s.bankName), 26.dp, 18.dp)
-                        Column(Modifier.weight(1f)) {
-                            Text(s.bankName, style = lt(14.sp, FontWeight.SemiBold), maxLines = 1)
-                            Text("${fa(s.messageCount)} پیامک · شماره ${fa(s.senderNumber)}", style = lt(12.sp, color = L.Muted), maxLines = 1)
-                        }
-                    }
-                    if (i < scanned.size - 1) Box(Modifier.padding(horizontal = 14.dp).fillMaxWidth().height(1.dp).background(L.Line))
-                }
-            }
-        }
-
-        if (pending.isNotEmpty()) {
-            Callout(
-                title = "${fa(pending.size)} پیامک منتظر تأیید شماست",
-                body = "تا تأیید نکنید، در حساب‌ها ثبت نمی‌شوند.",
-                bg = L.AmberSoft, titleColor = L.AmberInk,
-                trailing = {
-                    Box(
-                        Modifier.height(40.dp).clip(RoundedCornerShape(12.dp)).background(L.Surface).clickable(onClick = onOpenReview).padding(horizontal = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) { Text("بررسی", style = lt(13.sp, FontWeight.Bold, L.PrimaryText)) }
-                }
-            )
-        }
-        if (unknown.any { !it.isIgnored }) {
-            Callout(
-                title = "${fa(unknown.count { !it.isIgnored })} پیامک را نشناختیم",
-                body = "قالبشان را به تراز یاد بدهید تا بعد از این خودکار خوانده شوند.",
-                bg = L.PrimarySoft, titleColor = L.PrimaryText,
-                trailing = {
-                    Box(
-                        Modifier.height(40.dp).clip(RoundedCornerShape(12.dp)).background(L.Surface).clickable(onClick = onOpenLearn).padding(horizontal = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) { Text("آموزش", style = lt(13.sp, FontWeight.Bold, L.PrimaryText)) }
-                }
-            )
-        }
-    }
-}
-
-private fun Modifier.heightIn56(): Modifier = this.then(Modifier.height(56.dp))
 
 /**
  * بررسی پیامک‌ها — یک‌یکی: متن پیامک، مبلغ، عنوان، حساب، دسته با پیشنهاد تراز.
@@ -345,7 +194,8 @@ fun LayerSmsReviewScreen(
                     ) { Text(c, style = lt(13.sp, if (on) FontWeight.Bold else FontWeight.Medium, if (on) Color.White else L.Ink)) }
                 }
             }
-            Row(
+            // توضیح به دستیار فقط وقتی دستیار روشن است
+            if (com.example.Features.AI) Row(
                 Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(14.dp)).background(L.Surface).padding(start = 12.dp, end = 6.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -366,63 +216,4 @@ fun LayerSmsReviewScreen(
             }
         }
     }
-}
-
-/**
- * آموزش قالب پیامک — پیامک‌های ناشناخته با پیام راهنما؛ «یاد بگیر» قالب را می‌سازد.
- */
-@Composable
-fun LayerSmsLearnScreen(
-    viewModel: FinanceViewModel,
-    onBack: () -> Unit
-) {
-    val unknown by viewModel.unknownSmsList.collectAsState()
-    val loading by viewModel.isLearningLoading.collectAsState()
-    val error by viewModel.learningError.collectAsState()
-    val list = unknown.filter { !it.isIgnored }
-
-    LayerScreen(
-        title = "آموزش قالب پیامک",
-        subtitle = if (list.isEmpty()) "پیامک ناشناخته‌ای نمانده" else "${fa(list.size)} پیامک ناشناخته",
-        onBack = onBack
-    ) {
-        Row(
-            Modifier.padding(horizontal = 20.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(L.PrimarySoft).padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top
-        ) {
-            Icon(Icons.Default.AutoAwesome, null, tint = L.PrimaryText, modifier = Modifier.size(18.dp))
-            Text(
-                "این پیامک‌ها را نشناختیم. تراز قالبشان را یک بار یاد می‌گیرد تا پیامک‌های بعدی همین بانک خودکار خوانده شوند.",
-                style = lt(12.sp, color = L.Info, lineHeight = 22.sp)
-            )
-        }
-        if (loading) {
-            Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                CircleProgress()
-                Text("تراز در حال یادگیری قالب است…", style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText))
-            }
-        }
-        if (error != null) {
-            Text(error ?: "", style = lt(12.sp, FontWeight.SemiBold, L.RedText), modifier = Modifier.padding(horizontal = 24.dp))
-        }
-        list.forEach { u ->
-            LayerCard(padding = 16.dp) {
-                val d = JalaliDate.fromTimestamp(u.timestamp)
-                Text("پیامک · ${fa(u.senderNumber)} · ${d.formatShort()} ${timeOfDay(u.timestamp)}", style = lt(12.sp, color = L.Muted))
-                Text(u.smsBody, style = lt(14.sp, lineHeight = 30.sp), modifier = Modifier.padding(top = 8.dp))
-                Row(Modifier.padding(top = 12.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BigButton("یاد بگیر و ثبت کن", Modifier.weight(1f), enabled = !loading, height = 46.dp) { viewModel.learnNewFormatForUnknownSms(u) }
-                    Box(
-                        Modifier.height(46.dp).clip(RoundedCornerShape(16.dp)).background(L.PrimarySoft).clickable { viewModel.ignoreUnknownSms(u.id) }.padding(horizontal = 16.dp),
-                        contentAlignment = Alignment.Center
-                    ) { Text("نادیده", style = lt(14.sp, FontWeight.Bold, L.PrimaryText)) }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CircleProgress() {
-    CircularProgressIndicator(Modifier.size(20.dp), color = L.Primary, strokeWidth = 2.dp)
 }

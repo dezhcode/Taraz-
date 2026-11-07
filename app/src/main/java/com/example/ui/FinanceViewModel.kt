@@ -1843,36 +1843,6 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun learnNewFormatForUnknownSms(unknownSms: UnknownSms) {
-        viewModelScope.launch {
-            _isLearningLoading.value = true
-            _learningError.value = null
-
-            val sender = smsParserRepository.getAllSenders().find { it.senderNumber == unknownSms.senderNumber }
-            val currentParser = smsParserRepository.getLatestParser(unknownSms.senderNumber)
-
-            if (sender == null || currentParser == null) {
-                _isLearningLoading.value = false
-                _learningError.value = "اطلاعات فرستنده یا قالب قبلی یافت نشد"
-                return@launch
-            }
-
-            val result = smsParserRepository.learnNewFormatForUnknownSms(sender, currentParser, unknownSms.smsBody)
-            _isLearningLoading.value = false
-
-            result.fold(
-                onSuccess = { updatedParser ->
-                    smsParserRepository.saveParser(updatedParser)
-                    smsParserRepository.deleteUnknownSms(unknownSms.id)
-                    SmsIngest.process(db, unknownSms.senderNumber, unknownSms.smsBody, unknownSms.timestamp)
-                },
-                onFailure = { error ->
-                    _learningError.value = error.message ?: "خطای ناشناخته در یادگیری قالب"
-                }
-            )
-        }
-    }
-
     private fun parseAndScheduleReminder(fullText: String): String {
         try {
             val regex = Regex("\\[\u062a\u0646\u0638\u06cc\u0645 \u06cc\u0627\u062f\u0622\u0648\u0631\u06cc:\\s*([^|]+)\\s*\\|\\s*(\\d+)\\s*\\]")

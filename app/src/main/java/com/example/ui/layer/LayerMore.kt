@@ -421,7 +421,7 @@ fun LayerSettingsScreen(
             SwitchRow("اعلان‌ها و یادآوری اقساط", if (com.example.Features.SMS) "سه روز و یک روز قبل از سررسید، و پیامک‌های تازهٔ بانک" else "سه روز و یک روز قبل از سررسید اقساط، چک‌ها و قبض‌ها", alertsEnabled, onAlertsChange, divider = false)
         }
         SettingsGroup("داده‌ها") {
-            if (com.example.Features.SMS) NavRow("پیامک‌های بانکی", if (smsBankCount > 0) "${fa(smsBankCount)} بانک روشن" else "خاموش", onClick = onOpenSms)
+            if (com.example.Features.SMS) NavRow("پیامک‌های بانکی", if (smsBankCount > 0) "${fa(smsBankCount)} بانک روشن" else "راه‌اندازی", onClick = onOpenSms)
             else NavRow("پیامک‌های بانکی", com.example.Features.SOON, onClick = {})
             NavRow("پشتیبان و خروجی اکسل", null, divider = false, onClick = onOpenBackup)
         }

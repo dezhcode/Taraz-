@@ -42,7 +42,7 @@ class SmsReceiver : BroadcastReceiver() {
                         is SmsIngest.Outcome.Unknown -> NotificationHelper.showNotification(
                             appContext,
                             "پیامک تازه از ${outcome.bankName} خوانده نشد",
-                            "قالب این پیامک را یک بار در تراز آموزش دهید تا بعد خودکار ثبت شود."
+                            "اگر تراکنش است، از «تنظیمات ← پیامک‌های بانکی» خودتان ثبتش کنید."
                         )
                         else -> Unit
                     }
