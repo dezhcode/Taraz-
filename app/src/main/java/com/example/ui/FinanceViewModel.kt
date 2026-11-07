@@ -1124,13 +1124,29 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
     fun updateCard(card: BankCard) {
         viewModelScope.launch {
+            // The account's name is the key SMS senders are tied to; carry the link over a rename.
+            val before = cards.value.firstOrNull { it.id == card.id }
             repository.insertCard(card)
+            if (before != null && before.bankName != card.bankName) {
+                db.bankSenderDao().renameCardLink(before.bankName, card.bankName)
+            }
         }
     }
 
     fun deleteCard(cardId: Int) {
         viewModelScope.launch {
+            // A reader with no card to feed would keep queueing transactions nobody can approve.
+            cards.value.firstOrNull { it.id == cardId }?.let { disableSmsForCard(it.bankName) }
             repository.deleteCard(cardId)
+        }
+    }
+
+    /** Switches the SMS reader off for a card. Transactions already queued or recorded stay. */
+    fun disableSmsForCard(cardName: String) {
+        viewModelScope.launch {
+            db.bankSenderDao().getSendersForCard(cardName).forEach {
+                smsParserRepository.deleteSenderByNumber(it.senderNumber)
+            }
         }
     }
 
@@ -1193,109 +1209,6 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     learningStatus = "نیاز به آموزش"
                 )
             )
-        }
-    }
-
-    fun autoImportBankSms(bankName: String) {
-        viewModelScope.launch {
-            val senderNumber = if (bankName.contains("ملی") || bankName.contains("Melli")) "1000250" else "1000670"
-            val displayBankName = if (bankName.contains("ملی") || bankName.contains("Melli")) "بانک ملی" else "بانک رسالت"
-
-            // 1. Ensure the sender is registered in BankSender
-            val existingSender = db.bankSenderDao().getSenderByNumber(senderNumber)
-            if (existingSender == null) {
-                db.bankSenderDao().insertSender(
-                    BankSender(
-                        bankName = displayBankName,
-                        senderNumber = senderNumber,
-                        isEnabled = true,
-                        learningStatus = "آموزش دیده"
-                    )
-                )
-            } else if (!existingSender.isEnabled) {
-                db.bankSenderDao().insertSender(existingSender.copy(isEnabled = true))
-            }
-
-            // 2. Generate sample messages to showcase immediate integration
-            val samples = if (bankName.contains("ملی") || bankName.contains("Melli")) {
-                listOf(
-                    """
-                    بانك ملي ايران
-                    برداشت:5,000,000-
-                    حساب:70008
-                    مانده:84,184,943
-                    0411-20:35
-                    """.trimIndent(),
-                    """
-                    بانك ملي ايران
-                    كارت: 3142
-                    خريد: 1,100,000
-                    مانده: 189,222,743
-                    تاريخ: 1405/04/10
-                    ساعت: 18:07:05
-                    """.trimIndent(),
-                    """
-                    بانك ملي ايران
-                    قسط:93,615,172-
-                    حساب:70008
-                    مانده:865,433
-                    0311-21:19
-                    """.trimIndent()
-                )
-            } else {
-                listOf(
-                    """
-                    10.13328262.1
-                    -1,060,000
-                    04/11_12:36
-                    مانده: 430,097,482
-                    """.trimIndent(),
-                    """
-                    10.13328262.1
-                    +5,500,000
-                    04/12_10:15
-                    مانده: 435,597,482
-                    """.trimIndent()
-                )
-            }
-
-            val specificParser = com.example.sms.data.parser.BankSpecificParser()
-            for (smsBody in samples) {
-                val parsed = specificParser.parse(smsBody, displayBankName)
-                if (parsed != null) {
-                    val hash = java.util.UUID.randomUUID().toString().take(8)
-                    val isExpense = parsed.transactionType != "deposit"
-                    
-                    db.pendingTransactionDao().insertPendingTransaction(
-                        PendingTransaction(
-                            senderNumber = senderNumber,
-                            amount = parsed.amount,
-                            date = parsed.date,
-                            isExpense = isExpense,
-                            card = parsed.cardNumber,
-                            title = "تراکنش پیامکی $displayBankName",
-                            smsBody = smsBody,
-                            smsBodyHash = hash,
-                            status = "در انتظار بررسی"
-                        )
-                    )
-
-                    // Also, update the user's card for this bank to update its balance automatically
-                    val currentCards = cards.value
-                    val existingCard = currentCards.find { it.bankName.contains(displayBankName) || displayBankName.contains(it.bankName) }
-                    if (existingCard != null && parsed.balance > 0) {
-                        repository.insertCard(existingCard.copy(balance = parsed.balance))
-                    }
-                }
-            }
-
-            if (_alertsEnabled.value) {
-                com.example.utils.NotificationHelper.showNotification(
-                    getApplication(),
-                    "اتصال خودکار پیامک $displayBankName",
-                    "اتصال برقرار شد و تراکنش‌های پیامکی جدید با موفقیت همگام‌سازی شدند."
-                )
-            }
         }
     }
 

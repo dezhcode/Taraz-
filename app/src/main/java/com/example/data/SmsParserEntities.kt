@@ -11,7 +11,15 @@ data class BankSender(
     val isEnabled: Boolean = true,
     val learningStatus: String = "نیاز به آموزش", // "نیاز به آموزش", "آموزش دیده", "در حال آموزش"
     val parserVersion: Int = 0,
-    val lastUpdated: Long = System.currentTimeMillis()
+    val lastUpdated: Long = System.currentTimeMillis(),
+    /**
+     * Name, in the SMS pattern database, of the bank whose rules read this
+     * sender's messages. Set when the reader is switched on for a card; empty on
+     * senders added by the older scan screen, which fall back to the generic parsers.
+     */
+    val engineBank: String = "",
+    /** [BankCard.bankName] of the account this sender feeds; empty when not tied to one. */
+    val cardName: String = ""
 )
 
 @Entity(tableName = "bank_sms_parsers", primaryKeys = ["senderNumber", "version"])

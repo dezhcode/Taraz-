@@ -25,6 +25,16 @@ interface BankSenderDao {
 
     @Query("DELETE FROM bank_senders WHERE senderNumber = :senderNumber")
     suspend fun deleteSenderByNumber(senderNumber: String)
+
+    @Query("SELECT * FROM bank_senders WHERE cardName = :cardName")
+    suspend fun getSendersForCard(cardName: String): List<BankSender>
+
+    @Query("DELETE FROM bank_senders WHERE cardName = :cardName")
+    suspend fun deleteSendersForCard(cardName: String)
+
+    /** A card keeps its readers when it is renamed. */
+    @Query("UPDATE bank_senders SET cardName = :newName WHERE cardName = :oldName")
+    suspend fun renameCardLink(oldName: String, newName: String)
 }
 
 @Dao

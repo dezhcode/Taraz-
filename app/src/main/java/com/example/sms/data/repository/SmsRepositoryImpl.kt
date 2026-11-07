@@ -8,8 +8,12 @@ import com.example.data.PendingTransaction
 import com.example.data.PendingTransactionDao
 import com.example.data.UnknownSms
 import com.example.data.UnknownSmsDao
+import com.example.sms.data.engine.BankSmsEngineProvider
 import com.example.sms.data.parser.CompositeParser
 import com.example.sms.data.scanner.SmsScanner
+import com.example.sms.engine.BankCatalog
+import com.example.sms.engine.BankSmsEngine
+import com.example.sms.engine.SmsSenders
 import com.example.sms.domain.model.BankSenderModel
 import com.example.sms.domain.model.ParsedTransactionModel
 import com.example.sms.domain.repository.SmsRepository
@@ -30,6 +34,7 @@ class SmsRepositoryImpl(
 
     private val scanner = SmsScanner(context)
     private val parser = CompositeParser()
+    private val engine: BankSmsEngine get() = BankSmsEngineProvider.get(context)
 
     override suspend fun scanDeviceSms(): List<BankSenderModel> = withContext(Dispatchers.IO) {
         try {
@@ -64,9 +69,14 @@ class SmsRepositoryImpl(
     }
 
     override suspend fun saveSelectedSenders(senders: List<BankSenderModel>) = withContext(Dispatchers.IO) {
-        // To prevent orphaned senders or duplicates, we insert or replace them
+        // Insert-or-replace, but never wipe what the activation flow stored on an
+        // existing row (the bank whose rules read it, and the card it feeds).
         senders.forEach { senderModel ->
-            val entity = mapToEntity(senderModel)
+            val existing = bankSenderDao.getSenderByNumber(senderModel.senderNumber)
+            val entity = existing?.copy(
+                isEnabled = senderModel.isEnabled,
+                lastUpdated = senderModel.lastUpdated
+            ) ?: mapToEntity(senderModel)
             bankSenderDao.insertSender(entity)
         }
     }
@@ -82,22 +92,74 @@ class SmsRepositoryImpl(
         bankSenderDao.deleteSenderByNumber(senderNumber)
     }
 
-    override suspend fun processIncomingSms(sender: String, body: String): ParsedTransactionModel? = withContext(Dispatchers.IO) {
-        // 1. Check if the sender is registered and enabled
-        val bankSender = bankSenderDao.getSenderByNumber(sender)
-        if (bankSender == null || !bankSender.isEnabled) {
+    override suspend fun processIncomingSms(
+        sender: String,
+        body: String,
+        receivedAt: Long
+    ): ParsedTransactionModel? = withContext(Dispatchers.IO) {
+        // 1. Is this a sender the user registered, and is it switched on?
+        //    The inbox spells the same number several ways (+98…, 0…, bare), so compare canonically.
+        val bankSender = bankSenderDao.getAllSenders()
+            .firstOrNull { it.isEnabled && SmsSenders.same(it.senderNumber, sender) }
+        if (bankSender == null) {
             Log.i("SmsRepositoryImpl", "Sender $sender is not registered or disabled. Skipping incoming SMS.")
             return@withContext null
         }
 
-        // 2. Duplicate detection using MD5 hash of message body
-        val hash = md5(body)
+        // 2. Duplicate detection. The body alone is not enough: two identical
+        //    «کارمزد» texts a day apart are two transactions.
+        val hash = md5("${SmsSenders.canonical(sender)}|${receivedAt / 60_000L}|$body")
         if (pendingTransactionDao.isDuplicate(hash)) {
             Log.i("SmsRepositoryImpl", "Duplicate SMS message detected. Skipping.")
             return@withContext null
         }
 
-        // 3. Try parsing the incoming transaction
+        val card = bankSender.cardName.ifBlank { bankSender.bankName }
+
+        // 3a. The bank's own message layouts, when the user told us which bank this is.
+        val engineBank = bankSender.engineBank.ifBlank { BankCatalog.find(bankSender.bankName)?.patternName.orEmpty() }
+        if (engineBank.isNotBlank()) {
+            val tx = engine.parse(body, sender, engineBank)
+            if (tx != null && tx.amountToman > 0) {
+                pendingTransactionDao.insertPendingTransaction(
+                    PendingTransaction(
+                        senderNumber = bankSender.senderNumber,
+                        amount = tx.amountToman,
+                        date = tx.timestamp(receivedAt),
+                        isExpense = !tx.isIncome,
+                        card = card,
+                        title = "تراکنش پیامکی ${bankSender.bankName}",
+                        smsBody = body,
+                        smsBodyHash = hash,
+                        status = "در انتظار بررسی"
+                    )
+                )
+                return@withContext ParsedTransactionModel(
+                    transactionType = if (tx.isIncome) "deposit" else "withdrawal",
+                    amount = tx.amountToman,
+                    date = tx.timestamp(receivedAt),
+                    cardNumber = "",
+                    balance = 0L,
+                    bankName = bankSender.bankName,
+                    reference = "",
+                    merchant = ""
+                )
+            }
+        }
+
+        // 3b. Senders the user set up with the engine are read by the engine only: a
+        //     generic parser would turn an advert's "5,000,000" into a transaction.
+        //     Only texts that look like bank messages are kept for the user to review.
+        if (bankSender.engineBank.isNotBlank()) {
+            if (BankUtils.isBankSms(body) && !BankSmsEngine.looksLikeOneTimeCode(body)) {
+                unknownSmsDao.insertUnknownSms(
+                    UnknownSms(senderNumber = bankSender.senderNumber, smsBody = body, timestamp = receivedAt)
+                )
+            }
+            return@withContext null
+        }
+
+        // 3c. Senders from the older scan screen keep the generic parsers.
         val parsed = parser.parse(body, bankSender.bankName)
         if (parsed != null && parsed.amount > 0) {
             val finalAmount = parsed.amount / 10L
@@ -105,7 +167,7 @@ class SmsRepositoryImpl(
             val finalParsed = parsed.copy(amount = finalAmount, balance = finalBalance)
             val isExpense = finalParsed.transactionType != "deposit"
             val pendingTx = PendingTransaction(
-                senderNumber = sender,
+                senderNumber = bankSender.senderNumber,
                 amount = finalAmount,
                 date = finalParsed.date,
                 isExpense = isExpense,
@@ -121,7 +183,7 @@ class SmsRepositoryImpl(
             // If parsing failed, save it in unknown_sms so the user can review/train
             unknownSmsDao.insertUnknownSms(
                 UnknownSms(
-                    senderNumber = sender,
+                    senderNumber = bankSender.senderNumber,
                     smsBody = body,
                     timestamp = System.currentTimeMillis()
                 )

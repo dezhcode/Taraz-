@@ -45,6 +45,9 @@ interface BankCardDao {
 
     @Query("SELECT * FROM bank_cards WHERE bankName = :bankName LIMIT 1")
     suspend fun getCardByBankName(bankName: String): BankCard?
+
+    @Query("SELECT * FROM bank_cards")
+    suspend fun getAllCardsOnce(): List<BankCard>
 }
 
 @Dao
@@ -104,7 +107,7 @@ interface GoalDao {
         UnknownSms::class,
         Category::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -121,6 +124,18 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
+
+        /**
+         * v8 ties an SMS sender to the card it feeds and to the bank whose message
+         * layouts read it. Senders saved before this carry neither, and keep using
+         * the generic parsers.
+         */
+        val MIGRATION_7_8 = object : androidx.room.migration.Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE bank_senders ADD COLUMN engineBank TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE bank_senders ADD COLUMN cardName TEXT NOT NULL DEFAULT ''")
+            }
+        }
 
         /**
          * v7 lets an account be something other than a bank card. Cash is the
@@ -237,7 +252,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "fidar_finance_database"
                 )
                 .addCallback(AppDatabaseCallback(scope))
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance

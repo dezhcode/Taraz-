@@ -107,6 +107,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 var isAiSheetOpen by remember { mutableStateOf(false) }
                 var activeSubScreen by remember { mutableStateOf<String?>(null) } // "banks" or "loans"
                 var selectedCardForDetail by remember { mutableStateOf<com.example.data.BankCard?>(null) }
+                // The card the SMS reader is being switched on for, and whether to start at the sender step.
+                var smsActivation by remember { mutableStateOf<Pair<com.example.data.BankCard, Boolean>?>(null) }
+                val bankSenders by viewModel.bankSenders.collectAsStateWithLifecycle()
                 var isAddCardOpen by remember { mutableStateOf(false) }
                 var isTransferOpen by remember { mutableStateOf(false) }
 
@@ -117,7 +120,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 val exitToastMessage = "برای خروج از برنامه دوبار برگشت بزنید پشت سر هم"
 
                 BackHandler(enabled = screenState == Screen.MAIN) {
-                    if (loanToPay != null) {
+                    if (smsActivation != null) {
+                        smsActivation = null
+                    } else if (loanToPay != null) {
                         loanToPay = null
                     } else if (showSmsAssistantSheet) {
                         viewModel.setSmsAssistantSheetOpen(false)
@@ -452,12 +457,16 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             }
 
                             if (selectedCardForDetail != null) {
+                                // The sheet holds a snapshot; follow the live row so a card number
+                                // entered in the SMS flow shows up here too.
+                                val liveCard = cards.firstOrNull { it.id == selectedCardForDetail!!.id } ?: selectedCardForDetail!!
                                 CardDetailBottomSheet(
-                                    card = selectedCardForDetail!!,
+                                    card = liveCard,
                                     onDismiss = { selectedCardForDetail = null },
-                                    onEnableSmsBanking = { bankName ->
-                                        activeSubScreen = "settings"
-                                    },
+                                    smsLink = bankSenders.firstOrNull { it.cardName == liveCard.bankName },
+                                    onEnableSmsBanking = { smsActivation = liveCard to false },
+                                    onChangeSmsSender = { smsActivation = liveCard to true },
+                                    onDisableSmsBanking = { viewModel.disableSmsForCard(liveCard.bankName) },
                                     onUpdateCard = { updatedCard ->
                                         viewModel.updateCard(updatedCard)
                                         selectedCardForDetail = null
@@ -466,6 +475,15 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         viewModel.deleteCard(cardId)
                                         selectedCardForDetail = null
                                     }
+                                )
+                            }
+
+                            // Switching the SMS reader on for a card: card, permission, sender number.
+                            smsActivation?.let { (activationCard, startAtSender) ->
+                                SmsActivationSheet(
+                                    card = activationCard,
+                                    startAtSender = startAtSender,
+                                    onDismiss = { smsActivation = null }
                                 )
                             }
 

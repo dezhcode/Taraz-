@@ -33,7 +33,9 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.AccountType
 import com.example.data.BankCard
+import com.example.data.BankSender
 import com.example.ui.formatNumber
 import com.example.ui.EmeraldPrimary
 import com.example.ui.BackgroundLight
@@ -121,7 +123,11 @@ fun formatCardNumberForDisplay(rawNumber: String): String {
 fun CardDetailBottomSheet(
     card: BankCard,
     onDismiss: () -> Unit,
-    onEnableSmsBanking: (bankName: String) -> Unit,
+    /** The sender feeding this card from SMS, or null when the reader is off. */
+    smsLink: BankSender?,
+    onEnableSmsBanking: () -> Unit,
+    onChangeSmsSender: () -> Unit,
+    onDisableSmsBanking: () -> Unit,
     onUpdateCard: (BankCard) -> Unit,
     onDeleteCard: (Int) -> Unit
 ) {
@@ -131,10 +137,14 @@ fun CardDetailBottomSheet(
     var editedBalanceStr by remember { mutableStateOf(card.balance.toString()) }
     var editedCardHolderName by remember { mutableStateOf(card.cardHolderName) }
 
+    // A number saved elsewhere (the SMS reader's setup) should show without reopening the sheet.
+    LaunchedEffect(card.cardNumber) {
+        if (!isEditing) editedCardNumber = card.cardNumber.replace("*", "0")
+    }
+
     var dropdownExpanded by remember { mutableStateOf(false) }
     var showManualBankSelector by remember { mutableStateOf(false) }
-    var showSupportedBanksSheet by remember { mutableStateOf(false) }
-    var syncSuccessBankName by remember { mutableStateOf<String?>(null) }
+    var showDisableSmsConfirm by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
@@ -578,76 +588,14 @@ fun CardDetailBottomSheet(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        // Normal Action: SMS sync activation
-                        AnimatedContent(targetState = syncSuccessBankName, label = "syncStateTransition") { successBank ->
-                            if (successBank != null) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(Color(0xFFECFDF5))
-                                        .border(1.dp, Color(0xFFA7F3D0), RoundedCornerShape(16.dp))
-                                        .padding(16.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(48.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFF10B981)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
-                                    }
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Text(
-                                        text = "پیامک بانک $successBank فعال شد!",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = Color(0xFF065F46))
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "پیامک‌های تراکنشی دریافت شده به صورت خودکار خوانده شده و دارایی کارت شما به‌روزرسانی شد.",
-                                        style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF047857), textAlign = TextAlign.Center),
-                                        lineHeight = 16.sp
-                                    )
-                                }
-                            } else {
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { showSupportedBanksSheet = true }
-                                        .testTag("enable_sms_banking_button"),
-                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFEEF2F6)),
-                                    shape = RoundedCornerShape(16.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(48.dp)
-                                                .clip(CircleShape)
-                                                .background(Color(0xFF0EA5E9).copy(alpha = 0.12f)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(imageVector = Icons.Default.Sms, contentDescription = null, tint = Color(0xFF0284C7))
-                                        }
-                                        Spacer(modifier = Modifier.width(16.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "فعال‌سازی دریافت خودکار از پیامک",
-                                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = NavySecondary)
-                                            )
-                                            Text(
-                                                text = "اتصال خودکار پیامک‌های بانکی به سیستم تراز",
-                                                style = MaterialTheme.typography.bodySmall.copy(color = SlateGray)
-                                            )
-                                        }
-                                        Icon(imageVector = Icons.Default.ChevronLeft, contentDescription = null, tint = Color(0xFF94A3B8))
-                                    }
-                                }
-                            }
+                        // SMS reader: only a bank card has messages to read.
+                        if (card.accountType == AccountType.BANK) {
+                            SmsReaderCard(
+                                link = smsLink,
+                                onEnable = onEnableSmsBanking,
+                                onChangeSender = onChangeSmsSender,
+                                onDisable = { showDisableSmsConfirm = true }
+                            )
                         }
 
                         // Edit & Delete Management Actions Row
@@ -686,115 +634,147 @@ fun CardDetailBottomSheet(
         }
     }
 
-    // Supported Banks Sub Sheet overlay
-    if (showSupportedBanksSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showSupportedBanksSheet = false },
+    if (showDisableSmsConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDisableSmsConfirm = false },
+            title = {
+                Text(
+                    text = "غیرفعال‌سازی پیامک‌خوان",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = NavySecondary)
+                )
+            },
+            text = {
+                Text(
+                    text = "پیامک‌های این کارت دیگر خوانده نمی‌شوند. تراکنش‌هایی که قبلاً ثبت شده‌اند باقی می‌مانند.",
+                    style = MaterialTheme.typography.bodyMedium.copy(color = SlateGray)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDisableSmsBanking()
+                        showDisableSmsConfirm = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("غیرفعال کن", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = Color.White))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showDisableSmsConfirm = false },
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color.LightGray)
+                ) {
+                    Text("انصراف", style = MaterialTheme.typography.bodyMedium.copy(color = SlateGray))
+                }
+            },
             containerColor = Color.White,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+}
+
+/**
+ * The SMS reader's status on a card: an invitation to switch it on, or — once
+ * it is on — which sender feeds the card, with a way to change or stop it.
+ */
+@Composable
+private fun SmsReaderCard(
+    link: BankSender?,
+    onEnable: () -> Unit,
+    onChangeSender: () -> Unit,
+    onDisable: () -> Unit
+) {
+    if (link == null) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onEnable() }
+                .testTag("enable_sms_banking_button"),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFEEF2F6)),
+            shape = RoundedCornerShape(16.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 40.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "بانک‌های پشتیبانی شده",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = NavySecondary),
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                    textAlign = TextAlign.Center
-                )
-                Text(
-                    text = "بانک مورد نظر خود را جهت اتصال خودکار پیامک‌ها انتخاب کنید:",
-                    style = MaterialTheme.typography.bodyMedium.copy(color = SlateGray),
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
-                    textAlign = TextAlign.Center
-                )
-
-                val banks = listOf(
-                    SupportedBankItem("بانک ملی", "Melli", isActive = true),
-                    SupportedBankItem("بانک رسالت", "Resalat", isActive = true),
-                    SupportedBankItem("بانک ملت", "Mellat", isActive = false),
-                    SupportedBankItem("بانک صادرات", "Saderat", isActive = false),
-                    SupportedBankItem("بانک تجارت", "Tejarat", isActive = false),
-                    SupportedBankItem("بانک سامان", "Saman", isActive = false)
-                )
-
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    banks.forEach { b ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (b.isActive) Color(0xFFF0FDF4) else Color(0xFFF8FAFC))
-                                .border(
-                                    1.dp,
-                                    if (b.isActive) Color(0xFFBBF7D0) else Color(0xFFE2E8F0),
-                                    RoundedCornerShape(12.dp)
-                                )
-                                .clickable(enabled = b.isActive) {
-                                    onEnableSmsBanking(b.name)
-                                    syncSuccessBankName = b.name
-                                    showSupportedBanksSheet = false
-                                }
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IranianBankLogo(bankName = b.name, size = 32.dp)
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = b.name,
-                                    style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (b.isActive) Color(0xFF166534) else SlateGray
-                                    )
-                                )
-                            }
-
-                            if (b.isActive) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFFDCFCE7))
-                                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = "فعال",
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            color = Color(0xFF15803D),
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    )
-                                }
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFFF1F5F9))
-                                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = "به‌زودی",
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            color = Color(0xFF94A3B8),
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    }
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF0EA5E9).copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(imageVector = Icons.Default.Sms, contentDescription = null, tint = Color(0xFF0284C7))
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "فعال‌سازی دریافت خودکار از پیامک",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = NavySecondary)
+                    )
+                    Text(
+                        text = "کارت و سرشمارهٔ بانک را مشخص کنید تا تراکنش‌ها خودکار ثبت شوند",
+                        style = MaterialTheme.typography.bodySmall.copy(color = SlateGray)
+                    )
+                }
+                Icon(imageVector = Icons.Default.ChevronLeft, contentDescription = null, tint = Color(0xFF94A3B8))
+            }
+        }
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0xFFECFDF5))
+                .border(1.dp, Color(0xFFA7F3D0), RoundedCornerShape(16.dp))
+                .padding(16.dp)
+                .testTag("sms_reader_active_card")
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF10B981)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "پیامک‌خوان فعال است",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = Color(0xFF065F46))
+                    )
+                    Text(
+                        text = "${link.bankName} · سرشماره ${link.senderNumber}",
+                        style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF047857)),
+                        maxLines = 1
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(
+                    onClick = onChangeSender,
+                    modifier = Modifier.weight(1f).testTag("sms_change_sender_button"),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color(0xFF10B981))
+                ) {
+                    Text("تغییر سرشماره", style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFF047857), fontWeight = FontWeight.Bold))
+                }
+                OutlinedButton(
+                    onClick = onDisable,
+                    modifier = Modifier.weight(1f).testTag("sms_disable_button"),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.5f))
+                ) {
+                    Text("غیرفعال‌سازی", style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFFEF4444), fontWeight = FontWeight.Bold))
                 }
             }
         }
     }
 }
-
-data class SupportedBankItem(
-    val name: String,
-    val latinName: String,
-    val isActive: Boolean
-)
