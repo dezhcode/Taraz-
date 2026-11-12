@@ -136,7 +136,7 @@ class SmsRepositoryImpl(
                     val parsed = parser.parse(body, bankName, senderNumber)
                     if (parsed != null && parsed.balance > 0) {
                         val db = com.example.data.AppDatabase.getDatabase(context, kotlinx.coroutines.CoroutineScope(Dispatchers.IO))
-                        db.bankCardDao().updateBalance(bankName, com.example.data.SmsIngest.toToman(parsed.balance, body))
+                        db.bankCardDao().updateBalance(bankName, com.example.data.SmsIngest.toBookUnit(parsed.balance, body))
                         break
                     }
                 }

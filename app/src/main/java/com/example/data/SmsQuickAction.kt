@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 class SmsQuickAction : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        Money.load(context)
         val id = intent.getIntExtra(EXTRA_ID, -1)
         if (id < 0) return
         val appContext = context.applicationContext
@@ -63,7 +64,7 @@ class SmsQuickAction : BroadcastReceiver() {
          */
         fun notify(c: Context, tx: PendingTransaction, bankName: String) {
             val card = tx.card.filter { it.isDigit() }.takeLast(4)
-            val line = "${NotificationHelper.formatAmount(tx.amount)} تومان " + (if (tx.isExpense) "برداشت" else "واریز") +
+            val line = "${NotificationHelper.formatAmount(tx.amount)} ${com.example.data.Money.label} " + (if (tx.isExpense) "برداشت" else "واریز") +
                 " · " + bankName + (if (card.length == 4) " · کارت " + com.example.utils.JalaliDate.toPersianDigits(card) else "")
             NotificationHelper.showNotification(
                 c,

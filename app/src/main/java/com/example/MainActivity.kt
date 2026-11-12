@@ -108,6 +108,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         // پیامک‌های بانکی صندوق ورودی هر ۱۵ دقیقه، برای گوشی‌هایی که پیامک تازه را به برنامه اعلام نمی‌کنند
         com.example.reminders.ReminderScheduler.scheduleSmsCatchUp(this)
 
+        // واحد پولی دفتر (تومان/ریال/دلار) پیش از هر نمایش مبلغ
+        com.example.data.Money.load(this)
         // انتخاب روشن/تیرهٔ کاربر قبل از اولین رسم اعمال می‌شود تا صفحه چشمک نزند
         com.example.ui.layer.ThemePrefs.load(this)?.let { com.example.ui.layer.LayerTheme.dark = it }
 
@@ -181,6 +183,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 var initialIsExpenseForDialog by remember { mutableStateOf(true) }
                 val pendingQuick = quickAction.value
                 var weeklyOpen by remember { mutableStateOf(false) }
+                // تغییر واحد پول (تنظیمات)
+                var currencyOpen by remember { mutableStateOf(false) }
+                var currencyBusy by remember { mutableStateOf(false) }
+                var currencyError by remember { mutableStateOf<String?>(null) }
                 // شیت «تراکنش‌های تازه»: با باز شدن برنامه، نوتیفیکیشن یا بنر خانه
                 var pendingSheetOpen by remember { mutableStateOf(false) }
                 var pendingFocusId by remember { mutableStateOf<Int?>(null) }
@@ -334,7 +340,16 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             backupBusy = false
                             backupMsg = false to "فایل خوانده نشد."
                         } else {
-                            viewModel.restoreBackup(bytes, pass) { ok, msg -> backupBusy = false; backupMsg = ok to msg }
+                            val unitBefore = com.example.data.Money.current
+                            viewModel.restoreBackup(bytes, pass) { ok, msg ->
+                                backupBusy = false
+                                backupMsg = ok to msg
+                                // پشتیبان با واحد پول دیگری بود: صفحه‌ها با واحد تازه از نو ساخته شوند
+                                if (ok && com.example.data.Money.current != unitBefore) {
+                                    android.widget.Toast.makeText(this@MainActivity, msg, android.widget.Toast.LENGTH_LONG).show()
+                                    this@MainActivity.recreate()
+                                }
+                            }
                         }
                     }
                 }
@@ -541,6 +556,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         onOpenSms = { openSub("sms_setup") },
                                         onOpenBackup = { openBackupGuarded() },
                                         onOpenPrivacy = { openSub("privacy") },
+                                        onOpenCurrency = { currencyOpen = true },
                                         onTestServer = { cb -> viewModel.testAiServerConnection(cb) },
                                         onLogout = {
                                             subStack.clear()
@@ -1158,6 +1174,30 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 )
                             }
 
+                            if (currencyOpen) {
+                                com.example.ui.layer.CurrencySheet(
+                                    current = com.example.data.Money.current,
+                                    suggestedUsdToman = viewModel.usdTomanRate(),
+                                    busy = currencyBusy,
+                                    error = currencyError,
+                                    onDismiss = { if (!currencyBusy) { currencyOpen = false; currencyError = null } },
+                                    onOpenBackup = { currencyOpen = false; currencyError = null; openBackupGuarded() },
+                                    onConvert = { to, rate ->
+                                        currencyBusy = true
+                                        currencyError = null
+                                        viewModel.changeCurrency(to, rate) { err ->
+                                            currencyBusy = false
+                                            if (err != null) currencyError = err
+                                            else {
+                                                currencyOpen = false
+                                                // همهٔ صفحه‌ها با واحد تازه از نو ساخته شوند
+                                                this@MainActivity.recreate()
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+
                             if (weeklyOpen) {
                                 val digest = remember(transactions, loans, cheques, bills, loanPayments) {
                                     com.example.data.WeeklyDigest.build(transactions, loans, cheques, bills, payments = loanPayments)
@@ -1383,8 +1423,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     }
                                 ) {
                                     androidx.compose.material3.Text(
-                                        "در تراز: ${com.example.ui.layer.money(m.inApp)} تومان\n" +
-                                            "طبق پیامک بانک: ${com.example.ui.layer.money(m.inSms)} تومان\n\n" +
+                                        "در تراز: ${com.example.ui.layer.money(m.inApp)} ${com.example.data.Money.label}\n" +
+                                            "طبق پیامک بانک: ${com.example.ui.layer.money(m.inSms)} ${com.example.data.Money.label}\n\n" +
                                             "معمولاً یعنی تراکنشی بیرون از تراز ثبت نشده یا موجودی اول درست وارد نشده بود.",
                                         style = com.example.ui.layer.lt(14.sp, lineHeight = 24.sp)
                                     )

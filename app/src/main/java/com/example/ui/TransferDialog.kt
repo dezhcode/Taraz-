@@ -209,7 +209,7 @@ fun TransferDialog(
                                                 style = MaterialTheme.typography.labelSmall.copy(color = Color.White.copy(alpha = 0.7f))
                                             )
                                             Text(
-                                                text = "${formatNumber(card.balance)} تومان",
+                                                text = "${formatNumber(card.balance)} ${com.example.data.Money.label}",
                                                 style = MaterialTheme.typography.bodySmall.copy(color = Color.White, fontWeight = FontWeight.Black)
                                             )
                                         }
@@ -301,7 +301,7 @@ fun TransferDialog(
                                                 style = MaterialTheme.typography.labelSmall.copy(color = Color.White.copy(alpha = 0.7f))
                                             )
                                             Text(
-                                                text = "${formatNumber(card.balance)} تومان",
+                                                text = "${formatNumber(card.balance)} ${com.example.data.Money.label}",
                                                 style = MaterialTheme.typography.bodySmall.copy(color = Color.White, fontWeight = FontWeight.Black)
                                             )
                                         }
@@ -317,15 +317,15 @@ fun TransferDialog(
                     OutlinedTextField(
                         value = amountStr,
                         onValueChange = { input ->
-                            if (input.all { it.isDigit() }) {
+                            if (input.all { it.isDigit() || (com.example.data.Money.current.decimals > 0 && it in ".٫") }) {
                                 amountStr = input
                                 showError = false
                             }
                         },
-                        label = { Text("مبلغ انتقال وجه (تومان)", style = MaterialTheme.typography.bodyMedium) },
+                        label = { Text("مبلغ انتقال وجه (${com.example.data.Money.label})", style = MaterialTheme.typography.bodyMedium) },
                         placeholder = { Text("مثال: ۵۰,۰۰۰", style = MaterialTheme.typography.bodyMedium) },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        keyboardOptions = com.example.ui.layer.moneyKeyboard,
                         textStyle = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
                             color = NavySecondary,
@@ -342,9 +342,9 @@ fun TransferDialog(
                     )
 
                     if (amountStr.isNotEmpty()) {
-                        val formatted = amountStr.toLongOrNull()?.let { formatNumber(it) } ?: amountStr
+                        val formatted = formatNumber(com.example.data.Money.parse(amountStr))
                         Text(
-                            text = "معادل: $formatted تومان",
+                            text = "معادل: $formatted ${com.example.data.Money.label}",
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 color = Color(0xFF2563EB),
                                 fontWeight = FontWeight.Bold
@@ -386,7 +386,7 @@ fun TransferDialog(
                         // Confirm
                         Button(
                             onClick = {
-                                val amount = amountStr.toLongOrNull()
+                                val amount = com.example.data.Money.parse(amountStr).takeIf { it > 0 }
                                 val srcCard = fromCard
                                 val destCard = toCard
 
@@ -400,7 +400,7 @@ fun TransferDialog(
                                         showError = true
                                     }
                                     srcCard.balance < amount -> {
-                                        errorMessage = "موجودی کارت مبدأ کافی نیست! (موجودی: ${formatNumber(srcCard.balance)} تومان)"
+                                        errorMessage = "موجودی کارت مبدأ کافی نیست! (موجودی: ${formatNumber(srcCard.balance)} ${com.example.data.Money.label})"
                                         showError = true
                                     }
                                     else -> {

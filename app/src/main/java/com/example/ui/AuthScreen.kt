@@ -130,10 +130,18 @@ fun AuthScreen(
     }
     // بدون ورود با شماره: صفحهٔ شروع طرح «صفحه خودِ لوگو»
     if (!com.example.Features.LOGIN) {
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        var currency by remember { mutableStateOf(com.example.data.Money.current) }
         com.example.ui.layer.WelcomeStart(
             name = fullName,
             onNameChange = { fullName = it },
-            onStart = { viewModel.loginAsGuest(fullName.ifBlank { "کاربر تراز" }) }
+            currency = currency,
+            onCurrencyChange = { currency = it },
+            onStart = {
+                // شروع تازه: هنوز مبلغی ثبت نشده، پس فقط واحد ذخیره می‌شود
+                com.example.data.Money.save(ctx, currency)
+                viewModel.loginAsGuest(fullName.ifBlank { "کاربر تراز" })
+            }
         )
         return
     }

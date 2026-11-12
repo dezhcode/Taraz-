@@ -136,7 +136,7 @@ private fun PendingRow(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    signedMoney(p.amount, p.isExpense) + " تومان",
+                    signedMoney(p.amount, p.isExpense) + " ${com.example.data.Money.label}",
                     style = lt(17.sp, FontWeight.ExtraBold, if (p.isExpense) L.RedText else L.GreenText),
                     modifier = Modifier.weight(1f)
                 )

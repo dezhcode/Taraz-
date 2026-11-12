@@ -13,7 +13,7 @@ import com.example.utils.JalaliDate
  * اگر جهت تراکنش (برداشت یا واریز) روشن نباشد، حدس نمی‌زند و null برمی‌گرداند.
  *
  * مبلغ و مانده همان‌طور که در پیامک آمده برگردانده می‌شوند (ریال یا تومان)؛ تبدیل واحد با
- * [com.example.data.SmsIngest.toToman] است.
+ * [com.example.data.SmsIngest.toBookUnit] است.
  */
 class EngineParser : SmsParser {
 

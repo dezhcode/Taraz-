@@ -145,7 +145,13 @@ private fun BoxWithMark() {
 
 /** صفحهٔ شروع: سربرگ آبی با علامت تراز روی لبهٔ پایینش، و زیرش نام و دکمهٔ «شروع» */
 @Composable
-fun WelcomeStart(name: String, onNameChange: (String) -> Unit, onStart: () -> Unit) {
+fun WelcomeStart(
+    name: String,
+    onNameChange: (String) -> Unit,
+    onStart: () -> Unit,
+    currency: com.example.data.AppCurrency = com.example.data.AppCurrency.TOMAN,
+    onCurrencyChange: (com.example.data.AppCurrency) -> Unit = {}
+) {
     Column(Modifier.fillMaxSize().background(L.Bg).imePadding()) {
         Box(
             Modifier.fillMaxWidth().height(380.dp)
@@ -184,6 +190,9 @@ fun WelcomeStart(name: String, onNameChange: (String) -> Unit, onStart: () -> Un
                 )
             }
             Text("اطلاعات شما فقط روی همین دستگاه ذخیره می‌شود.", style = lt(12.sp, color = L.Muted))
+            Text("واحد پول", style = lt(13.sp, FontWeight.SemiBold), modifier = Modifier.padding(top = 8.dp))
+            CurrencyOptions(currency, onCurrencyChange)
+            Text("بعداً هم از «تنظیمات › واحد پول» قابل تغییر است.", style = lt(12.sp, color = L.Muted))
         }
         Box(Modifier.navigationBarsPadding().padding(horizontal = 24.dp, vertical = 20.dp)) {
             BigButton("شروع", height = 56.dp, onClick = onStart)

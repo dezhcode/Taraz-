@@ -100,7 +100,7 @@ object ReportRenderer {
 
         cv.drawText("تراز", right, M + 40, paint(40f, 0xFF2F5BEA.toInt(), bold))
         cv.drawText("گزارش ${r.monthTitle}", right, M + 140, paint(64f, ink, bold))
-        cv.drawText(if (hide) "مبالغ پنهان است؛ فقط نسبت‌ها" else "به تومان", right, M + 200, paint(32f, muted, regular))
+        cv.drawText(if (hide) "مبالغ پنهان است؛ فقط نسبت‌ها" else "به ${com.example.data.Money.label}", right, M + 200, paint(32f, muted, regular))
 
         // سه کادر: درآمد، هزینه، پس‌انداز
         val boxW = (W - 2 * M - 2 * 24f) / 3

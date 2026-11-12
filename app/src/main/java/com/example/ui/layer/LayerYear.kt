@@ -108,7 +108,7 @@ fun LayerYearScreen(
         ) {
             Text("عملکرد سال ${fa(year)}", style = lt(14.sp, FontWeight.SemiBold, Color(0xD9FFFFFF)))
             Text(
-                if (saved >= 0) "${millions(saved)} پس‌انداز" else "هزینه ${millions(-saved)} تومان بیش از درآمد بود",
+                if (saved >= 0) "${millions(saved)} پس‌انداز" else "هزینه ${millions(-saved)} ${com.example.data.Money.label} بیش از درآمد بود",
                 style = lt(30.sp, FontWeight.Bold, Color.White)
             )
             Text(
@@ -172,16 +172,16 @@ fun LayerYearScreen(
 
         // نکته‌ها
         Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            st.biggest?.let { b -> Fact("بزرگ‌ترین هزینه", "${b.title} · ${money(b.amount)} تومان", JalaliDate.fromTimestamp(b.date).formatLong()) }
+            st.biggest?.let { b -> Fact("بزرگ‌ترین هزینه", "${b.title} · ${money(b.amount)} ${com.example.data.Money.label}", JalaliDate.fromTimestamp(b.date).formatLong()) }
             st.busiestWeekday?.let { Fact("پرهزینه‌ترین روز هفته", it, "روزی با بیشترین هزینه") }
             val yearStart = JalaliDate.toTimestamp(year, 1, 1)
             val days = (
                 if (year == thisYear) JalaliDate.daysUntil(System.currentTimeMillis(), yearStart) + 1
                 else JalaliDate.daysUntil(JalaliDate.toTimestamp(year + 1, 1, 1), yearStart) // ۳۶۵ یا ۳۶۶ در سال کبیسه
                 ).coerceAtLeast(1)
-            Fact("میانگین هزینهٔ روزانه", "${money(st.expense / days)} تومان", "در ${fa(days)} روز")
-            if (st.loanPaid > 0) Fact("قسط پرداخت‌شده", "${money(st.loanPaid)} تومان", "از وام‌های بانکی")
-            if (st.lent > 0 || st.gotBack > 0) Fact("حساب اشخاص", "پرداخت ${money(st.lent)} تومان", "دریافت ${money(st.gotBack)} تومان")
+            Fact("میانگین هزینهٔ روزانه", "${money(st.expense / days)} ${com.example.data.Money.label}", "در ${fa(days)} روز")
+            if (st.loanPaid > 0) Fact("قسط پرداخت‌شده", "${money(st.loanPaid)} ${com.example.data.Money.label}", "از وام‌های بانکی")
+            if (st.lent > 0 || st.gotBack > 0) Fact("حساب اشخاص", "پرداخت ${money(st.lent)} ${com.example.data.Money.label}", "دریافت ${money(st.gotBack)} ${com.example.data.Money.label}")
         }
     }
 }

@@ -33,10 +33,7 @@ object NotificationHelper {
     }
 
     /** Persian-digit thousands separators, e.g. ۲٬۵۰۰٬۰۰۰ */
-    fun formatAmount(amount: Long): String {
-        val grouped = java.text.NumberFormat.getNumberInstance(java.util.Locale("fa", "IR")).format(amount)
-        return grouped
-    }
+    fun formatAmount(amount: Long): String = com.example.data.Money.format(amount)
 
     /**
      * [notificationId] lets each loan own a stable slot, so three loans produce

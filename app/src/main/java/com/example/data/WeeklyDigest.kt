@@ -28,7 +28,7 @@ object WeeklyDigest {
             get() = if (prevSpent > 0) (((spent - prevSpent) * 100.0) / prevSpent).toInt() else null
 
         val title: String
-            get() = "خلاصهٔ هفته: ${amount(spent)} تومان هزینه"
+            get() = "خلاصهٔ هفته: ${amount(spent)} ${com.example.data.Money.label} هزینه"
 
         /** The lines of the notification and of the in-app card, in order. */
         fun lines(): List<String> = buildList {
@@ -37,16 +37,16 @@ object WeeklyDigest {
             } else {
                 val ch = changePercent
                 add(
-                    "هزینهٔ این هفته ${amount(spent)} تومان بود" + when {
+                    "هزینهٔ این هفته ${amount(spent)} ${com.example.data.Money.label} بود" + when {
                         ch == null -> "."
                         ch > 0 -> "؛ ${fa(ch)}٪ بیشتر از هفتهٔ قبل."
                         ch < 0 -> "؛ ${fa(-ch)}٪ کمتر از هفتهٔ قبل."
                         else -> "؛ هم‌اندازهٔ هفتهٔ قبل."
                     }
                 )
-                if (earned > 0) add("درآمد این هفته ${amount(earned)} تومان بود.")
-                topCategory?.let { add("بیشترین هزینه: $it با ${amount(topCategoryAmount)} تومان.") }
-                biggest?.let { add("بزرگ‌ترین هزینه: ${it.title} (${amount(it.amount)} تومان).") }
+                if (earned > 0) add("درآمد این هفته ${amount(earned)} ${com.example.data.Money.label} بود.")
+                topCategory?.let { add("بیشترین هزینه: $it با ${amount(topCategoryAmount)} ${com.example.data.Money.label}.") }
+                biggest?.let { add("بزرگ‌ترین هزینه: ${it.title} (${amount(it.amount)} ${com.example.data.Money.label}).") }
             }
             if (upcoming.isNotEmpty()) {
                 add(
@@ -101,5 +101,5 @@ object WeeklyDigest {
 
     private fun fa(v: Any) = JalaliDate.toPersianDigits(v)
 
-    fun amount(v: Long): String = fa(String.format(Locale.ENGLISH, "%,d", v).replace(',', '٬'))
+    fun amount(v: Long): String = Money.format(v)
 }

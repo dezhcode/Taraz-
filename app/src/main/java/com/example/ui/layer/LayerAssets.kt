@@ -131,7 +131,7 @@ fun LayerAssetsScreen(
             Text("دارایی خالص", style = lt(13.sp, color = L.Muted))
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(amt(net), style = lt(36.sp, FontWeight.Light, if (net < 0) L.RedText else L.Ink, letterSpacing = (-1.5).sp))
-                Text("تومان", style = lt(14.sp), modifier = Modifier.padding(bottom = 6.dp))
+                Text("${com.example.data.Money.label}", style = lt(14.sp), modifier = Modifier.padding(bottom = 6.dp))
             }
             Text(
                 "حساب‌ها ${millions(accountsTotal)} + دارایی‌ها ${millions(assetsTotal)}" + if (debtsTotal > 0) " − بدهی‌ها ${millions(debtsTotal)}" else "",
@@ -175,7 +175,7 @@ fun LayerAssetsScreen(
 
         if (assets.isEmpty()) {
             Text(
-                "دلار، طلا، سکه، رمزارز یا واحدهای صندوق خود را اضافه کنید؛ ارزش تومانی آن با قیمت روز محاسبه می‌شود.",
+                "دلار، طلا، سکه، رمزارز یا واحدهای صندوق خود را اضافه کنید؛ ارزش ${com.example.data.Money.label}ی آن با قیمت روز محاسبه می‌شود.",
                 style = lt(13.sp, color = L.Muted, lineHeight = 23.sp), modifier = Modifier.padding(horizontal = 24.dp)
             )
         }
@@ -342,17 +342,17 @@ fun AssetSheet(
         )
         if (unit > 0 && qty > 0) {
             Text(
-                "ارزش امروز: ${money((unit * qty).roundToLong())} تومان" + if (manual <= 0 && livePrice != null) " (هر واحد ${money(livePrice)})" else "",
+                "ارزش امروز: ${money((unit * qty).roundToLong())} ${com.example.data.Money.label}" + if (manual <= 0 && livePrice != null) " (هر واحد ${money(livePrice)})" else "",
                 style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText)
             )
         }
         LField(
-            value = buyText, onChange = { buyText = groupedInput(it) }, label = "بهای تمام‌شده (اختیاری، تومان)",
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), hint = "برای محاسبهٔ سود یا زیان"
+            value = buyText, onChange = { buyText = groupedInput(it) }, label = "بهای تمام‌شده (اختیاری، ${com.example.data.Money.label})",
+            keyboardOptions = moneyKeyboard, hint = "برای محاسبهٔ سود یا زیان"
         )
         LField(
             value = manualText, onChange = { manualText = groupedInput(it) }, label = "قیمت هر واحد به‌صورت دستی (اختیاری)",
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            keyboardOptions = moneyKeyboard,
             hint = "در صورت خالی بودن، قیمت روز اعمال می‌شود."
         )
         Spacer(Modifier.height(4.dp))
@@ -377,7 +377,7 @@ private fun InflationCard(snapshots: List<com.example.data.NetWorthSnapshot>, hi
         Text("پس‌انداز در برابر تورم", style = lt(14.sp, FontWeight.Bold))
         if (list.size < 2) {
             Text(
-                "تراز هر ماه دارایی خالص شما را با قیمت روز دلار و طلا ثبت می‌کند. از ماه دوم در این بخش مشخص می‌شود که ارزش دارایی شما به دلار و طلا افزایش یافته یا تنها مبلغ تومانی آن بیشتر شده است." +
+                "تراز هر ماه دارایی خالص شما را با قیمت روز دلار و طلا ثبت می‌کند. از ماه دوم در این بخش مشخص می‌شود که ارزش دارایی شما به دلار و طلا افزایش یافته یا تنها مبلغ ${com.example.data.Money.label}ی آن بیشتر شده است." +
                     if (list.size == 1) "\nارزش ${JalaliDate.MONTH_NAMES[list[0].monthKey % 100 - 1]} ثبت شد." else "",
                 style = lt(12.sp, color = L.Muted, lineHeight = 21.sp), modifier = Modifier.padding(top = 6.dp)
             )
@@ -387,14 +387,20 @@ private fun InflationCard(snapshots: List<com.example.data.NetWorthSnapshot>, hi
         val b = list.last()
         val fromLabel = JalaliDate.MONTH_NAMES[a.monthKey % 100 - 1]
         Text("از $fromLabel تا امروز", style = lt(12.sp, color = L.Muted), modifier = Modifier.padding(top = 2.dp, bottom = 8.dp))
-        val usdA = a.netWorth.toDouble() / a.usdToman
-        val usdB = b.netWorth.toDouble() / b.usdToman
-        val goldA = a.netWorth.toDouble() / a.gold18Toman
-        val goldB = b.netWorth.toDouble() / b.gold18Toman
+        // دارایی خالص به واحد دفتر ذخیره شده و نرخ‌ها به تومان؛ برای مقایسه همه به تومان برده می‌شوند.
+        fun toman(s: com.example.data.NetWorthSnapshot) = (com.example.data.Money.toToman(s.netWorth, s.usdToman) ?: 0L).toDouble()
+        fun whole(v: Double) = com.example.data.Money.format(v.toLong(), com.example.data.AppCurrency.TOMAN)
+        val usdA = toman(a) / a.usdToman
+        val usdB = toman(b) / b.usdToman
+        val goldA = toman(a) / a.gold18Toman
+        val goldB = toman(b) / b.gold18Toman
+        val book = com.example.data.Money.current
         listOf(
-            Triple("به تومان", pct(a.netWorth.toDouble(), b.netWorth.toDouble()), if (hide) "••••" else millions(b.netWorth)),
-            Triple("به دلار", pct(usdA, usdB), if (hide) "••••" else "${money(usdB.toLong())} دلار"),
-            Triple("به طلای ۱۸", pct(goldA, goldB), if (hide) "••••" else "${money(goldB.toLong())} گرم")
+            if (book == com.example.data.AppCurrency.USD)
+                Triple("به تومان", pct(toman(a), toman(b)), if (hide) "••••" else "${whole(toman(b))} تومان")
+            else Triple("به ${book.label}", pct(a.netWorth.toDouble(), b.netWorth.toDouble()), if (hide) "••••" else millions(b.netWorth)),
+            Triple("به دلار", pct(usdA, usdB), if (hide) "••••" else "${whole(usdB)} دلار"),
+            Triple("به طلای ۱۸", pct(goldA, goldB), if (hide) "••••" else "${whole(goldB)} گرم")
         ).forEach { (label, change, now) ->
             Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(label, style = lt(13.sp), modifier = Modifier.weight(1f))
@@ -406,13 +412,13 @@ private fun InflationCard(snapshots: List<com.example.data.NetWorthSnapshot>, hi
             }
         }
         // دارایی خالص به دلار در هر ماه
-        val maxUsd = list.maxOf { it.netWorth.toDouble() / it.usdToman }.coerceAtLeast(1.0)
+        val maxUsd = list.maxOf { toman(it) / it.usdToman }.coerceAtLeast(1.0)
         Row(
             Modifier.fillMaxWidth().height(70.dp).padding(top = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom
         ) {
             list.forEach { snap ->
-                val v = (snap.netWorth.toDouble() / snap.usdToman).coerceAtLeast(0.0)
+                val v = (toman(snap) / snap.usdToman).coerceAtLeast(0.0)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
                         Modifier.fillMaxWidth().height((44 * v / maxUsd).coerceAtLeast(2.0).dp)
@@ -426,7 +432,7 @@ private fun InflationCard(snapshots: List<com.example.data.NetWorthSnapshot>, hi
         val usdChange = if (usdA > 0) (usdB - usdA) / usdA else 0.0
         Text(
             when {
-                b.netWorth > a.netWorth && usdChange < 0 -> "ارزش تومانی افزایش یافته اما ارزش دلاری کاهش یافته است؛ یعنی نرخ تورم از رشد پس‌انداز بیشتر بوده است."
+                b.netWorth > a.netWorth && usdChange < 0 -> "ارزش ${com.example.data.Money.label}ی افزایش یافته اما ارزش دلاری کاهش یافته است؛ یعنی نرخ تورم از رشد پس‌انداز بیشتر بوده است."
                 usdChange > 0 -> "ارزش واقعی دارایی شما افزایش یافته است."
                 else -> "ارزش دارایی شما به دلار و طلا کاهش یافته است."
             },

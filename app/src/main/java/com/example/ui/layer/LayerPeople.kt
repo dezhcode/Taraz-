@@ -106,7 +106,7 @@ fun LayerObligationsScreen(
             Column(Modifier.weight(1f).cardSurface(18.dp).padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("بدهکار", style = lt(12.sp, color = L.Muted))
                 FitText(money(loanLeft + iOwePeople + chequesOut + creditUsed), lt(20.sp, FontWeight.Bold, L.RedText))
-                Text("تومان", style = lt(11.sp, color = L.Muted))
+                Text("${com.example.data.Money.label}", style = lt(11.sp, color = L.Muted))
                 Text(
                     listOfNotNull(
                         if (loanLeft > 0) "وام ${millions(loanLeft)}" else null,
@@ -120,7 +120,7 @@ fun LayerObligationsScreen(
             Column(Modifier.weight(1f).cardSurface(18.dp).padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("بستانکار", style = lt(12.sp, color = L.Muted))
                 FitText(money(owedToMe), lt(20.sp, FontWeight.Bold, L.Green))
-                Text("تومان", style = lt(11.sp, color = L.Muted))
+                Text("${com.example.data.Money.label}", style = lt(11.sp, color = L.Muted))
                 Text(
                     "از ${fa(balances.values.count { it > 0 })} نفر" + if (chequesIn > 0) "\nچک دریافتی ${millions(chequesIn)}" else "",
                     style = lt(11.sp, color = L.Muted, lineHeight = 17.sp), modifier = Modifier.padding(top = 4.dp)
@@ -335,7 +335,7 @@ fun LayerPersonDetailScreen(
             )
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(money(abs(balance)), style = lt(34.sp, FontWeight.Light, letterSpacing = (-1).sp))
-                Text("تومان", style = lt(14.sp), modifier = Modifier.padding(bottom = 6.dp))
+                Text("${com.example.data.Money.label}", style = lt(14.sp), modifier = Modifier.padding(bottom = 6.dp))
             }
             val nextDue = mine.filter { !it.settled && !it.isRepayment && it.dueDate != null && it.owedToMe == (balance > 0) }
                 .minByOrNull { it.dueDate!! }?.dueDate
@@ -408,7 +408,7 @@ fun LayerPersonDetailScreen(
 
     if (settling) {
         AccountChoiceSheet(
-            title = if (balance > 0) "آیا کل مبلغ ${money(balance)} تومان از ${person.name} دریافت شد؟" else "آیا کل مبلغ ${money(-balance)} تومان به ${person.name} پرداخت شد؟",
+            title = if (balance > 0) "آیا کل مبلغ ${money(balance)} ${com.example.data.Money.label} از ${person.name} دریافت شد؟" else "آیا کل مبلغ ${money(-balance)} ${com.example.data.Money.label} به ${person.name} پرداخت شد؟",
             question = if (balance > 0) "به کدام حساب واریز شد؟" else "از کدام حساب پرداخت شد؟",
             cards = cards,
             confirm = "تسویه شد",
@@ -422,7 +422,7 @@ fun LayerPersonDetailScreen(
             bottomBar = { BigButton("بله، حذف شود", background = L.RedText) { onDeleteEntry(d); entryToDelete = null } }
         ) {
             Text(
-                "${d.kindLabel} · ${money(d.amount)} تومان" +
+                "${d.kindLabel} · ${money(d.amount)} ${com.example.data.Money.label}" +
                     if (d.transactionId != null) "\nتراکنش مرتبط نیز حذف و موجودی حساب اصلاح می‌شود." else "",
                 style = lt(13.sp, color = L.Muted, lineHeight = 23.sp)
             )
@@ -606,8 +606,8 @@ fun PersonEntrySheet(
         }
         if (person != null && bal != 0L) {
             Text(
-                if (bal > 0) "مانده: ${money(bal)} تومان بستانکار هستید (${person.name} به شما بدهکار است)."
-                else "مانده: ${money(-bal)} تومان به ${person.name} بدهکار هستید.",
+                if (bal > 0) "مانده: ${money(bal)} ${com.example.data.Money.label} بستانکار هستید (${person.name} به شما بدهکار است)."
+                else "مانده: ${money(-bal)} ${com.example.data.Money.label} به ${person.name} بدهکار هستید.",
                 style = lt(12.sp, color = if (bal > 0) L.GreenText else L.RedText)
             )
         }
@@ -622,8 +622,8 @@ fun PersonEntrySheet(
         )
 
         LField(
-            value = amountText, onChange = { amountText = groupedInput(it) }, label = "مبلغ (تومان)", placeholder = "۰",
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            value = amountText, onChange = { amountText = groupedInput(it) }, label = "مبلغ (${com.example.data.Money.label})", placeholder = "۰",
+            keyboardOptions = moneyKeyboard
         )
         Text(if (kind.owedToMe) "حساب پرداخت‌کننده" else "حساب دریافت‌کننده", style = lt(13.sp, FontWeight.SemiBold))
         AccountChips(cards, account) { account = it }
@@ -681,8 +681,8 @@ fun SplitExpenseSheet(
     ) {
         LField(value = title, onChange = { title = it.take(40) }, label = "شرح", placeholder = "مثلاً شام جمعه")
         LField(
-            value = totalText, onChange = { totalText = groupedInput(it) }, label = "کل مبلغ (تومان)", placeholder = "۰",
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            value = totalText, onChange = { totalText = groupedInput(it) }, label = "کل مبلغ (${com.example.data.Money.label})", placeholder = "۰",
+            keyboardOptions = moneyKeyboard
         )
         Text("اشخاص سهیم", style = lt(13.sp, FontWeight.SemiBold))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -698,7 +698,7 @@ fun SplitExpenseSheet(
         WatchNew(categories, { it.id }) { c -> if (!c.isIncome) category = c.name }
         if (total > 0 && n > 0) {
             Text(
-                "سهم هر نفر ${money(share)} تومان. " +
+                "سهم هر نفر ${money(share)} ${com.example.data.Money.label}. " +
                     (if (includeMe) "سهم شما به‌عنوان هزینه ثبت می‌شود و " else "") +
                     "سهم ${fa(picked.size)} نفر دیگر به بستانکاری شما افزوده می‌شود.",
                 style = lt(12.sp, color = L.PrimaryText, lineHeight = 21.sp)

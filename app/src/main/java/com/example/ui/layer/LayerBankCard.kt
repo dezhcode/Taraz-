@@ -168,7 +168,7 @@ fun BankCardView(
                 Text("موجودی", style = lt(11.sp, color = L.Muted))
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(if (hideBalance) "••••••" else money(card.balance), style = lt(18.sp, FontWeight.Bold, if (card.balance < 0) L.RedText else L.Ink))
-                    Text(" تومان", style = lt(11.sp, color = L.Muted), modifier = Modifier.padding(bottom = 2.dp))
+                    Text(" ${com.example.data.Money.label}", style = lt(11.sp, color = L.Muted), modifier = Modifier.padding(bottom = 2.dp))
                 }
             }
         }

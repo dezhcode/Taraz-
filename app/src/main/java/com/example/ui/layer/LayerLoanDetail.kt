@@ -117,7 +117,7 @@ fun LayerLoanDetailScreen(
             Text(if (loan.isSettled) "این وام تسویه شده است" else "باقی‌مانده", style = lt(13.sp, color = L.Muted))
             Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(money(left), style = lt(34.sp, FontWeight.Light, letterSpacing = (-1).sp))
-                Text("تومان", style = lt(14.sp), modifier = Modifier.padding(bottom = 6.dp))
+                Text("${com.example.data.Money.label}", style = lt(14.sp), modifier = Modifier.padding(bottom = 6.dp))
             }
             // نوار قسط‌ها
             val units = min(max(total, 1), 24)
@@ -270,13 +270,13 @@ fun LayerAddLoanScreen(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 LField(totalText, { totalText = groupedInput(it) }, if (purchase) "مبلغ کل اقساط" else "مبلغ کل وام", Modifier.weight(1f), placeholder = "۰",
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                    keyboardOptions = moneyKeyboard)
                 LField(instText, { instText = groupedInput(it) }, "مبلغ هر قسط", Modifier.weight(1f), placeholder = "۰",
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                    keyboardOptions = moneyKeyboard)
             }
             LField(
-                paidText, { paidText = groupedInput(it) }, "مبلغ پرداخت‌شده تاکنون (تومان)", placeholder = "۰",
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                paidText, { paidText = groupedInput(it) }, "مبلغ پرداخت‌شده تاکنون (${com.example.data.Money.label})", placeholder = "۰",
+                keyboardOptions = moneyKeyboard,
                 hint = if (paid > total && total > 0) "مبلغ پرداخت‌شده از کل وام بیشتر است." else null
             )
 
@@ -310,7 +310,7 @@ fun LayerAddLoanScreen(
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(L.PrimarySoft).padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("خلاصه", style = lt(12.sp, FontWeight.Bold, L.PrimaryText))
                     Text(
-                        "${fa(remainCount)} قسط ${money(inst)} تومانی باقی مانده است. قسط بعدی ${JalaliDate.fromTimestamp(next).formatShort()} و آخرین قسط ${JalaliDate.fromTimestamp(last).formatMonthYear()}.",
+                        "${fa(remainCount)} قسط ${money(inst)} ${com.example.data.Money.label}ی باقی مانده است. قسط بعدی ${JalaliDate.fromTimestamp(next).formatShort()} و آخرین قسط ${JalaliDate.fromTimestamp(last).formatMonthYear()}.",
                         style = lt(13.sp, color = L.Info, lineHeight = 24.sp)
                     )
                 }

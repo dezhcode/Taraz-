@@ -330,7 +330,7 @@ private fun StepSender(s: SmsWizardState, a: SmsWizardActions) {
                             Text("تراز این پیامک را این‌طور فهمید", style = lt(12.sp, FontWeight.Bold, L.PrimaryText))
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 StatusPill(
-                                    (if (preview.isExpense) "هزینه · " else "درآمد · ") + money(preview.amount) + " تومان",
+                                    (if (preview.isExpense) "هزینه · " else "درآمد · ") + money(preview.amount) + " ${com.example.data.Money.label}",
                                     if (preview.isExpense) L.AmberSoft else L.GreenSoft,
                                     if (preview.isExpense) L.AmberText else L.GreenText
                                 )
@@ -502,6 +502,17 @@ fun LayerSmsSetupScreen(
     onOpenUnread: () -> Unit
 ) {
     val context = LocalContext.current
+    // پیامک‌های بانکی ریالی‌اند؛ دفتر دلاری آن‌ها را نمی‌خواند.
+    if (!com.example.data.Money.current.readsBankSms) {
+        LayerScreen(title = "پیامک بانک", subtitle = "ثبت خودکار از پیامک بانک", onBack = onBack) {
+            Callout(
+                "در حالت دلار، پیامک بانکی خوانده نمی‌شود",
+                "پیامک‌های بانک‌های ایران به ریال هستند. برای ثبت خودکار آن‌ها، از «تنظیمات › واحد پول» تومان یا ریال را انتخاب کنید.",
+                L.AmberSoft, L.AmberInk, Modifier.padding(horizontal = 20.dp)
+            )
+        }
+        return
+    }
     val scope = rememberCoroutineScope()
     val smsVm: SmsParserViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     val creators = LocalCreators.current

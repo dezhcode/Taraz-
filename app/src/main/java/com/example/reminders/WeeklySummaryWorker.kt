@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.first
 class WeeklySummaryWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = try {
+        com.example.data.Money.load(applicationContext)
         val prefs = applicationContext.getSharedPreferences("fidar_prefs", Context.MODE_PRIVATE)
         if (prefs.getBoolean("alerts_enabled", true) && prefs.getBoolean(KEY_ENABLED, true)) {
             val db = AppDatabase.getDatabase(applicationContext, CoroutineScope(Dispatchers.IO))

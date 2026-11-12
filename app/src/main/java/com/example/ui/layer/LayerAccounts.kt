@@ -149,7 +149,7 @@ fun LayerAccountsScreen(
             Text("موجودی کل", style = lt(13.sp, color = L.Muted))
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(if (hideAmounts) "••••••" else money(totalBalance), style = lt(38.sp, FontWeight.Light, letterSpacing = (-1.5).sp))
-                Text("تومان", style = lt(14.sp), modifier = Modifier.padding(bottom = 6.dp))
+                Text("${com.example.data.Money.label}", style = lt(14.sp), modifier = Modifier.padding(bottom = 6.dp))
             }
         }
         // دارایی‌ها (ارز، طلا، رمزارز، صندوق) با قیمت روز
@@ -407,16 +407,16 @@ fun LayerAddAccountSheet(
         )
         if (credit) {
             LField(
-                value = limitText, onChange = { limitText = groupedInput(it) }, label = "سقف اعتبار (تومان)", placeholder = "۰",
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                value = limitText, onChange = { limitText = groupedInput(it) }, label = "سقف اعتبار (${com.example.data.Money.label})", placeholder = "۰",
+                keyboardOptions = moneyKeyboard
             )
         }
         LField(
             value = balanceText,
             onChange = { balanceText = groupedInput(it) },
-            label = if (credit) "مبلغ استفاده‌شده تاکنون (تومان)" else "موجودی فعلی (تومان)",
+            label = if (credit) "مبلغ استفاده‌شده تاکنون (${com.example.data.Money.label})" else "موجودی فعلی (${com.example.data.Money.label})",
             placeholder = "۰",
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            keyboardOptions = moneyKeyboard,
             hint = if (credit) "خریدهای این کارت به بدهی آن افزوده می‌شود؛ بازپرداخت را با دکمهٔ «بازپرداخت» در صفحهٔ همین کارت ثبت کنید."
             else "تا موجودی کل از ابتدا صحیح باشد."
         )
@@ -504,14 +504,14 @@ fun LayerEditAccountSheet(
             hint = if (nameTaken) "حساب دیگری با این نام وجود دارد." else "تراکنش‌های این حساب نیز با نام جدید نمایش داده می‌شوند."
         )
         LField(
-            value = balanceText, onChange = { balanceText = groupedInput(it) }, label = if (credit) "استفاده‌شده (تومان)" else "موجودی (تومان)",
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            value = balanceText, onChange = { balanceText = groupedInput(it) }, label = if (credit) "استفاده‌شده (${com.example.data.Money.label})" else "موجودی (${com.example.data.Money.label})",
+            keyboardOptions = moneyKeyboard,
             hint = "در صورت مغایرت موجودی واقعی با تراز، آن را در این بخش اصلاح کنید."
         )
         if (credit) {
             LField(
-                value = limitText, onChange = { limitText = groupedInput(it) }, label = "سقف اعتبار (تومان)",
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                value = limitText, onChange = { limitText = groupedInput(it) }, label = "سقف اعتبار (${com.example.data.Money.label})",
+                keyboardOptions = moneyKeyboard
             )
             CreditDueDay(dueDay) { dueDay = it }
         }
@@ -550,8 +550,8 @@ fun RepayCreditSheet(card: BankCard, cards: List<BankCard>, onDismiss: () -> Uni
             BigButton("ثبت بازپرداخت", enabled = amount > 0 && from.isNotBlank()) { onRepay(from, amount); onDismiss() }
         }
     ) {
-        Text("بدهی این کارت: ${money(used)} تومان", style = lt(14.sp, FontWeight.SemiBold))
-        LField(amountText, { amountText = groupedInput(it) }, "مبلغ بازپرداخت (تومان)", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        Text("بدهی این کارت: ${money(used)} ${com.example.data.Money.label}", style = lt(14.sp, FontWeight.SemiBold))
+        LField(amountText, { amountText = groupedInput(it) }, "مبلغ بازپرداخت (${com.example.data.Money.label})", keyboardOptions = moneyKeyboard,
             hint = if (src != null && amount > src.balance) "موجودی ${src.bankName} کمتر از این مبلغ است." else null)
         if (used > 0 && amount != used) SoftButton("کل بدهی: ${money(used)}", height = 34.dp) { amountText = money(used) }
         Text("از حساب", style = lt(13.sp, FontWeight.Bold))

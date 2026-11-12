@@ -165,7 +165,7 @@ fun LayerSmsReviewScreen(
                     verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(money(amount), style = lt(32.sp, FontWeight.Light, letterSpacing = (-1).sp))
-                    Text("تومان", style = lt(13.sp), modifier = Modifier.padding(bottom = 5.dp))
+                    Text("${com.example.data.Money.label}", style = lt(13.sp), modifier = Modifier.padding(bottom = 5.dp))
                 }
                 // اگر تراز جهت تراکنش را برعکس خوانده، با یک ضربه درست می‌شود
                 Box(
@@ -182,8 +182,8 @@ fun LayerSmsReviewScreen(
             Text("برای تغییر مبلغ یا نوع تراکنش، روی آن بزنید.", style = lt(11.sp, color = L.Muted), modifier = Modifier.padding(top = 4.dp))
             if (editingAmount) {
                 LField(
-                    amountText, { amountText = groupedInput(it) }, "مبلغ (تومان)", Modifier.padding(top = 8.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    amountText, { amountText = groupedInput(it) }, "مبلغ (${com.example.data.Money.label})", Modifier.padding(top = 8.dp),
+                    keyboardOptions = moneyKeyboard
                 )
             }
             Box(Modifier.padding(top = 10.dp).fillMaxWidth().height(1.dp).background(L.Line))

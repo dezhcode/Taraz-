@@ -25,6 +25,7 @@ class LoanReminderWorker(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        com.example.data.Money.load(applicationContext)
         return try {
             val prefs = applicationContext.getSharedPreferences("fidar_prefs", Context.MODE_PRIVATE)
             val database = AppDatabase.getDatabase(
@@ -64,7 +65,7 @@ class LoanReminderWorker(
                         NotificationHelper.showNotification(
                             context = applicationContext,
                             title = "قسط معوق ${loan.loanName}",
-                            message = "${NotificationHelper.formatAmount(loan.installmentAmount)} تومان — سررسید ${JalaliDate.fromTimestamp(thisDue).formatLong()} گذشته است.",
+                            message = "${NotificationHelper.formatAmount(loan.installmentAmount)} ${com.example.data.Money.label} — سررسید ${JalaliDate.fromTimestamp(thisDue).formatLong()} گذشته است.",
                             notificationId = NOTIFICATION_ID_BASE + loan.id
                         )
                         prefs.edit().putBoolean(lateKey, true).apply()
@@ -89,7 +90,7 @@ class LoanReminderWorker(
                     1 -> "فردا سررسید قسط ${loan.loanName}"
                     else -> "${JalaliDate.toPersianDigits(daysLeft)} روز تا سررسید قسط ${loan.loanName}"
                 }
-                val message = "$amount تومان — ${loan.bankName} — ${dueDate.formatLong()}"
+                val message = "$amount ${com.example.data.Money.label} — ${loan.bankName} — ${dueDate.formatLong()}"
 
                 NotificationHelper.showNotification(
                     context = applicationContext,
@@ -132,7 +133,7 @@ class LoanReminderWorker(
             NotificationHelper.showNotification(
                 context = applicationContext,
                 title = if (d.owedToMe) "$whenText موعد دریافت از ${d.person}" else "$whenText موعد پرداخت به ${d.person}",
-                message = if (d.owedToMe) "مبلغ $amount تومان از ${d.person} بستانکار هستید." else "مبلغ $amount تومان به ${d.person} بدهکار هستید.",
+                message = if (d.owedToMe) "مبلغ $amount ${com.example.data.Money.label} از ${d.person} بستانکار هستید." else "مبلغ $amount ${com.example.data.Money.label} به ${d.person} بدهکار هستید.",
                 notificationId = 9000 + d.id
             )
             prefs.edit().putBoolean(key, true).apply()
@@ -156,7 +157,7 @@ class LoanReminderWorker(
             notifyOnce(
                 prefs, "cheque_${c.id}_${c.dueDate}_$days",
                 if (c.issued) "${whenText(days)} سررسید پرداخت چک به ${c.person}" else "${whenText(days)} سررسید دریافت چک از ${c.person}",
-                if (c.issued) "موجودی حساب ${c.bankName} باید دست‌کم $amount تومان باشد." else "مبلغ $amount تومان؛ چک را برای وصول به بانک ارائه کنید.",
+                if (c.issued) "موجودی حساب ${c.bankName} باید دست‌کم $amount ${com.example.data.Money.label} باشد." else "مبلغ $amount ${com.example.data.Money.label}؛ چک را برای وصول به بانک ارائه کنید.",
                 10_000 + c.id
             )
         }
@@ -171,7 +172,7 @@ class LoanReminderWorker(
             notifyOnce(
                 prefs, "bill_${b.id}_${b.dueDate}_$days",
                 "${whenText(days)} موعد قبض ${b.title.ifBlank { b.kind }}",
-                (if (b.amount > 0) "${NotificationHelper.formatAmount(b.amount)} تومان" else "مبلغ در قبض درج شده است") +
+                (if (b.amount > 0) "${NotificationHelper.formatAmount(b.amount)} ${com.example.data.Money.label}" else "مبلغ در قبض درج شده است") +
                     if (b.billId.isNotBlank()) " · شناسه ${b.billId}" else "",
                 11_000 + b.id
             )
@@ -189,7 +190,7 @@ class LoanReminderWorker(
             notifyOnce(
                 prefs, "credit_${c.id}_${d.monthKey()}_$days",
                 "${whenText(days)} بازپرداخت ${c.bankName}",
-                "${NotificationHelper.formatAmount(-c.balance)} تومان از اعتبار استفاده شده است.",
+                "${NotificationHelper.formatAmount(-c.balance)} ${com.example.data.Money.label} از اعتبار استفاده شده است.",
                 12_000 + c.id
             )
         }

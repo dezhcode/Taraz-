@@ -74,9 +74,11 @@ object SmsIngest {
 
     private fun number(s: String?): Long = latinDigits(s.orEmpty()).filter { it.isDigit() }.toLongOrNull() ?: 0L
 
-    /** Bank SMS give rials unless they say toman; Taraz keeps toman everywhere. */
-    fun toToman(raw: Long, body: String): Long =
-        if (body.contains("تومان") && !body.contains("ریال")) raw else raw / 10
+    /**
+     * مبلغ پیامک به واحد دفتر ([Money]): پیامک بانک ریالی است مگر «تومان» بگوید. در دفتر ریالی همان
+     * عدد پیامک بی‌کم‌وکاست ثبت می‌شود، در دفتر تومانی ÷۱۰. دفتر دلاری پیامک نمی‌خواند (۰).
+     */
+    fun toBookUnit(raw: Long, body: String): Long = Money.fromSms(raw, body) ?: 0L
 
     private data class Parsed(val amount: Long, val balance: Long, val card: String, val isExpense: Boolean)
 
@@ -93,8 +95,8 @@ object SmsIngest {
         if (SmsFilter.isNonTransaction(body) || !BankSmsDetector.isTransaction(body)) return null
         val p = CompositeParser().parse(body, bankName, sender)?.takeIf { it.amount > 0 } ?: return null
         return Preview(
-            amount = toToman(p.amount, body),
-            balance = toToman(p.balance, body),
+            amount = toBookUnit(p.amount, body),
+            balance = toBookUnit(p.balance, body),
             card = latinDigits(p.cardNumber).filter { it.isDigit() }.takeLast(4),
             isExpense = p.transactionType !in INCOME_TYPES
         )
@@ -171,7 +173,7 @@ object SmsIngest {
 
         val tx = PendingTransaction(
             senderNumber = sender.senderNumber,
-            amount = toToman(found.amount, body),
+            amount = toBookUnit(found.amount, body),
             // When the SMS arrived, not when it was read: the parsers' own dates were "now".
             date = receivedAt,
             isExpense = found.isExpense,
@@ -179,7 +181,7 @@ object SmsIngest {
             title = "تراکنش پیامکی ${sender.bankName}",
             smsBody = body,
             smsBodyHash = hash,
-            balance = toToman(found.balance, body)
+            balance = toBookUnit(found.balance, body)
         )
         val id = db.pendingTransactionDao().insertPendingTransaction(tx).toInt()
         return Outcome.Pending(tx.copy(id = id), sender.bankName)

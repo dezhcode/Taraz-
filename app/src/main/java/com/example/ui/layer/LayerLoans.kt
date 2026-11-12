@@ -92,7 +92,7 @@ internal fun ColumnScope.LoansSection(
                 Text("وام‌ها و خریدهای اقساطی", style = lt(17.sp, FontWeight.Bold))
                 Text(
                     if (active.isEmpty()) "قسط فعالی وجود ندارد"
-                    else "${fa(active.size)} مورد فعال · قسط ${today.monthName} ${money(active.sumOf { it.installmentAmount })} تومان",
+                    else "${fa(active.size)} مورد فعال · قسط ${today.monthName} ${money(active.sumOf { it.installmentAmount })} ${com.example.data.Money.label}",
                     style = lt(12.sp, color = L.Muted)
                 )
             }
@@ -124,7 +124,7 @@ internal fun ColumnScope.LoansSection(
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(money(loan.installmentAmount), style = lt(24.sp, letterSpacing = (-0.8).sp))
                         Spacer(Modifier.width(4.dp))
-                        Text("تومان", style = lt(12.sp), modifier = Modifier.padding(bottom = 4.dp))
+                        Text("${com.example.data.Money.label}", style = lt(12.sp), modifier = Modifier.padding(bottom = 4.dp))
                     }
                 }
                 PrimaryButton("پرداخت این قسط", Modifier.fillMaxWidth().height(50.dp)) { onPay(loan) }
@@ -209,7 +209,7 @@ internal fun ColumnScope.LoansSection(
             Box(Modifier.padding(start = 4.dp, end = 4.dp, top = 10.dp).fillMaxWidth().clip(ButtonShape).background(L.Bg).padding(horizontal = 12.dp, vertical = 10.dp)) {
                 Text(
                     if (pickedLoans != null) pickedLoans.joinToString("\n") {
-                        "${fa(picked!!)} ${JalaliDate.MONTH_NAMES[month - 1]}: قسط ${it.loanName} · ${money(it.installmentAmount)} تومان · ${it.bankName}"
+                        "${fa(picked!!)} ${JalaliDate.MONTH_NAMES[month - 1]}: قسط ${it.loanName} · ${money(it.installmentAmount)} ${com.example.data.Money.label} · ${it.bankName}"
                     } else if (active.isEmpty()) "وام فعالی ثبت نشده است."
                     else "برای مشاهدهٔ جزئیات قسط، روی روزهای رنگی ضربه بزنید.",
                     style = lt(12.sp, if (pickedLoans != null) FontWeight.SemiBold else FontWeight.Normal, if (pickedLoans != null) L.Ink else L.Muted, lineHeight = 20.sp)
@@ -305,7 +305,7 @@ fun LayerPaySheet(
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(money(payAmount), style = lt(42.sp, letterSpacing = (-1.5).sp))
                         Spacer(Modifier.width(6.dp))
-                        Text("تومان", style = lt(15.sp), modifier = Modifier.padding(bottom = 8.dp))
+                        Text("${com.example.data.Money.label}", style = lt(15.sp), modifier = Modifier.padding(bottom = 8.dp))
                     }
                 }
                 Box(Modifier.padding(top = 8.dp).fillMaxWidth().height(1.dp).background(L.Line))
@@ -366,7 +366,7 @@ fun LayerPaySheet(
                     Spacer(Modifier.height(12.dp))
                     Text(
                         (if (total > 0) "قسط ${fa(total - remainingBefore + 1)} از ${fa(total)} ${loan.loanName}\n" else "") +
-                            "${money(payAmount)} تومان از ${fromCard?.let { shortAccountLabel(it) } ?: from}",
+                            "${money(payAmount)} ${com.example.data.Money.label} از ${fromCard?.let { shortAccountLabel(it) } ?: from}",
                         style = lt(14.sp, color = L.Muted, lineHeight = 25.sp), textAlign = TextAlign.Center
                     )
                     if (remainingBefore > 1) {

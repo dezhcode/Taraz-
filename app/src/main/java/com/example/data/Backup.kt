@@ -70,6 +70,8 @@ object Backup {
         val root = JSONObject()
         root.put("format", 1)
         root.put("exportedAt", System.currentTimeMillis())
+        // مبلغ‌ها به همین واحد ذخیره شده‌اند؛ بازگردانی واحد را هم برمی‌گرداند
+        root.put("currency", Money.current.code)
         root.put("transactions", JSONArray(db.transactionDao().getAllTransactions().first().map { t ->
             JSONObject().put("id", t.id).put("title", t.title).put("amount", t.amount).put("category", t.category)
                 .put("date", t.date).put("isExpense", t.isExpense).put("bankName", t.bankName).put("type", t.type)
@@ -170,6 +172,10 @@ object Backup {
      * succeeded. It used to be emptied first: a file that was damaged or from an incompatible
      * version then failed half-way and left the user with nothing at all.
      */
+    /** واحد پولی که مبلغ‌های این پشتیبان با آن ذخیره شده‌اند؛ پشتیبان‌های قدیمی تومانی‌اند. */
+    fun currencyOf(json: String): AppCurrency =
+        AppCurrency.of(runCatching { JSONObject(json).optString("currency") }.getOrNull()) ?: AppCurrency.TOMAN
+
     suspend fun restore(db: AppDatabase, json: String, photos: java.io.File? = null): Int {
         val root = JSONObject(json)
         if (!root.has("transactions") || !root.has("cards")) throw NotABackupException()
@@ -299,10 +305,15 @@ object Backup {
         csvOf(withContext(Dispatchers.IO) { db.transactionDao().getAllTransactions().first() })
 
     /** The given transactions as CSV (the filtered list on the Transactions screen). */
+    /** مبلغ برای اکسل، بی جداکنندهٔ هزارگان: 1250000 یا برای دلار 12.50 */
+    internal fun csvAmount(v: Long): String =
+        if (Money.current.decimals == 0) v.toString()
+        else (if (v < 0) "-" else "") + (kotlin.math.abs(v) / 100) + "." + String.format(java.util.Locale.US, "%02d", kotlin.math.abs(v) % 100)
+
     suspend fun csvOf(list: List<Transaction>): ByteArray = withContext(Dispatchers.Default) {
         fun cell(v: String) = "\"" + v.replace("\"", "\"\"") + "\""
         val sb = StringBuilder()
-        sb.append("تاریخ,تاریخ میلادی,عنوان,دسته,حساب,نوع,مبلغ (تومان),برچسب\n")
+        sb.append("تاریخ,تاریخ میلادی,عنوان,دسته,حساب,نوع,مبلغ (${com.example.data.Money.label}),برچسب\n")
         val iso = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
         for (t in list) {
             val j = com.example.utils.JalaliDate.fromTimestamp(t.date)
@@ -317,7 +328,7 @@ object Backup {
                 .append(cell(t.category)).append(',')
                 .append(cell(t.bankName)).append(',')
                 .append(cell(kind)).append(',')
-                .append(if (t.isExpense) -t.amount else t.amount).append(',')
+                .append(csvAmount(if (t.isExpense) -t.amount else t.amount)).append(',')
                 .append(cell(t.tags)).append('\n')
         }
         byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()) + sb.toString().toByteArray(Charsets.UTF_8)

@@ -11,6 +11,7 @@ import com.example.data.SmsCatchUp
  */
 class SmsCatchUpWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
+        com.example.data.Money.load(applicationContext)
         SmsCatchUp.run(applicationContext, notify = true)
         return Result.success()
     }

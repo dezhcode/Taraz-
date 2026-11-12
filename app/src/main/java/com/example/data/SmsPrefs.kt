@@ -16,10 +16,12 @@ object SmsPrefs {
 
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
-    fun enabled(context: Context): Boolean = prefs(context).getBoolean(KEY_ENABLED, false)
+    /** روشن است و دفتر پیامک بانک را می‌خواند (دفتر دلاری پیامک ریالی نمی‌خواند). */
+    fun enabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ENABLED, false) && Money.load(context).readsBankSms
 
     fun setEnabled(context: Context, on: Boolean) {
-        val was = enabled(context)
+        val was = prefs(context).getBoolean(KEY_ENABLED, false)
         val edit = prefs(context).edit().putBoolean(KEY_ENABLED, on)
         // لحظهٔ روشن شدن: تراز فقط پیامک‌هایی را می‌خواند که از این به بعد می‌رسند.
         if (on && !was) edit.putLong(KEY_ENABLED_AT, System.currentTimeMillis())

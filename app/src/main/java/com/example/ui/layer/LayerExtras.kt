@@ -74,9 +74,9 @@ fun CategoryBudgetSheet(category: Category, spent: Long, onDismiss: () -> Unit, 
         }
     ) {
         LField(
-            value = text, onChange = { text = groupedInput(it) }, label = "سقف هزینهٔ ماهانه (تومان)", placeholder = "۰",
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            hint = "هزینهٔ این ماه تاکنون ${money(spent)} تومان است. با رسیدن به ۸۰٪ سقف، در صفحهٔ خانه هشدار نمایش داده می‌شود."
+            value = text, onChange = { text = groupedInput(it) }, label = "سقف هزینهٔ ماهانه (${com.example.data.Money.label})", placeholder = "۰",
+            keyboardOptions = moneyKeyboard,
+            hint = "هزینهٔ این ماه تاکنون ${money(spent)} ${com.example.data.Money.label} است. با رسیدن به ۸۰٪ سقف، در صفحهٔ خانه هشدار نمایش داده می‌شود."
         )
         Spacer(Modifier.height(4.dp))
     }
@@ -166,7 +166,7 @@ fun LayerRecurringScreen(
                 }
             }
             Text(
-                "اشتراک‌های غیرضروری را لغو کنید؛ مجموع این موارد ماهانه ${money(candidates.sumOf { it.amount })} تومان است.",
+                "اشتراک‌های غیرضروری را لغو کنید؛ مجموع این موارد ماهانه ${money(candidates.sumOf { it.amount })} ${com.example.data.Money.label} است.",
                 style = lt(12.sp, color = L.Muted, lineHeight = 21.sp), modifier = Modifier.padding(horizontal = 24.dp)
             )
         }
@@ -208,7 +208,7 @@ fun LayerRecurringScreen(
         var bank by remember { mutableStateOf(cards.firstOrNull()?.bankName.orEmpty()) }
         val cats = categories.filter { it.isIncome == !isExpense }.sortedBy { it.sortOrder }
         var category by remember(isExpense) { mutableStateOf(cats.firstOrNull()?.name ?: if (isExpense) "سایر" else "سایر درآمدها") }
-        val day = parseAmount(dayText).toInt()
+        val day = parseInt(dayText)
         val amount = parseAmount(amountText)
         val ok = title.isNotBlank() && amount > 0 && day in 1..31 && bank.isNotBlank()
         LayerSheet(
@@ -225,8 +225,8 @@ fun LayerRecurringScreen(
             LSegmented(listOf("هزینه", "درآمد"), if (isExpense) 0 else 1, { isExpense = it == 0 })
             LField(value = title, onChange = { title = it }, label = "عنوان", placeholder = if (isExpense) "مثلاً اجارهٔ خانه" else "مثلاً حقوق")
             LField(
-                value = amountText, onChange = { amountText = groupedInput(it) }, label = "مبلغ (تومان)", placeholder = "۰",
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                value = amountText, onChange = { amountText = groupedInput(it) }, label = "مبلغ (${com.example.data.Money.label})", placeholder = "۰",
+                keyboardOptions = moneyKeyboard
             )
             LField(
                 value = dayText, onChange = { dayText = it.filter { c -> c.isDigit() }.take(2) }, label = "روز ماه (۱ تا ۳۱)",

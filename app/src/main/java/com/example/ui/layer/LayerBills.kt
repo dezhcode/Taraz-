@@ -91,7 +91,7 @@ fun LayerBillsScreen(
                 val known = dueSoon.sumOf { it.amount }
                 Callout(
                     "${fa(dueSoon.size)} قبض تا یک هفتهٔ دیگر",
-                    if (known > 0) "حدود ${money(known)} تومان" else null,
+                    if (known > 0) "حدود ${money(known)} ${com.example.data.Money.label}" else null,
                     L.AmberSoft, L.AmberInk,
                     modifier = Modifier.padding(horizontal = 20.dp)
                 )
@@ -206,7 +206,7 @@ private fun BillSheet(bill: Bill?, onDismiss: () -> Unit, onSave: (Bill) -> Unit
                 clipboard.setText(AnnotatedString(listOf(billId, payId).filter { it.isNotBlank() }.joinToString(" ")))
             }
         }
-        LField(amountText, { amountText = groupedInput(it) }, "مبلغ این دوره (اختیاری)", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+        LField(amountText, { amountText = groupedInput(it) }, "مبلغ این دوره (اختیاری)", keyboardOptions = moneyKeyboard)
         LRow("موعد پرداخت", "${JalaliDate.fromTimestamp(due).formatShort()} · ${dueLabel(due)}", divider = false, onClick = { pickDate = true })
         Text("هر چند ماه یک بار", style = lt(13.sp, FontWeight.Bold))
         LSegmented(listOf("ماهانه", "دوماهه", "سه‌ماهه"), (period - 1).coerceIn(0, 2), { period = it + 1 })
@@ -231,7 +231,7 @@ internal fun PayBillSheet(bill: Bill, cards: List<BankCard>, onDismiss: () -> Un
             BigButton("ثبت پرداخت", enabled = amount > 0 && account.isNotBlank()) { onPay(amount, account); onDismiss() }
         }
     ) {
-        LField(amountText, { amountText = groupedInput(it) }, "مبلغ پرداخت‌شده (تومان)", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+        LField(amountText, { amountText = groupedInput(it) }, "مبلغ پرداخت‌شده (${com.example.data.Money.label})", keyboardOptions = moneyKeyboard)
         Text("از حساب", style = lt(13.sp, FontWeight.Bold))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             cards.forEach { c -> LChip(c.bankName, c.bankName == account) { account = c.bankName } }

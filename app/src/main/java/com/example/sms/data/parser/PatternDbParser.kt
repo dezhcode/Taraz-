@@ -18,7 +18,7 @@ import java.util.regex.Pattern
  *    داشتن مبلغ و شماره حساب. این مسیر پشتیبان است و در زنجیره پس از موتورهای دیگر می‌آید.
  *
  * مبلغ و مانده همان‌طور که در پیامک آمده‌اند برمی‌گردند (ریال/تومان با
- * [com.example.data.SmsIngest.toToman] تبدیل می‌شود).
+ * [com.example.data.SmsIngest.toBookUnit] تبدیل می‌شود).
  */
 class PatternDbParser(
     private val mode: Mode = Mode.TEMPLATE,

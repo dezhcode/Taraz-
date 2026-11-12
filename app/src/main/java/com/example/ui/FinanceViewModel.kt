@@ -271,6 +271,38 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         _dailyBudget.value = amount
     }
 
+    // ─── واحد پول ───
+
+    /** نرخ روز دلار به تومان از قیمت‌های روز (برای پیشنهاد در تبدیل واحد)؛ null اگر هنوز گرفته نشده */
+    fun usdTomanRate(): Long? = _prices.value["usd"]?.price?.takeIf { it > 0 }
+
+    /**
+     * واحد پولی دفتر را عوض می‌کند و همهٔ مبلغ‌های ذخیره‌شده را به واحد تازه می‌برد (تومان↔ریال دقیق،
+     * دلار با نرخ [usdToman] تومان برای هر دلار). [onDone] بعد از ذخیره صدا زده می‌شود تا صفحه‌ها با
+     * واحد تازه دوباره ساخته شوند؛ خطا (مثلاً نرخ نامعتبر) با پیام برمی‌گردد و چیزی عوض نمی‌شود.
+     */
+    fun changeCurrency(to: com.example.data.AppCurrency, usdToman: Long?, onDone: (error: String?) -> Unit) {
+        val from = com.example.data.Money.current
+        if (from == to) { onDone(null); return }
+        val needsRate = from == com.example.data.AppCurrency.USD || to == com.example.data.AppCurrency.USD
+        val rate = usdToman ?: 0L
+        if (needsRate && rate <= 0) { onDone("نرخ دلار را وارد کنید."); return }
+        viewModelScope.launch {
+            try {
+                repository.convertCurrency(from, to, rate)
+                val f = com.example.data.Money.factor(from, to, rate)
+                val budget = Math.round(_dailyBudget.value * f)
+                sharedPrefs.edit().putLong("daily_budget", budget).apply()
+                _dailyBudget.value = budget
+                com.example.data.Money.save(getApplication(), to)
+                com.example.widget.TodayWidget.refresh(getApplication())
+                onDone(null)
+            } catch (e: Exception) {
+                onDone("تبدیل انجام نشد: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
     // Reactive Financial Health Score calculation with AI Backend integration
     private val _aiFinancialHealth = MutableStateFlow<FinancialHealthResult?>(null)
 
@@ -503,7 +535,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         val userName = userProfile.value?.name?.takeIf { it.isNotBlank() && it != "کاربر مهمان" }
         val amount = com.example.utils.JalaliDate.toPersianDigits(formatNumber(balance).replace(',', '٬'))
         return "با سلام و احترام، ${person.name} گرامی\n" +
-            "یادآوری می‌شود مبلغ $amount تومان از حساب فی‌مابین نزد شما باقی مانده است. خواهشمند است در اولین فرصت نسبت به تسویه اقدام فرمایید.\n" +
+            "یادآوری می‌شود مبلغ $amount ${com.example.data.Money.label} از حساب فی‌مابین نزد شما باقی مانده است. خواهشمند است در اولین فرصت نسبت به تسویه اقدام فرمایید.\n" +
             "با سپاس" + (userName?.let { "\n$it" } ?: "")
     }
 
@@ -536,7 +568,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     fun deletePersonEntry(debt: Debt) {
         viewModelScope.launch {
             val gone = repository.deletePersonEntry(debt)
-            offerUndo("ردیف «${debt.kindLabel}» حذف شد", "${formatNumber(debt.amount)} تومان · ${debt.person}", gone)
+            offerUndo("ردیف «${debt.kindLabel}» حذف شد", "${formatNumber(debt.amount)} ${com.example.data.Money.label} · ${debt.person}", gone)
         }
     }
 
@@ -545,8 +577,21 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     val assets: StateFlow<List<Asset>> = repository.allAssets
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /** قیمت‌های روز به تومان، همان‌طور که از سایت‌ها می‌آیند (عکس ماهانهٔ دارایی خالص با همین‌ها) */
     private val _prices = MutableStateFlow<Map<String, PriceQuote>>(PriceService.cached(application))
-    val prices: StateFlow<Map<String, PriceQuote>> = _prices.asStateFlow()
+
+    /**
+     * قیمت‌های روز به واحد پولی دفتر (ریال ×۱۰، دلار با نرخ روز دلار به سنت). قیمتی که به دلار
+     * قابل تبدیل نیست (نرخ دلار در دست نیست) کنار می‌رود.
+     */
+    val prices: StateFlow<Map<String, PriceQuote>> = _prices
+        .map { inBookUnit(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, inBookUnit(_prices.value))
+
+    private fun inBookUnit(raw: Map<String, PriceQuote>): Map<String, PriceQuote> {
+        val usd = raw["usd"]?.price
+        return raw.mapNotNull { (k, q) -> com.example.data.Money.fromToman(q.price, usd)?.let { k to q.copy(price = it) } }.toMap()
+    }
 
     private val _pricesRefreshing = MutableStateFlow(false)
     val pricesRefreshing: StateFlow<Boolean> = _pricesRefreshing.asStateFlow()
@@ -556,7 +601,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     val priceErrors: StateFlow<List<String>> = _priceErrors.asStateFlow()
 
     /** قیمت هر واحد: قیمت دستی کاربر، وگرنه قیمت روز */
-    fun unitPrice(asset: Asset): Long = if (asset.manualPrice > 0) asset.manualPrice else _prices.value[asset.code]?.price ?: 0L
+    fun unitPrice(asset: Asset): Long = if (asset.manualPrice > 0) asset.manualPrice else prices.value[asset.code]?.price ?: 0L
 
     /** قیمت‌های روز را می‌گیرد؛ بی [force] اگر کمتر از ۱۰ دقیقه از آخرین بار گذشته کاری نمی‌کند */
     fun refreshPrices(force: Boolean = false) {
@@ -721,7 +766,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 جملهٔ زیر را که کاربر برای ثبت یک تراکنش گفته، به JSON تبدیل کن. فقط JSON برگردان، بدون هیچ توضیح.
                 فیلدها:
                 "type": "expense" یا "income"
-                "amount": عدد به تومان (در محاوره «۸۰ تومن» یعنی ۸۰ هزار تومان، «۲ میلیون» یعنی ۲۰۰۰۰۰۰، «۵۰۰ تومن» یعنی ۵۰۰ هزار)
+                "amount": عدد به ${com.example.data.Money.label} (در محاوره «۸۰ تومن» یعنی ۸۰ هزار ${com.example.data.Money.label}، «۲ میلیون» یعنی ۲۰۰۰۰۰۰، «۵۰۰ تومن» یعنی ۵۰۰ هزار)
                 "title": عنوان کوتاه
                 "category": یکی از [$cats] یا null
                 "account": یکی از [$accounts] یا null
@@ -768,7 +813,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
         val income = listOf("حقوق", "واریز", "گرفتم", "درآمد", "دریافت").any { text.contains(it) }
         val title = text.replace(Regex("[0-9۰-۹٬,.]+"), "").replace(Regex("(میلیون|هزار|تومن|تومان)"), "").trim().take(40)
-        return EntryDraft(isExpense = !income, amount = amount, title = title.ifBlank { null })
+        // عدد گفته‌شده به واحد کامل است؛ در دفتر دلاری به سنت ذخیره می‌شود
+        return EntryDraft(isExpense = !income, amount = amount * com.example.data.Money.current.unit, title = title.ifBlank { null })
     }
 
     // ─── پشتیبان و خروجی ───
@@ -793,7 +839,13 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 val json = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Backup.decrypt(data, password) }
                 val count = Backup.restore(db, json, Attachments.dir(getApplication()))
                 sharedPrefs.edit().remove("ai_insight_at").apply()
-                onDone(true, "${com.example.utils.JalaliDate.toPersianDigits(count)} تراکنش و همهٔ حساب‌ها بازگردانده شد.")
+                // مبلغ‌های پشتیبان به واحد خودشان‌اند: واحد دفتر هم همان می‌شود
+                val currency = Backup.currencyOf(json)
+                val unitNote = if (currency != com.example.data.Money.current) {
+                    com.example.data.Money.save(getApplication(), currency)
+                    " واحد پول: ${currency.label}."
+                } else ""
+                onDone(true, "${com.example.utils.JalaliDate.toPersianDigits(count)} تراکنش و همهٔ حساب‌ها بازگردانده شد.$unitNote")
             } catch (e: Exception) {
                 onDone(false, e.message ?: "بازگردانی انجام نشد.")
             }
@@ -1171,7 +1223,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 val prompt = """
                     شما یک دستیار مالی هوشمند فارسی هستید.
                     کاربر پیامک تراکنشی دریافت کرده و توضیح داده که این تراکنش بابت چی بوده است.
-                    مبلغ تراکنش: ${tx.amount} تومان
+                    مبلغ تراکنش: ${tx.amount} ${com.example.data.Money.label}
                     نوع تراکنش: $actionType
                     پیامک بانکی: ${tx.smsBody}
                     توضیح کاربر: "$userText"
@@ -1466,7 +1518,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             offerUndo(
                 if (transaction.isTransfer) "انتقال حذف شد" else "«${transaction.title}» حذف شد",
                 if (transaction.isTransfer) "موجودی هر دو حساب اصلاح شد"
-                else "${formatNumber(transaction.amount)} تومان ${if (transaction.isExpense) "به" else "از"} ${transaction.bankName} ${if (transaction.isExpense) "بازگشت" else "کسر شد"}",
+                else "${formatNumber(transaction.amount)} ${com.example.data.Money.label} ${if (transaction.isExpense) "به" else "از"} ${transaction.bankName} ${if (transaction.isExpense) "بازگشت" else "کسر شد"}",
                 gone
             )
         }
@@ -2236,22 +2288,22 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
         _isAiLoading.value = true
 
-        val cardsCtx = cards.value.joinToString("\n") { "کارت: ${it.bankName} | شماره کارت: ${it.cardNumber} | موجودی: ${it.balance} تومان" }
+        val cardsCtx = cards.value.joinToString("\n") { "کارت: ${it.bankName} | شماره کارت: ${it.cardNumber} | موجودی: ${it.balance} ${com.example.data.Money.label}" }
         val loansCtx = loans.value.joinToString("\n") { "وام: آیدی: ${it.id} | بانک: ${it.bankName} | نام وام: ${it.loanName} | مبلغ کل وام: ${it.totalAmount} | مبلغ پرداخت‌شده تا الان: ${it.paidAmount} | مبلغ هر قسط: ${it.installmentAmount} | تاریخ سررسید: روز ${it.dueDay} هر ماه | قسط بعدی: ${com.example.utils.JalaliDate.fromTimestamp(com.example.utils.JalaliDate.nextDueTimestamp(it.dueDay)).formatLong()}" }
         val creditCtx = cards.value.filter { it.accountType == AccountType.CREDIT }.joinToString("\n") {
             "کارت اعتباری: ${it.bankName} | سقف: ${it.creditLimit} | استفاده‌شده: ${(-it.balance).coerceAtLeast(0)} | روز بازپرداخت: ${it.dueDay}"
         }
-        val monthCtx = "این ماه: درآمد ${monthlyIncome.value} تومان، هزینه ${monthlyExpense.value} تومان، خرج امروز ${todayExpense.value} تومان"
+        val monthCtx = "این ماه: درآمد ${monthlyIncome.value} ${com.example.data.Money.label}، هزینه ${monthlyExpense.value} ${com.example.data.Money.label}، خرج امروز ${todayExpense.value} ${com.example.data.Money.label}"
         val peopleCtx = persons.value.mapNotNull { p ->
             val bal = personBalances.value[p.id] ?: 0L
-            if (bal == 0L) null else "${p.name}: " + if (bal > 0) "به کاربر $bal تومان بدهکار است (طلب کاربر)" else "کاربر ${-bal} تومان به او بدهکار است"
+            if (bal == 0L) null else "${p.name}: " + if (bal > 0) "به کاربر $bal ${com.example.data.Money.label} بدهکار است (طلب کاربر)" else "کاربر ${-bal} ${com.example.data.Money.label} به او بدهکار است"
         }.take(12).joinToString("\n")
         val chequesCtx = cheques.value.filter { it.status == ChequeStatus.PENDING }.sortedBy { it.dueDate }.take(8).joinToString("\n") {
             (if (it.issued) "چک داده‌شده به ${it.person}" else "چک دریافتی از ${it.person}") +
-                " | ${it.amount} تومان | سررسید ${com.example.utils.JalaliDate.fromTimestamp(it.dueDate).formatLong()} | حساب ${it.bankName}"
+                " | ${it.amount} ${com.example.data.Money.label} | سررسید ${com.example.utils.JalaliDate.fromTimestamp(it.dueDate).formatLong()} | حساب ${it.bankName}"
         }
         val billsCtx = bills.value.filter { it.enabled }.sortedBy { it.dueDate }.take(8).joinToString("\n") {
-            "قبض ${it.title.ifBlank { it.kind }} | ${if (it.amount > 0) "${it.amount} تومان" else "مبلغ نامشخص"} | موعد ${com.example.utils.JalaliDate.fromTimestamp(it.dueDate).formatLong()}"
+            "قبض ${it.title.ifBlank { it.kind }} | ${if (it.amount > 0) "${it.amount} ${com.example.data.Money.label}" else "مبلغ نامشخص"} | موعد ${com.example.utils.JalaliDate.fromTimestamp(it.dueDate).formatLong()}"
         }
         // Duck.ai هر پیام را تا ۱۶ هزار نویسه می‌پذیرد؛ اگر داده‌ها زیاد باشد تراکنش‌های کمتری فرستاده می‌شود
         val txLimit = if (transactions.value.size > 15 && (peopleCtx.length + chequesCtx.length + billsCtx.length) > 2500) 8 else 15
@@ -2294,7 +2346,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             2. **فرمت بولد (Bold)**: حتماً واژه‌های کلیدی، عناوین دسته‌بندی‌ها، مبالغ و عبارات مهم را با علامت `**` بولد کنید (مانند **مخارج خورد و خوراک** یا **موجودی حساب**) تا سریعاً توجه کاربر جلب شود.
             3. **لیست‌ها**: برای مراحل، پیشنهادها یا گزینه‌ها از لیست‌های بالت‌دار مارک‌داون با استفاده از کاراکتر `•` یا `-` در ابتدای خط استفاده کنید.
             4. **جدول‌های مارک‌داون**: هر زمان که لیستی از هزینه‌ها، تراکنش‌ها، مبالغ یا مقایسه‌های ارقام را ارایه می‌دهید، حتماً و بدون استثنا آن را در یک جدول استاندارد با فرمت پایپ `|` قرار دهید. به عنوان مثال:
-               | دسته‌بندی | مبلغ (تومان) | وضعیت |
+               | دسته‌بندی | مبلغ (${com.example.data.Money.label}) | وضعیت |
                | :---: | :---: | :---: |
                | خورد و خوراک | 450,000 | ثبت شده |
                | قسط خودرو | 2,500,000 | سررسید شده |
@@ -2340,16 +2392,16 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             قالب دقیق تگ PROPOSE_ACTION (تنها یک تگ در پاسخ ارسال کن و فرمت JSON آن دقیقاً باید رعایت شود):
             
             - اضافه کردن تراکنش:
-            [PROPOSE_ACTION: {"type": "add_transaction", "txTitle": "خرید نان", "txAmount": 15000, "txCategory": "خورد و خوراک", "txIsExpense": true, "txBankName": "ملی", "description": "ثبت تراکنش هزینه خرید نان به مبلغ 15,000 تومان روی کارت بانک ملی"}]
+            [PROPOSE_ACTION: {"type": "add_transaction", "txTitle": "خرید نان", "txAmount": 15000, "txCategory": "خورد و خوراک", "txIsExpense": true, "txBankName": "ملی", "description": "ثبت تراکنش هزینه خرید نان به مبلغ 15,000 ${com.example.data.Money.label} روی کارت بانک ملی"}]
             
             - حذف تراکنش:
-            [PROPOSE_ACTION: {"type": "delete_transaction", "txId": 12, "txTitle": "کافه", "txAmount": 45000, "txIsExpense": true, "txBankName": "ملت", "description": "حذف تراکنش هزینه کافه به مبلغ 45,000 تومان"}]
+            [PROPOSE_ACTION: {"type": "delete_transaction", "txId": 12, "txTitle": "کافه", "txAmount": 45000, "txIsExpense": true, "txBankName": "ملت", "description": "حذف تراکنش هزینه کافه به مبلغ 45,000 ${com.example.data.Money.label}"}]
             
             - ویرایش تراکنش:
-            [PROPOSE_ACTION: {"type": "edit_transaction", "txId": 12, "txTitle": "خرید میوه", "txAmount": 85000, "txCategory": "خورد و خوراک", "txIsExpense": true, "txBankName": "ملت", "description": "ویرایش تراکنش آیدی 12 به خرید میوه به مبلغ 85,000 تومان"}]
+            [PROPOSE_ACTION: {"type": "edit_transaction", "txId": 12, "txTitle": "خرید میوه", "txAmount": 85000, "txCategory": "خورد و خوراک", "txIsExpense": true, "txBankName": "ملت", "description": "ویرایش تراکنش آیدی 12 به خرید میوه به مبلغ 85,000 ${com.example.data.Money.label}"}]
             
             - اضافه کردن وام:
-            [PROPOSE_ACTION: {"type": "add_loan", "loanBankName": "تجارت", "loanName": "وام مسکن", "loanTotalAmount": 100000000, "loanPaidAmount": 0, "loanInstallmentAmount": 2000000, "loanDueDate": "15 هر ماه", "description": "ثبت وام جدید مسکن بانک تجارت به مبلغ 100,000,000 تومان با قسط 2,000,000 تومان"}]
+            [PROPOSE_ACTION: {"type": "add_loan", "loanBankName": "تجارت", "loanName": "وام مسکن", "loanTotalAmount": 100000000, "loanPaidAmount": 0, "loanInstallmentAmount": 2000000, "loanDueDate": "15 هر ماه", "description": "ثبت وام جدید مسکن بانک تجارت به مبلغ 100,000,000 ${com.example.data.Money.label} با قسط 2,000,000 ${com.example.data.Money.label}"}]
             
             - حذف وام:
             [PROPOSE_ACTION: {"type": "delete_loan", "loanId": 3, "loanName": "وام مسکن", "description": "حذف وام مسکن بانک مسکن"}]
@@ -2358,25 +2410,25 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             [PROPOSE_ACTION: {"type": "edit_loan", "loanId": 3, "loanBankName": "تجارت", "loanName": "وام مسکن مهر", "loanTotalAmount": 120000000, "loanPaidAmount": 4000000, "loanInstallmentAmount": 2000000, "loanDueDate": "20 هر ماه", "description": "ویرایش جزئیات وام مسکن"}]
             
             - پرداخت قسط (installment):
-            [PROPOSE_ACTION: {"type": "pay_installment", "loanId": 3, "loanName": "وام مسکن", "loanInstallmentAmount": 2000000, "description": "پرداخت قسط وام مسکن به مبلغ 2,000,000 تومان"}]
+            [PROPOSE_ACTION: {"type": "pay_installment", "loanId": 3, "loanName": "وام مسکن", "loanInstallmentAmount": 2000000, "description": "پرداخت قسط وام مسکن به مبلغ 2,000,000 ${com.example.data.Money.label}"}]
             
             - ثبت چک (issued=true یعنی چکی که کاربر داده؛ false یعنی گرفته):
-            [PROPOSE_ACTION: {"type": "add_cheque", "issued": true, "amount": 15000000, "person": "صاحبخانه", "dueDate": "1405/09/01", "bankName": "ملت", "description": "ثبت چک 15,000,000 تومانی به صاحبخانه با سررسید 1 آذر"}]
+            [PROPOSE_ACTION: {"type": "add_cheque", "issued": true, "amount": 15000000, "person": "صاحبخانه", "dueDate": "1405/09/01", "bankName": "ملت", "description": "ثبت چک 15,000,000 ${com.example.data.Money.label}ی به صاحبخانه با سررسید 1 آذر"}]
 
             - ثبت قبض (kind یکی از: برق، آب، گاز، تلفن ثابت، موبایل، اینترنت، سایر):
             [PROPOSE_ACTION: {"type": "add_bill", "kind": "برق", "title": "برق خانه", "amount": 620000, "dueInDays": 5, "periodMonths": 2, "description": "ثبت قبض برق خانه با موعد 5 روز دیگر"}]
 
             - پرداخت قبض ثبت‌شده (billTitle همان نام قبض در فهرست بالا):
-            [PROPOSE_ACTION: {"type": "pay_bill", "billTitle": "برق خانه", "amount": 620000, "bankName": "ملت", "description": "پرداخت قبض برق خانه به مبلغ 620,000 تومان"}]
+            [PROPOSE_ACTION: {"type": "pay_bill", "billTitle": "برق خانه", "amount": 620000, "bankName": "ملت", "description": "پرداخت قبض برق خانه به مبلغ 620,000 ${com.example.data.Money.label}"}]
 
             - قرض به شخص یا از شخص (owedToMe=true یعنی کاربر قرض داده یا طلب دارد؛ isRepayment=true یعنی پس دادن/پس گرفتن؛ bankName فقط اگر پول از حسابی جابه‌جا شده):
-            [PROPOSE_ACTION: {"type": "person_entry", "person": "علی", "amount": 2000000, "owedToMe": true, "isRepayment": false, "bankName": "ملت", "dueInDays": 30, "description": "2,000,000 تومان قرض به علی از حساب ملت"}]
+            [PROPOSE_ACTION: {"type": "person_entry", "person": "علی", "amount": 2000000, "owedToMe": true, "isRepayment": false, "bankName": "ملت", "dueInDays": 30, "description": "2,000,000 ${com.example.data.Money.label} قرض به علی از حساب ملت"}]
 
             توجه: برای هر قسطی که کاربر می‌پردازد، علاوه بر آپدیت وام، یک تراکنش هزینه نیز ثبت می‌شود. برای این کار از نوع "pay_installment" استفاده کن.
             
             همیشه یک کادر تایید تعاملی با استفاده از این تگ ایجاد کن. دیتابیس بدون تایید کاربر تغییر نخواهد کرد.
 
-            همیشه تمام اعداد را در پاسخ خود به زبان انگلیسی و با فرمت جداکننده هزارگان بنویسید (مانند 20,000,000 تومان). از نوشتن اعداد به فارسی خودداری کنید.
+            همیشه تمام اعداد را در پاسخ خود به زبان انگلیسی و با فرمت جداکننده هزارگان بنویسید (مانند 20,000,000 ${com.example.data.Money.label}). از نوشتن اعداد به فارسی خودداری کنید.
         """.trimIndent()
 
         // مثل ChatViewModel در AI Studio: تاریخچه به‌صورت پیام‌های جدای user/assistant (۱۰ پیام آخر)
@@ -2553,13 +2605,13 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
      * در حالت صوتی تگ‌های عملیاتی پشتیبانی نمی‌شوند، پس فقط پاسخ گفتاری خواسته می‌شود.
      */
     private fun buildLiveVoiceInstructions(): String {
-        val cardsCtx = cards.value.joinToString("؛ ") { "${it.bankName}: ${it.balance} تومان" }
+        val cardsCtx = cards.value.joinToString("؛ ") { "${it.bankName}: ${it.balance} ${com.example.data.Money.label}" }
         val loansCtx = loans.value.joinToString("؛ ") {
-            "${it.loanName} (${it.bankName}) قسط ${it.installmentAmount} تومان، روز ${it.dueDay} هر ماه، " +
-                "باقی‌مانده ${it.totalAmount - it.paidAmount} تومان"
+            "${it.loanName} (${it.bankName}) قسط ${it.installmentAmount} ${com.example.data.Money.label}، روز ${it.dueDay} هر ماه، " +
+                "باقی‌مانده ${it.totalAmount - it.paidAmount} ${com.example.data.Money.label}"
         }
         val txCtx = transactions.value.take(10).joinToString("؛ ") {
-            "${it.title} ${it.amount} تومان (${if (it.isExpense) "هزینه" else "درآمد"}، ${it.category})"
+            "${it.title} ${it.amount} ${com.example.data.Money.label} (${if (it.isExpense) "هزینه" else "درآمد"}، ${it.category})"
         }
         return """
             تو «تراز» هستی، دستیار مالی شخصی و صمیمی داخل اپلیکیشن مدیریت مالی تراز.
@@ -2569,7 +2621,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             کارت‌ها: ${cardsCtx.ifBlank { "ثبت نشده" }}
             وام‌ها: ${loansCtx.ifBlank { "ثبت نشده" }}
             ۱۰ تراکنش اخیر: ${txCtx.ifBlank { "ثبت نشده" }}
-            هزینه امروز: ${todayExpense.value} تومان
+            هزینه امروز: ${todayExpense.value} ${com.example.data.Money.label}
         """.trimIndent()
     }
 

@@ -487,6 +487,42 @@ class FinanceRepository(private val db: AppDatabase) {
         Deleted(withTx?.transactions.orEmpty(), withTx?.loanPayments.orEmpty(), (withTx?.debts.orEmpty() + debt).distinctBy { it.id })
     }
 
+    // ─── Currency ───
+
+    /**
+     * Re-expresses every stored amount from [from] to [to] in one transaction: toman↔rial exactly
+     * (×10 / ÷10, rounded to the nearest toman), and to or from dollars at [usdToman] tomans per
+     * dollar (dollars are kept in cents). A month's net-worth snapshot is converted at its own
+     * dollar rate. Nothing changes when [from] equals [to].
+     */
+    suspend fun convertCurrency(from: AppCurrency, to: AppCurrency, usdToman: Long) = db.withTransaction {
+        if (from == to) return@withTransaction
+        require(usdToman > 0 || (from != AppCurrency.USD && to != AppCurrency.USD)) { "a dollar rate is needed" }
+        val f = Money.factor(from, to, usdToman)
+        val columns = listOf(
+            "transactions" to listOf("amount"),
+            "bank_cards" to listOf("balance", "creditLimit"),
+            "loans" to listOf("totalAmount", "paidAmount", "installmentAmount"),
+            "financial_goals" to listOf("targetAmount", "currentAmount"),
+            "categories" to listOf("monthlyBudget"),
+            "loan_payments" to listOf("amount"),
+            "recurring_transactions" to listOf("amount"),
+            "debts" to listOf("amount"),
+            "assets" to listOf("buyPrice", "manualPrice"),
+            "cheques" to listOf("amount"),
+            "bills" to listOf("amount"),
+            "pending_transactions" to listOf("amount", "balance")
+        )
+        val sql = db.openHelper.writableDatabase
+        for ((table, cols) in columns) {
+            val set = cols.joinToString(", ") { "$it = CAST(ROUND($it * ?) AS INTEGER)" }
+            sql.execSQL("UPDATE $table SET $set", Array<Any>(cols.size) { f })
+        }
+        for (s in snapshotDao.getAllNow()) {
+            snapshotDao.insert(s.copy(netWorth = Money.convert(s.netWorth, from, to, s.usdToman.takeIf { it > 0 } ?: usdToman)))
+        }
+    }
+
     // ─── Reset ───
 
     /**

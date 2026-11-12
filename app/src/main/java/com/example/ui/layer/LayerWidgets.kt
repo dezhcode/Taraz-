@@ -358,26 +358,21 @@ fun shiftJalaliMonth(ts: Long, delta: Int): Long {
     return com.example.utils.JalaliDate.toTimestamp(y, m, 1)
 }
 
-/** عدد از متن ورودی (ارقام فارسی/عربی هم قبول است)؛ ورودی نامعتبر = ۰ */
-fun parseAmount(text: String): Long {
-    val sb = StringBuilder()
-    for (ch in text) {
-        val p = "۰۱۲۳۴۵۶۷۸۹".indexOf(ch)
-        val a = "٠١٢٣٤٥٦٧٨٩".indexOf(ch)
-        when {
-            ch in '0'..'9' -> sb.append(ch)
-            p >= 0 -> sb.append(('0' + p))
-            a >= 0 -> sb.append(('0' + a))
-        }
-    }
-    return sb.toString().take(15).toLongOrNull() ?: 0L
-}
+/** مبلغ از متن ورودی (ارقام فارسی/عربی هم قبول است)، به واحد ذخیرهٔ پول انتخاب‌شده؛ ورودی نامعتبر = ۰ */
+fun parseAmount(text: String): Long = com.example.data.Money.parse(text)
 
-/** ۱۲٬۵۰۰٬۰۰۰ از متن ورودی؛ برای نمایش داخل فیلد */
-fun groupedInput(text: String): String {
-    val n = parseAmount(text)
-    return if (n == 0L && text.none { it.isDigit() || it in "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩" }) "" else money(n)
-}
+/** عدد صحیح ساده از متن (روز ماه، تعداد)؛ برخلاف [parseAmount] واحد پول و اعشار ندارد */
+fun parseInt(text: String): Int = com.example.data.Money.parse(text, com.example.data.AppCurrency.TOMAN).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+
+/** ۱۲٬۵۰۰٬۰۰۰ (یا ۱۲٫۵ برای دلار) از متن ورودی؛ برای نمایش داخل فیلد مبلغ */
+fun groupedInput(text: String): String = com.example.data.Money.inputText(text)
+
+/** صفحه‌کلید کادرهای مبلغ: برای دلار با ممیز */
+val moneyKeyboard: androidx.compose.foundation.text.KeyboardOptions
+    get() = androidx.compose.foundation.text.KeyboardOptions(
+        keyboardType = if (com.example.data.Money.current.decimals > 0) androidx.compose.ui.text.input.KeyboardType.Decimal
+        else androidx.compose.ui.text.input.KeyboardType.Number
+    )
 
 /**
  * شیت پایین‌آمدنی تمام‌عرض: پس‌زمینهٔ تیره، گوشه‌های گرد، دستگیره، عنوان و «انصراف».

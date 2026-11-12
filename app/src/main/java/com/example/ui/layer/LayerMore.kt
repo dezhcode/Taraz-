@@ -70,7 +70,7 @@ fun averageDailySpend(transactions: List<Transaction>): Long {
 fun LayerBudgetSheet(current: Long, avgDaily: Long, onDismiss: () -> Unit, onSave: (Long) -> Unit) {
     var text by remember { mutableStateOf(if (current > 0) money(current) else "") }
     val value = parseAmount(text)
-    val presets = listOf(500_000L to "۵۰۰ هزار", 1_000_000L to "۱ میلیون", 1_200_000L to "۱٫۲ میلیون", 2_000_000L to "۲ میلیون")
+    val presets = com.example.data.Money.dailyBudgetPresets()
 
     LayerSheet(
         title = "سقف هزینهٔ روزانه",
@@ -98,10 +98,10 @@ fun LayerBudgetSheet(current: Long, avgDaily: Long, onDismiss: () -> Unit, onSav
                     ),
                     cursorBrush = SolidColor(L.Primary),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = "سقف هزینهٔ روزانه به تومان" }
+                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = "سقف هزینهٔ روزانه به ${com.example.data.Money.label}" }
                 )
             }
-            Text(if (value == 0L) "تومان در روز" else NumberToPersianWords.convert(value) + " تومان در روز", style = lt(13.sp, color = L.Muted))
+            Text(if (value == 0L) "${com.example.data.Money.label} در روز" else com.example.data.Money.words(value) + " در روز", style = lt(13.sp, color = L.Muted))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             presets.forEach { (amt, label) ->
@@ -121,8 +121,8 @@ fun LayerBudgetSheet(current: Long, avgDaily: Long, onDismiss: () -> Unit, onSav
             ) {
                 Icon(Icons.Default.AutoAwesome, null, tint = L.PrimaryText, modifier = Modifier.size(18.dp))
                 Text(
-                    "میانگین هزینهٔ روزانهٔ شما در ۳۰ روز گذشته ${money(avgDaily)} تومان بوده است." +
-                        if (saveMonthly > 0) " با این سقف، ماهانه حدود ${money(saveMonthly)} تومان صرفه‌جویی می‌شود." else "",
+                    "میانگین هزینهٔ روزانهٔ شما در ۳۰ روز گذشته ${money(avgDaily)} ${com.example.data.Money.label} بوده است." +
+                        if (saveMonthly > 0) " با این سقف، ماهانه حدود ${money(saveMonthly)} ${com.example.data.Money.label} صرفه‌جویی می‌شود." else "",
                     style = lt(12.sp, color = L.Info, lineHeight = 23.sp)
                 )
             }
@@ -152,7 +152,7 @@ fun LayerGoalsScreen(
 
     LayerScreen(
         title = "اهداف پس‌انداز",
-        subtitle = if (active.isEmpty()) "هدف فعالی وجود ندارد" else "${fa(active.size)} هدف فعال · ${money(saved)} تومان پس‌انداز شده",
+        subtitle = if (active.isEmpty()) "هدف فعالی وجود ندارد" else "${fa(active.size)} هدف فعال · ${money(saved)} ${com.example.data.Money.label} پس‌انداز شده",
         onBack = onBack,
         trailing = {
             Row(
@@ -223,7 +223,7 @@ fun LayerGoalsScreen(
                         }
                         LProgress(frac, L.Ink, height = 6.dp)
                         goalPlan(g, transactions)?.let { Text(it.headline, style = lt(12.sp, FontWeight.SemiBold, if (it.onTrack) L.GreenText else L.AmberInk)) }
-                        Text("${money(g.currentAmount)} از ${money(g.targetAmount)} تومان", style = lt(12.sp, color = L.Muted))
+                        Text("${money(g.currentAmount)} از ${money(g.targetAmount)} ${com.example.data.Money.label}", style = lt(12.sp, color = L.Muted))
                     }
                 }
             }
@@ -266,8 +266,8 @@ fun LayerGoalsScreen(
                 }
             }
         ) {
-            LField(amount, { amount = groupedInput(it) }, "مبلغ (تومان)", placeholder = "۰", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                hint = "تاکنون ${money(goal.currentAmount)} از ${money(goal.targetAmount)} تومان پس‌انداز شده است.")
+            LField(amount, { amount = groupedInput(it) }, "مبلغ (${com.example.data.Money.label})", placeholder = "۰", keyboardOptions = moneyKeyboard,
+                hint = "تاکنون ${money(goal.currentAmount)} از ${money(goal.targetAmount)} ${com.example.data.Money.label} پس‌انداز شده است.")
         }
     }
 }
@@ -289,8 +289,8 @@ private fun LayerAddGoalSheet(onDismiss: () -> Unit, onSave: (String, Long, Long
         }
     ) {
         LField(title, { title = it }, "نام هدف", placeholder = "مثلاً سفر شمال")
-        LField(target, { target = groupedInput(it) }, "مبلغ هدف (تومان)", placeholder = "۰", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-        LField(current, { current = groupedInput(it) }, "مبلغ پس‌انداز فعلی (اختیاری)", placeholder = "۰", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+        LField(target, { target = groupedInput(it) }, "مبلغ هدف (${com.example.data.Money.label})", placeholder = "۰", keyboardOptions = moneyKeyboard)
+        LField(current, { current = groupedInput(it) }, "مبلغ پس‌انداز فعلی (اختیاری)", placeholder = "۰", keyboardOptions = moneyKeyboard)
         Text("مهلت", style = lt(13.sp, FontWeight.SemiBold))
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(3 to "۳ ماه", 6 to "۶ ماه", 12 to "یک سال", 24 to "دو سال", null to "بدون موعد").forEach { (m, label) ->
@@ -299,7 +299,7 @@ private fun LayerAddGoalSheet(onDismiss: () -> Unit, onSave: (String, Long, Long
         }
         val left = (t - parseAmount(current)).coerceAtLeast(0)
         months?.let { m ->
-            if (left > 0) Text("یعنی ماهانه ${money(left / m)} تومان پس‌انداز لازم است.", style = lt(12.sp, color = L.PrimaryText))
+            if (left > 0) Text("یعنی ماهانه ${money(left / m)} ${com.example.data.Money.label} پس‌انداز لازم است.", style = lt(12.sp, color = L.PrimaryText))
         }
     }
 }
@@ -315,7 +315,7 @@ fun goalPlan(goal: FinancialGoal, transactions: List<Transaction>, now: Long = S
     val t = JalaliDate.fromTimestamp(now)
     val monthsLeft = ((d.year - t.year) * 12 + (d.month - t.month)).coerceAtLeast(1)
     val perMonth = (left + monthsLeft - 1) / monthsLeft
-    val headline = "ماهانه ${money(perMonth)} تومان تا ${d.formatMonthYear()}"
+    val headline = "ماهانه ${money(perMonth)} ${com.example.data.Money.label} تا ${d.formatMonthYear()}"
 
     // میانگین سه ماه گذشته (بدون ماه جاری که هنوز تمام نشده)
     val months = (1..3).map { shiftJalaliMonth(now, -it) }
@@ -328,7 +328,7 @@ fun goalPlan(goal: FinancialGoal, transactions: List<Transaction>, now: Long = S
     if (withData.isEmpty()) return GoalPlan(headline, "پس از ثبت تراکنش‌های چند ماه، امکان تحقق هدف با روند فعلی و موارد قابل کاهش نمایش داده می‌شود.", true)
     val avgSaved = withData.sumOf { it.first - it.second } / withData.size
     if (avgSaved >= perMonth) {
-        return GoalPlan(headline, "میانگین پس‌انداز ماهانهٔ شما در سه ماه گذشته ${money(avgSaved)} تومان بوده است؛ با این روند، هدف در موعد محقق می‌شود.", true)
+        return GoalPlan(headline, "میانگین پس‌انداز ماهانهٔ شما در سه ماه گذشته ${money(avgSaved)} ${com.example.data.Money.label} بوده است؛ با این روند، هدف در موعد محقق می‌شود.", true)
     }
     val gap = perMonth - avgSaved.coerceAtLeast(0)
     // دسته‌ای که بیشترین خرج اختیاری را دارد (قسط و قبوض را نمی‌شود کم کرد)
@@ -339,10 +339,10 @@ fun goalPlan(goal: FinancialGoal, transactions: List<Transaction>, now: Long = S
     val top = byCat.firstOrNull()
     val advice = if (top != null && top.second > 0) {
         val pct = (gap * 100 / top.second).coerceAtMost(100L)
-        "میانگین پس‌انداز ماهانهٔ شما ${money(avgSaved.coerceAtLeast(0))} تومان و کسری ${money(gap)} تومان است. " +
-            "با کاهش ${fa(pct)}٪ از هزینهٔ «${top.first}» (ماهانه حدود ${money(top.second)} تومان)، هدف در موعد محقق می‌شود" +
+        "میانگین پس‌انداز ماهانهٔ شما ${money(avgSaved.coerceAtLeast(0))} ${com.example.data.Money.label} و کسری ${money(gap)} ${com.example.data.Money.label} است. " +
+            "با کاهش ${fa(pct)}٪ از هزینهٔ «${top.first}» (ماهانه حدود ${money(top.second)} ${com.example.data.Money.label})، هدف در موعد محقق می‌شود" +
             if (pct >= 100) "؛ یا موعد را تمدید کنید." else "."
-    } else "ماهانه ${money(gap)} تومان بیش از روند فعلی لازم است؛ موعد را تمدید کنید یا هزینه‌ها را کاهش دهید."
+    } else "ماهانه ${money(gap)} ${com.example.data.Money.label} بیش از روند فعلی لازم است؛ موعد را تمدید کنید یا هزینه‌ها را کاهش دهید."
     return GoalPlan(headline, advice, false)
 }
 
@@ -365,7 +365,8 @@ fun LayerSettingsScreen(
     onOpenPrivacy: () -> Unit,
     onTestServer: ((Boolean, String) -> Unit) -> Unit,
     onLogout: () -> Unit,
-    onResetAll: () -> Unit
+    onResetAll: () -> Unit,
+    onOpenCurrency: () -> Unit = {}
 ) {
     var serverMsg by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
     var testing by remember { mutableStateOf(false) }
@@ -420,6 +421,7 @@ fun LayerSettingsScreen(
             SwitchRow("اعلان‌ها و یادآوری اقساط", if (com.example.Features.SMS) "سه روز و یک روز قبل از سررسید، و پیامک‌های تازهٔ بانک" else "سه روز و یک روز قبل از سررسید اقساط، چک‌ها و قبض‌ها", alertsEnabled, onAlertsChange, divider = false)
         }
         SettingsGroup("داده‌ها") {
+            NavRow("واحد پول", com.example.data.Money.label, onClick = onOpenCurrency)
             if (com.example.Features.SMS) NavRow("پیامک‌های بانکی", if (smsBankCount > 0) "${fa(smsBankCount)} بانک روشن" else "راه‌اندازی", onClick = onOpenSms)
             else NavRow("پیامک‌های بانکی", com.example.Features.SOON, onClick = {})
             NavRow("پشتیبان و خروجی اکسل", null, divider = false, onClick = onOpenBackup)
@@ -636,8 +638,8 @@ fun LayerAddCategoryScreen(
             LField(name, { name = it }, "نام دسته", placeholder = "مثلاً قبض برق", hint = if (taken) "دسته‌ای با این نام وجود دارد." else null)
             if (!income) {
                 LField(
-                    budgetText, { budgetText = groupedInput(it) }, "بودجهٔ ماهانه (اختیاری، تومان)", placeholder = "۰",
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    budgetText, { budgetText = groupedInput(it) }, "بودجهٔ ماهانه (اختیاری، ${com.example.data.Money.label})", placeholder = "۰",
+                    keyboardOptions = moneyKeyboard,
                     hint = "با رسیدن به ۸۰٪، در صفحهٔ خانه هشدار نمایش داده می‌شود."
                 )
             }
@@ -724,7 +726,7 @@ fun LayerNotificationsScreen(
                 NotifItem(
                     iconBg = L.AmberSoft, iconFg = L.AmberText,
                     title = "قسط ${loan.loanName}، ${daysLabel(days)}",
-                    sub = "${money(loan.installmentAmount)} تومان · ${weekdayName(due)} ${JalaliDate.fromTimestamp(due).formatShort()}",
+                    sub = "${money(loan.installmentAmount)} ${com.example.data.Money.label} · ${weekdayName(due)} ${JalaliDate.fromTimestamp(due).formatShort()}",
                     action = "پرداخت", onAction = { onPay(loan) }
                 )
             }
@@ -734,7 +736,7 @@ fun LayerNotificationsScreen(
             if (budgetPct >= 0) {
                 NotifItem(
                     L.Chip, L.Ink, "${fa(budgetPct)}٪ سقف امروز مصرف شده",
-                    if (todayExpense <= dailyBudget) "${money(dailyBudget - todayExpense)} تومان تا سقف امروز باقی مانده است" else "${money(todayExpense - dailyBudget)} تومان بیش از سقف",
+                    if (todayExpense <= dailyBudget) "${money(dailyBudget - todayExpense)} ${com.example.data.Money.label} تا سقف امروز باقی مانده است" else "${money(todayExpense - dailyBudget)} ${com.example.data.Money.label} بیش از سقف",
                     null, {}
                 )
             }
