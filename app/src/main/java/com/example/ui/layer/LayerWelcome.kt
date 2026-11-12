@@ -143,7 +143,10 @@ private fun BoxWithMark() {
 
 // ─────────────────────────── صفحهٔ شروع ───────────────────────────
 
-/** صفحهٔ شروع: سربرگ آبی با علامت تراز روی لبهٔ پایینش، و زیرش نام و دکمهٔ «شروع» */
+/**
+ * صفحهٔ شروع (طرح «روشن با کارت‌ها»): لوگوی کوچک کنار خوش‌آمد، و دو کارت شماره‌دار — نام و واحد پول —
+ * که همه در یک صفحه جا می‌شوند؛ چیزی زیر سربرگ نمی‌رود. دکمه واحد انتخاب‌شده را می‌گوید.
+ */
 @Composable
 fun WelcomeStart(
     name: String,
@@ -152,50 +155,58 @@ fun WelcomeStart(
     currency: com.example.data.AppCurrency = com.example.data.AppCurrency.TOMAN,
     onCurrencyChange: (com.example.data.AppCurrency) -> Unit = {}
 ) {
-    Column(Modifier.fillMaxSize().background(L.Bg).imePadding()) {
-        Box(
-            Modifier.fillMaxWidth().height(380.dp)
-                .clip(RoundedCornerShape(bottomStart = 36.dp, bottomEnd = 36.dp))
-                .background(Brand)
+    Column(Modifier.fillMaxSize().background(L.Bg).statusBarsPadding().imePadding()) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 28.dp, bottom = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Column(Modifier.statusBarsPadding().padding(start = 24.dp, end = 24.dp, top = 40.dp)) {
-                Text("به", style = lt(15.sp, color = Color(0xFFDCE4FF)))
-                Text("تراز خوش آمدید", style = lt(36.sp, FontWeight.Bold, Color.White, lineHeight = 50.sp))
+            Box(
+                Modifier.size(64.dp).clip(RoundedCornerShape(18.dp)).background(Brand),
+                contentAlignment = Alignment.BottomCenter
+            ) { TarazMark(50.dp) }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("به تراز خوش آمدید", style = lt(24.sp, FontWeight.ExtraBold))
+                Text("دو قدم تا شروع", style = lt(13.sp, color = L.Muted))
             }
-            // جای علامت مثل طرح: کمی دورتر از لبهٔ چپ، روی لبهٔ پایین سربرگ
-            TarazMark(250.dp, Modifier.align(androidx.compose.ui.AbsoluteAlignment.BottomLeft).absoluteOffset(x = 70.dp))
         }
         Column(
-            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp).padding(top = 26.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Text(
-                "حساب‌ها، اقساط، چک‌ها و هزینه‌های روزانهٔ خود را یک‌جا مدیریت کنید.",
-                style = lt(15.sp, color = L.Muted, lineHeight = 27.sp)
-            )
-            Text("نام شما", style = lt(13.sp, FontWeight.SemiBold), modifier = Modifier.padding(top = 4.dp))
-            Box(
-                Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(14.dp)).background(L.Surface)
-                    .border(1.dp, L.Rail, RoundedCornerShape(14.dp)).padding(horizontal = 16.dp),
-                contentAlignment = Alignment.CenterStart
+            // ۱ · نام
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(L.Surface).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (name.isEmpty()) Text("مثلاً علی رضایی", style = lt(15.sp, color = L.Placeholder))
-                BasicTextField(
-                    value = name, onValueChange = { onNameChange(it.take(40)) }, singleLine = true,
-                    textStyle = lt(15.sp), cursorBrush = SolidColor(L.Primary),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { onStart() }),
-                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = "نام شما" }
-                )
+                Text("۱ · نام شما", style = lt(12.sp, FontWeight.Bold, L.Muted))
+                Box(Modifier.fillMaxWidth().height(40.dp), contentAlignment = Alignment.CenterStart) {
+                    if (name.isEmpty()) Text("مثلاً علی رضایی", style = lt(17.sp, FontWeight.SemiBold, L.Placeholder))
+                    BasicTextField(
+                        value = name, onValueChange = { onNameChange(it.take(40)) }, singleLine = true,
+                        textStyle = lt(17.sp, FontWeight.SemiBold), cursorBrush = SolidColor(L.Primary),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { onStart() }),
+                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = "نام شما" }
+                    )
+                }
+                Box(Modifier.fillMaxWidth().height(2.dp).background(L.Primary))
             }
-            Text("اطلاعات شما فقط روی همین دستگاه ذخیره می‌شود.", style = lt(12.sp, color = L.Muted))
-            Text("واحد پول", style = lt(13.sp, FontWeight.SemiBold), modifier = Modifier.padding(top = 8.dp))
-            CurrencyOptions(currency, onCurrencyChange)
-            Text("بعداً هم از «تنظیمات › واحد پول» قابل تغییر است.", style = lt(12.sp, color = L.Muted))
+            // ۲ · واحد پول
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(L.Surface)
+                    .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)
+            ) {
+                Text("۲ · واحد پول", style = lt(12.sp, FontWeight.Bold, L.Muted), modifier = Modifier.padding(bottom = 4.dp))
+                CurrencyOptions(currency, onCurrencyChange)
+            }
+            Text(
+                "اطلاعات شما فقط روی همین گوشی ذخیره می‌شود. واحد پول بعداً از تنظیمات هم قابل تغییر است.",
+                style = lt(12.sp, color = L.Muted, lineHeight = 21.sp), modifier = Modifier.padding(horizontal = 6.dp)
+            )
         }
-        Box(Modifier.navigationBarsPadding().padding(horizontal = 24.dp, vertical = 20.dp)) {
-            BigButton("شروع", height = 56.dp, onClick = onStart)
+        Box(Modifier.navigationBarsPadding().padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 20.dp)) {
+            BigButton("شروع با ${currency.label}", height = 56.dp, onClick = onStart)
         }
     }
 }

@@ -4,6 +4,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,9 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,31 +34,45 @@ import com.example.data.AppCurrency
 
 /** توضیح کوتاه هر واحد پول برای صفحهٔ انتخاب */
 private fun AppCurrency.hint(): String = when (this) {
-    AppCurrency.TOMAN -> "مبلغ پیامک‌های بانکی تقسیم بر ۱۰ ثبت می‌شود."
-    AppCurrency.RIAL -> "مبلغ پیامک‌های بانکی دقیقاً همان‌طور که در پیامک آمده ثبت می‌شود."
-    AppCurrency.USD -> "با دو رقم اعشار (سنت). پیامک‌های بانکی ریالی خوانده نمی‌شوند."
+    AppCurrency.TOMAN -> "پیامک بانک ÷ ۱۰ ثبت می‌شود"
+    AppCurrency.RIAL -> "دقیقاً همان عدد پیامک بانک"
+    AppCurrency.USD -> "با سنت · بدون پیامک بانک"
 }
 
-/** سه گزینهٔ تومان / ریال / دلار با توضیح؛ در صفحهٔ شروع و تنظیمات */
+/** همان مبلغ نمونه به هر واحد: ۱۲٬۵۰۰ تومان، ۱۲۵٬۰۰۰ ریال، ۱۲٫۵۰ دلار */
+private fun AppCurrency.sample(): String = when (this) {
+    AppCurrency.TOMAN -> com.example.data.Money.withLabel(12_500, this)
+    AppCurrency.RIAL -> com.example.data.Money.withLabel(125_000, this)
+    AppCurrency.USD -> com.example.data.Money.withLabel(1_250, this)
+}
+
+/**
+ * فهرست تومان / ریال / دلار با دکمهٔ انتخاب، توضیح، و همان مبلغ نمونه به هر واحد؛ در صفحهٔ شروع و
+ * تنظیمات. داخل یک کارت سفید گذاشته می‌شود.
+ */
 @Composable
 fun CurrencyOptions(selected: AppCurrency, onSelect: (AppCurrency) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        AppCurrency.entries.forEach { c ->
+    Column(Modifier.selectableGroup()) {
+        AppCurrency.entries.forEachIndexed { i, c ->
             val on = c == selected
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                    .background(if (on) L.PrimarySoft else L.Surface)
-                    .border(1.dp, if (on) L.Primary else L.Rail, RoundedCornerShape(14.dp))
-                    .clickable { onSelect(c) }
-                    .semantics { role = Role.RadioButton; this.selected = on }
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
+                Modifier.fillMaxWidth().heightIn(min = 64.dp)
+                    .selectable(selected = on, role = Role.RadioButton) { onSelect(c) }
+                    .padding(vertical = 8.dp, horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                Box(
+                    Modifier.size(22.dp).clip(CircleShape).background(L.Surface)
+                        .border(if (on) 7.dp else 2.dp, if (on) L.Primary else L.Placeholder, CircleShape)
+                )
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(c.label, style = lt(15.sp, FontWeight.Bold, if (on) L.PrimaryText else L.Ink))
-                    Text(c.hint(), style = lt(12.sp, color = L.Muted, lineHeight = 19.sp))
+                    Text(c.label, style = lt(16.sp, FontWeight.Bold, if (on) L.PrimaryText else L.Ink))
+                    Text(c.hint(), style = lt(12.sp, color = L.Muted))
                 }
+                Text(c.sample(), style = lt(13.sp, FontWeight.SemiBold, L.Muted), maxLines = 1)
             }
+            if (i < AppCurrency.entries.size - 1) Box(Modifier.fillMaxWidth().height(1.dp).background(L.Line))
         }
     }
 }
