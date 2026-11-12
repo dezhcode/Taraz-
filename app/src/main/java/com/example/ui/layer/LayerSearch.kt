@@ -34,14 +34,27 @@ import com.example.data.Transaction
 import com.example.data.tagList
 import com.example.utils.JalaliDate
 
-/** رقم‌های فارسی و عربی را لاتین می‌کند تا «۲۵۰» و «250» هر دو پیدا شوند */
+/**
+ * رقم‌های فارسی و عربی را لاتین و «ي/ك» عربی را «ی/ک» می‌کند تا «۲۵۰» و «250» هر دو پیدا شوند و
+ * عنوانی که از پیامک بانک آمده (اغلب با ي و ك عربی) با جستجوی کیبورد فارسی جور شود.
+ */
 private fun latin(s: String): String = buildString(s.length) {
     s.forEach { ch ->
         val p = "۰۱۲۳۴۵۶۷۸۹".indexOf(ch)
         val a = "٠١٢٣٤٥٦٧٨٩".indexOf(ch)
-        append(if (p >= 0) '0' + p else if (a >= 0) '0' + a else ch)
+        append(
+            when {
+                p >= 0 -> '0' + p
+                a >= 0 -> '0' + a
+                ch == 'ي' || ch == 'ى' -> 'ی'
+                ch == 'ك' -> 'ک'
+                else -> ch
+            }
+        )
     }
 }
+
+private fun String.has(q: String): Boolean = latin(this).contains(q, ignoreCase = true)
 
 @Composable
 private fun SearchGroup(title: String, count: Int, content: @Composable () -> Unit) {
@@ -93,18 +106,18 @@ fun HomeSearchSheet(
     val q = latin(query.trim())
     val digits = q.filter { it.isDigit() }
 
-    val tools = if (q.isEmpty()) emptyList() else HomeTools.all.filter { it.label.contains(q) || it.sub.contains(q) }
+    val tools = if (q.isEmpty()) emptyList() else HomeTools.all.filter { it.label.has(q) || it.sub.has(q) }
     val txs = remember(q, transactions) {
         if (q.length < 2 && digits.isEmpty()) emptyList()
         else transactions.filter { t ->
-            t.title.contains(q) || t.category.contains(q) || t.bankName.contains(q) ||
-                t.tagList.any { it.contains(q.removePrefix("#")) } ||
+            t.title.has(q) || t.category.has(q) || t.bankName.has(q) ||
+                t.tagList.any { it.has(q.removePrefix("#")) } ||
                 (digits.length >= 3 && t.amount.toString().contains(digits))
         }.sortedByDescending { it.date }
     }
-    val people = if (q.isEmpty()) emptyList() else persons.filter { it.name.contains(q) }
-    val foundBills = if (q.isEmpty()) emptyList() else bills.filter { it.title.contains(q) || it.kind.contains(q) || (digits.length >= 4 && it.billId.contains(digits)) }
-    val foundCheques = if (q.isEmpty()) emptyList() else cheques.filter { it.person.contains(q) || (digits.length >= 3 && it.amount.toString().contains(digits)) }
+    val people = if (q.isEmpty()) emptyList() else persons.filter { it.name.has(q) }
+    val foundBills = if (q.isEmpty()) emptyList() else bills.filter { it.title.has(q) || it.kind.has(q) || (digits.length >= 4 && latin(it.billId).contains(digits)) }
+    val foundCheques = if (q.isEmpty()) emptyList() else cheques.filter { it.person.has(q) || (digits.length >= 3 && it.amount.toString().contains(digits)) }
     val total = tools.size + txs.size + people.size + foundBills.size + foundCheques.size
 
     LayerSheet(title = "جستجو", onDismiss = onDismiss, closeLabel = "بستن", topGap = 24.dp) {

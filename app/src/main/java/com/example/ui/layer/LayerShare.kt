@@ -12,6 +12,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -219,18 +220,20 @@ fun ShareReportSheet(transactions: List<Transaction>, monthTs: Long, onDismiss: 
 /** خلاصهٔ هفته در خود برنامه، با تحلیل اختیاری دستیار */
 @Composable
 fun WeeklySummarySheet(digest: WeeklyDigest.Digest, onDismiss: () -> Unit, onAskAssistant: (String) -> Unit) {
+    val askBar: @Composable ColumnScope.() -> Unit = {
+        BigButton("تحلیل هفته با دستیار") {
+            onAskAssistant(
+                "خلاصهٔ هفتهٔ من این است:\n" + digest.lines().joinToString("\n") +
+                    "\nکوتاه بگو این هفته چطور بود و برای هفتهٔ بعد دو پیشنهاد مشخص بده."
+            )
+        }
+    }
     LayerSheet(
         title = "خلاصهٔ این هفته",
         onDismiss = onDismiss,
         topGap = 90.dp,
-        bottomBar = {
-            BigButton("تحلیل هفته با دستیار") {
-                onAskAssistant(
-                    "خلاصهٔ هفتهٔ من این است:\n" + digest.lines().joinToString("\n") +
-                        "\nکوتاه بگو این هفته چطور بود و برای هفتهٔ بعد دو پیشنهاد مشخص بده."
-                )
-            }
-        }
+        // دستیار هنوز فعال نیست؛ دکمه‌ای که فقط «به‌زودی» نشان دهد گمراه‌کننده است
+        bottomBar = askBar.takeIf { com.example.Features.AI }
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(L.RedSoft).padding(12.dp)) {

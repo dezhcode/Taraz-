@@ -174,7 +174,11 @@ fun LayerYearScreen(
         Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             st.biggest?.let { b -> Fact("بزرگ‌ترین هزینه", "${b.title} · ${money(b.amount)} تومان", JalaliDate.fromTimestamp(b.date).formatLong()) }
             st.busiestWeekday?.let { Fact("پرهزینه‌ترین روز هفته", it, "روزی با بیشترین هزینه") }
-            val days = if (year == thisYear) (JalaliDate.daysUntil(System.currentTimeMillis(), JalaliDate.toTimestamp(year, 1, 1)) + 1).coerceAtLeast(1) else 365
+            val yearStart = JalaliDate.toTimestamp(year, 1, 1)
+            val days = (
+                if (year == thisYear) JalaliDate.daysUntil(System.currentTimeMillis(), yearStart) + 1
+                else JalaliDate.daysUntil(JalaliDate.toTimestamp(year + 1, 1, 1), yearStart) // ۳۶۵ یا ۳۶۶ در سال کبیسه
+                ).coerceAtLeast(1)
             Fact("میانگین هزینهٔ روزانه", "${money(st.expense / days)} تومان", "در ${fa(days)} روز")
             if (st.loanPaid > 0) Fact("قسط پرداخت‌شده", "${money(st.loanPaid)} تومان", "از وام‌های بانکی")
             if (st.lent > 0 || st.gotBack > 0) Fact("حساب اشخاص", "پرداخت ${money(st.lent)} تومان", "دریافت ${money(st.gotBack)} تومان")

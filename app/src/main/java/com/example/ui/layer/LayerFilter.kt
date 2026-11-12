@@ -250,7 +250,7 @@ fun TxFilterSheet(
                     val to = f.to?.takeIf { it > day }
                     f.copy(from = day, to = to, rangeLabel = customLabel(day, to))
                 } else {
-                    val to = day + DAY_MS
+                    val to = JalaliDate.dayRange(ts).second
                     val from = f.from?.takeIf { it < to }
                     f.copy(from = from, to = to, rangeLabel = customLabel(from, to))
                 }

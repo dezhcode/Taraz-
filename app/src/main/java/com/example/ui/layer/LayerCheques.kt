@@ -41,7 +41,7 @@ import com.example.data.ChequeStatus
 import com.example.data.isCash
 import com.example.utils.JalaliDate
 
-private fun daysUntil(ts: Long): Int = ((startOfDay(ts) - startOfDay(System.currentTimeMillis())) / DAY_MS).toInt()
+private fun daysUntil(ts: Long): Int = JalaliDate.daysUntil(ts)
 
 /** «۳ روز دیگر»، «امروز»، «۲ روز گذشته» */
 internal fun dueLabel(ts: Long): String {

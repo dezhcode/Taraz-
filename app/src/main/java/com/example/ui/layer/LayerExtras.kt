@@ -268,6 +268,8 @@ fun LayerBackupScreen(
     onAutoNow: () -> Unit = {}
 ) {
     var mode by remember { mutableStateOf<String?>(null) } // "create" | "restore" | "auto"
+    // رمز از کلید «پشتیبان خودکار» خواسته شد: بعد از ذخیرهٔ رمز روشن شود. تغییر رمز به‌تنهایی روشنش نمی‌کند.
+    var enableAfterPassword by remember { mutableStateOf(false) }
     LayerScreen(title = "پشتیبان و خروجی", subtitle = "نگهداری نسخهٔ پشتیبان خارج از دستگاه", onBack = onBack) {
         message?.let { (ok, text) ->
             Callout(text, null, if (ok) L.GreenSoft else L.RedSoft, if (ok) L.GreenText else L.RedText, Modifier.padding(horizontal = 20.dp))
@@ -283,7 +285,7 @@ fun LayerBackupScreen(
                         when {
                             !on -> onAutoEnabled(false)
                             auto.folderLabel == null -> onPickFolder()
-                            !auto.hasPassword -> mode = "auto"
+                            !auto.hasPassword -> { enableAfterPassword = true; mode = "auto" }
                             else -> onAutoEnabled(true)
                         }
                     }
@@ -304,7 +306,7 @@ fun LayerBackupScreen(
                         Text("رمز فایل‌ها", style = lt(12.sp, color = L.Muted))
                         Text(if (auto.hasPassword) "تعیین شده" else "تعیین نشده", style = lt(14.sp, FontWeight.SemiBold))
                     }
-                    SoftButton(if (auto.hasPassword) "تغییر" else "تعیین", height = 36.dp) { mode = "auto" }
+                    SoftButton(if (auto.hasPassword) "تغییر" else "تعیین", height = 36.dp) { enableAfterPassword = false; mode = "auto" }
                 }
                 Spacer(Modifier.height(10.dp))
                 when {
@@ -360,7 +362,11 @@ fun LayerBackupScreen(
                     enabled = ok
                 ) {
                     when (m) {
-                        "auto" -> { onAutoPassword(pass); onAutoEnabled(true) }
+                        "auto" -> {
+                            onAutoPassword(pass)
+                            if (enableAfterPassword && auto?.folderLabel != null) onAutoEnabled(true)
+                            enableAfterPassword = false
+                        }
                         "create" -> onCreate(pass)
                         else -> onRestore(pass)
                     }
