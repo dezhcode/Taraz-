@@ -1,5 +1,6 @@
 package com.example.data
 
+import com.example.sms.data.parser.BankPatternDb
 import com.example.sms.data.parser.CompositeParser
 import com.example.sms.data.parser.SmsFilter
 import java.security.MessageDigest
@@ -85,9 +86,9 @@ object SmsIngest {
      * setup screen can show «تراز این پیامک را این‌طور فهمید» before a sender is saved.
      * Null for one-time codes, failed attempts and anything the readers cannot parse.
      */
-    fun preview(body: String, bankName: String): Preview? {
+    fun preview(body: String, bankName: String, sender: String = ""): Preview? {
         if (SmsFilter.isNonTransaction(body)) return null
-        val p = CompositeParser().parse(body, bankName)?.takeIf { it.amount > 0 } ?: return null
+        val p = CompositeParser().parse(body, bankName, sender)?.takeIf { it.amount > 0 } ?: return null
         return Preview(
             amount = toToman(p.amount, body),
             balance = toToman(p.balance, body),
@@ -98,9 +99,19 @@ object SmsIngest {
 
     /** Reads [body] from [address] and files it as pending, unknown, or nothing. */
     suspend fun process(db: AppDatabase, address: String, body: String, receivedAt: Long): Outcome {
-        val sender = findSender(db.bankSenderDao(), address)?.takeIf { it.isEnabled } ?: return Outcome.NotBank
+        val registered = findSender(db.bankSenderDao(), address)
+        // فرستندهٔ ثبت‌نشده‌ای که شماره‌اش در دیتابیس بانک‌ها هست هم پیامک بانکی است (نه فرستنده‌ای که کاربر خاموشش کرده).
+        val known = if (registered == null) BankPatternDb.bankForSender(address) else null
+        if (registered == null && known == null) return Outcome.NotBank
+        if (registered != null && !registered.isEnabled) return Outcome.NotBank
         // رمز یک‌بارمصرف و تراکنش ناموفق: نه ثبت می‌شوند، نه حتی در فهرست ناشناخته‌ها می‌مانند.
         if (SmsFilter.isNonTransaction(body)) return Outcome.Ignored
+        val sender = registered ?: BankSender(
+            bankName = known!!.displayName,
+            senderNumber = address,
+            isEnabled = true,
+            learningStatus = "آموزش دیده"
+        )
         val hash = md5(body)
         if (db.pendingTransactionDao().isDuplicate(hash)) return Outcome.Duplicate
 
@@ -119,7 +130,7 @@ object SmsIngest {
             }
         }
         if (parsed == null) {
-            val p = CompositeParser().parse(body, sender.bankName)
+            val p = CompositeParser().parse(body, sender.bankName, address)
             if (p != null && p.amount > 0) {
                 parsed = Parsed(
                     amount = p.amount,
@@ -131,6 +142,11 @@ object SmsIngest {
         }
 
         val found = parsed
+        // فرستندهٔ تازه‌شناخته فقط با نخستین تراکنش خوانا ثبت می‌شود، نه با پیامک تبلیغاتی.
+        if (registered == null) {
+            if (found == null) return Outcome.NotBank
+            db.bankSenderDao().insertSender(sender)
+        }
         if (found == null) {
             val already = db.unknownSmsDao().getUnknownSmsList().any { it.smsBody == body }
             if (!already) {

@@ -39,6 +39,9 @@ object BankUtils {
         val senderLower = sender.lowercase().trim()
         val bodyClean = convertNumeralsAndClean(body)
 
+        // اول شماره‌های ثبت‌شدهٔ بانک‌ها در دیتابیس الگو (۳۵۴ شماره از ۴۷ بانک)
+        com.example.sms.data.parser.BankPatternDb.bankForSender(sender)?.let { return it.displayName }
+
         return when {
             // Check sender string
             senderLower.contains("melli") || senderLower.contains("bmi") || senderLower.contains("ملی") -> "بانک ملی"
