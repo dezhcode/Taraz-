@@ -85,6 +85,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         enableEdgeToEdge()
 
         com.example.utils.NotificationHelper.createNotificationChannel(this)
+        // دیتابیس الگوی پیامک بانک‌ها را از پیش بخوان تا صفحهٔ پیامک و نخستین پیامک منتظر نمانند.
+        Thread({ com.example.sms.data.parser.BankPatternDb.warmUp() }, "sms-patterns").start()
         requestNotificationPermissionIfNeeded()
         com.example.reminders.ReminderScheduler.scheduleDailyLoanCheck(this)
         com.example.reminders.ReminderScheduler.scheduleWeeklySummary(this)

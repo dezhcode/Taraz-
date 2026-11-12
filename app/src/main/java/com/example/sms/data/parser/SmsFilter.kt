@@ -16,7 +16,14 @@ object SmsFilter {
         "رمز اینترنتی", "رمز پیامکی", "رمز تراکنش",
         "کد تایید", "کد تاییدیه", "کد فعالسازی", "کد فعال سازی", "کد ورود",
         "کد امنیتی", "کد یکبار", "کد یک بار", "کد احراز",
-        "otp", "password", "verification code", "dynamic pin", "cvv2"
+        "otp", "password", "verification code", "dynamic pin", "cvv2",
+        // از موتورهای پیامک بانکی: شناسه/مجوز تایید برداشت و رمزهای دارای مهلت اعتبار
+        "مدت زمان اعتبار", "شناسه تایید برداشت", "تایید مجوز برداشت"
+    )
+
+    /** پیامک‌های اطلاع‌رسانی بانک که تراکنش نیستند: خوش‌آمد و یادآوری قسط. */
+    private val NOTICE = listOf(
+        "خوش آمدید", "یادآوری بازپرداخت", "اقساط قرار داد"
     )
 
     private val FAILED = listOf(
@@ -33,7 +40,14 @@ object SmsFilter {
 
     fun isOneTimeCode(body: String): Boolean {
         val t = normalize(body)
-        return ONE_TIME_CODE.any { t.contains(it) }
+        if (ONE_TIME_CODE.any { t.contains(it) }) return true
+        // «رمز» به‌تنهایی هم یعنی پیامک رمز؛ جز وقتی که فقط بخشی از «کارمزد» باشد.
+        return t.replace("کارمزد", "").contains("رمز")
+    }
+
+    fun isNotice(body: String): Boolean {
+        val t = normalize(body)
+        return NOTICE.any { t.contains(it) }
     }
 
     fun isFailedAttempt(body: String): Boolean {
@@ -41,5 +55,5 @@ object SmsFilter {
         return FAILED.any { t.contains(it) }
     }
 
-    fun isNonTransaction(body: String): Boolean = isOneTimeCode(body) || isFailedAttempt(body)
+    fun isNonTransaction(body: String): Boolean = isOneTimeCode(body) || isFailedAttempt(body) || isNotice(body)
 }

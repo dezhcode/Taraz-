@@ -296,7 +296,7 @@ private fun StepSender(s: SmsWizardState, a: SmsWizardActions) {
             s.senders.isEmpty() -> Text("پیام بانکی‌ای روی گوشی پیدا نشد. شماره را خودتان وارد کنید.", style = lt(13.sp, color = L.Muted), modifier = Modifier.padding(horizontal = 24.dp))
             else -> s.senders.forEach { sender ->
                 val selected = sender.number == s.selectedNumber
-                val preview = remember(sender.sample, sender.bankName) { SmsIngest.preview(sender.sample, sender.bankName) }
+                val preview = remember(sender.sample, sender.bankName, sender.number) { SmsIngest.preview(sender.sample, sender.bankName, sender.number) }
                 Column(
                     Modifier.padding(horizontal = 20.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(L.Surface)
                         .border(if (selected) 1.5.dp else 1.dp, if (selected) L.Primary else L.Rail, RoundedCornerShape(20.dp))
