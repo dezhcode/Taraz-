@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -90,7 +89,7 @@ fun LayerBudgetSheet(current: Long, avgDaily: Long, onDismiss: () -> Unit, onSav
         Column(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 if (text.isEmpty()) Text("۰", style = lt(54.sp, FontWeight.Light, L.Placeholder, letterSpacing = (-1.5).sp), textAlign = TextAlign.Center)
-                BasicTextField(
+                StableTextField(
                     value = text,
                     onValueChange = { text = groupedInput(it) },
                     singleLine = true,

@@ -49,8 +49,10 @@ class SmsScanner(private val context: Context) {
                         val sender = c.getString(addressIdx)?.trim() ?: continue
                         val body = c.getString(bodyIdx) ?: continue
 
-                        // Check if the body contains banking keywords
-                        if (BankUtils.isBankSms(body)) {
+                        // سرشمارهٔ بانک (شماره‌های دیتابیس الگو) یا پیامکی که واقعاً شکل تراکنش دارد
+                        if (com.example.sms.data.parser.BankSmsDetector.senderBank(sender) != null ||
+                            com.example.sms.data.parser.BankSmsDetector.isTransaction(body)
+                        ) {
                             val currentCount = candidateMap[sender] ?: 0
                             candidateMap[sender] = currentCount + 1
                             

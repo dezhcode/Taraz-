@@ -1,6 +1,6 @@
 package com.example.data
 
-import com.example.sms.data.parser.BankPatternDb
+import com.example.sms.data.parser.BankSmsDetector
 import com.example.sms.data.parser.CompositeParser
 import com.example.sms.data.parser.SmsFilter
 import java.security.MessageDigest
@@ -87,7 +87,8 @@ object SmsIngest {
      * Null for one-time codes, failed attempts and anything the readers cannot parse.
      */
     fun preview(body: String, bankName: String, sender: String = ""): Preview? {
-        if (SmsFilter.isNonTransaction(body)) return null
+        // فقط پیامکی که شکل تراکنش دارد؛ تبلیغ «۳۰۰م وام» نباید «درآمد ۳۰ تومان» نشان داده شود.
+        if (SmsFilter.isNonTransaction(body) || !BankSmsDetector.isTransaction(body)) return null
         val p = CompositeParser().parse(body, bankName, sender)?.takeIf { it.amount > 0 } ?: return null
         return Preview(
             amount = toToman(p.amount, body),
@@ -101,11 +102,11 @@ object SmsIngest {
     suspend fun process(db: AppDatabase, address: String, body: String, receivedAt: Long): Outcome {
         val registered = findSender(db.bankSenderDao(), address)
         // فرستندهٔ ثبت‌نشده‌ای که شماره‌اش در دیتابیس بانک‌ها هست هم پیامک بانکی است (نه فرستنده‌ای که کاربر خاموشش کرده).
-        val known = if (registered == null) BankPatternDb.bankForSender(address) else null
+        val known = if (registered == null) BankSmsDetector.senderBank(address) else null
         if (registered == null && known == null) return Outcome.NotBank
         if (registered != null && !registered.isEnabled) return Outcome.NotBank
-        // رمز یک‌بارمصرف و تراکنش ناموفق: نه ثبت می‌شوند، نه حتی در فهرست ناشناخته‌ها می‌مانند.
-        if (SmsFilter.isNonTransaction(body)) return Outcome.Ignored
+        // رمز یک‌بارمصرف، تراکنش ناموفق و پیامک بی‌مبلغ (تبلیغ، اطلاع‌رسانی): نه ثبت می‌شوند، نه در فهرست ناشناخته‌ها می‌مانند.
+        if (SmsFilter.isNonTransaction(body) || !BankSmsDetector.hasMoney(body)) return Outcome.Ignored
         val sender = registered ?: BankSender(
             bankName = known!!.displayName,
             senderNumber = address,

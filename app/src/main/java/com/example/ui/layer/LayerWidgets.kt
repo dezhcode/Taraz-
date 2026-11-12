@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -239,7 +238,7 @@ fun LField(
                     if (value.isEmpty() && placeholder.isNotEmpty()) {
                         Text(placeholder, style = lt(14.sp, color = L.Placeholder).let { if (ltr) it.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr) else it })
                     }
-                    BasicTextField(
+                    StableTextField(
                         value = value,
                         onValueChange = onChange,
                         singleLine = singleLine,
