@@ -408,7 +408,9 @@ internal fun SmsManageScreen(
     onAddSender: () -> Unit,
     onAddCard: () -> Unit,
     onOpenReview: () -> Unit,
-    onOpenUnread: () -> Unit
+    onOpenUnread: () -> Unit,
+    /** «وضعیت دریافت پیامک» ([SmsHealthSection])؛ در تصویرهای آزمون خالی می‌ماند. */
+    healthSection: (@Composable () -> Unit)? = null
 ) {
     LayerScreen(title = "پیامک‌های بانکی", subtitle = "ثبت خودکار تراکنش از پیامک", onBack = onBack) {
         LayerCard(radius = 18.dp, padding = 14.dp) {
@@ -437,6 +439,8 @@ internal fun SmsManageScreen(
             body = "قالب این پیامک‌ها را نمی‌شناسم؛ خودتان ثبتشان کنید.", bg = L.PrimarySoft, titleColor = L.PrimaryText,
             trailing = { SmallAction("دیدن", onOpenUnread) }
         )
+
+        if (readerOn && permissionGranted) healthSection?.invoke()
 
         SectionTitle("سرشماره‌ها")
         LayerCard(radius = 20.dp, padding = 0.dp) {
@@ -560,7 +564,8 @@ fun LayerSmsSetupScreen(
             onRemoveSender = { smsVm.removeSender(it) },
             onAddSender = { standalone = true; managing = false; step = 2; selected = null; error = null },
             onAddCard = { creators?.addAccount?.invoke() },
-            onOpenReview = onOpenReview, onOpenUnread = onOpenUnread
+            onOpenReview = onOpenReview, onOpenUnread = onOpenUnread,
+            healthSection = { SmsHealthSection() }
         )
         return
     }

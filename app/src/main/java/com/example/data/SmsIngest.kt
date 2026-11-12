@@ -3,6 +3,8 @@ package com.example.data
 import com.example.sms.data.parser.BankSmsDetector
 import com.example.sms.data.parser.CompositeParser
 import com.example.sms.data.parser.SmsFilter
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.security.MessageDigest
 import java.util.Locale
 
@@ -98,8 +100,17 @@ object SmsIngest {
         )
     }
 
+    /**
+     * گیرندهٔ پیامک، بررسی صندوق ورودی هنگام باز شدن برنامه و بررسی پس‌زمینه ممکن است یک پیامک را
+     * هم‌زمان ببینند؛ یکی‌یکی پردازش می‌شوند تا بررسی تکراری‌بودن معتبر بماند.
+     */
+    private val lock = Mutex()
+
     /** Reads [body] from [address] and files it as pending, unknown, or nothing. */
-    suspend fun process(db: AppDatabase, address: String, body: String, receivedAt: Long): Outcome {
+    suspend fun process(db: AppDatabase, address: String, body: String, receivedAt: Long): Outcome =
+        lock.withLock { processLocked(db, address, body, receivedAt) }
+
+    private suspend fun processLocked(db: AppDatabase, address: String, body: String, receivedAt: Long): Outcome {
         val registered = findSender(db.bankSenderDao(), address)
         // فرستندهٔ ثبت‌نشده‌ای که شماره‌اش در دیتابیس بانک‌ها هست هم پیامک بانکی است (نه فرستنده‌ای که کاربر خاموشش کرده).
         val known = if (registered == null) BankSmsDetector.senderBank(address) else null

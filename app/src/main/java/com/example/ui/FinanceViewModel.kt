@@ -1798,6 +1798,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             )
             // Kept as approved (not deleted) so the same SMS is never offered again.
             smsParserRepository.setPendingStatus(pendingTx.id, PendingStatus.APPROVED)
+            com.example.data.SmsQuickAction.cancel(getApplication<android.app.Application>(), listOf(pendingTx.id))
             checkBalanceAgainstSms(name, pendingTx.balance)
         }
     }
@@ -1828,7 +1829,10 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun rejectPendingTransaction(id: Int) {
-        viewModelScope.launch { smsParserRepository.setPendingStatus(id, PendingStatus.REJECTED) }
+        viewModelScope.launch {
+            smsParserRepository.setPendingStatus(id, PendingStatus.REJECTED)
+            com.example.data.SmsQuickAction.cancel(getApplication<android.app.Application>(), listOf(id))
+        }
     }
 
     fun ignoreUnknownSms(id: Int) {

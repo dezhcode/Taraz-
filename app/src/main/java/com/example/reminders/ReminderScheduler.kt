@@ -49,6 +49,15 @@ object ReminderScheduler {
         WorkManager.getInstance(context).enqueueUniquePeriodicWork("taraz_weekly_summary", ExistingPeriodicWorkPolicy.KEEP, request)
     }
 
+    /**
+     * بررسی پیامک‌های بانکی صندوق ورودی هر ۱۵ دقیقه (کمترین فاصلهٔ WorkManager). KEEP: هر بار باز شدن
+     * برنامه زمان‌بندی را از نو شروع نمی‌کند. خود کار وقتی پیامک‌خوان خاموش است هیچ نمی‌خواند.
+     */
+    fun scheduleSmsCatchUp(context: Context) {
+        val request = PeriodicWorkRequestBuilder<SmsCatchUpWorker>(15, TimeUnit.MINUTES).build()
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork("taraz_sms_catch_up", ExistingPeriodicWorkPolicy.KEEP, request)
+    }
+
     fun cancelDailyLoanCheck(context: Context) {
         WorkManager.getInstance(context).cancelUniqueWork(DAILY_LOAN_CHECK)
     }
