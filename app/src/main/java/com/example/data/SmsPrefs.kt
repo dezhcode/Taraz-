@@ -9,6 +9,7 @@ import android.content.Context
 object SmsPrefs {
     private const val FILE = "taraz_sms"
     private const val KEY_ENABLED = "reader_enabled"
+    private const val KEY_ENABLED_AT = "reader_enabled_at"
     private const val KEY_LAST_SCAN = "last_inbox_scan"
     private const val KEY_LAST_BROADCAST = "last_broadcast"
     private const val KEY_SHEET_SEEN = "sheet_seen_max_id"
@@ -18,8 +19,19 @@ object SmsPrefs {
     fun enabled(context: Context): Boolean = prefs(context).getBoolean(KEY_ENABLED, false)
 
     fun setEnabled(context: Context, on: Boolean) {
-        prefs(context).edit().putBoolean(KEY_ENABLED, on).apply()
+        val was = enabled(context)
+        val edit = prefs(context).edit().putBoolean(KEY_ENABLED, on)
+        // لحظهٔ روشن شدن: تراز فقط پیامک‌هایی را می‌خواند که از این به بعد می‌رسند.
+        if (on && !was) edit.putLong(KEY_ENABLED_AT, System.currentTimeMillis())
+        edit.apply()
     }
+
+    /**
+     * آخرین باری که پیامک‌خوان روشن شد؛ ۰ برای کسی که پیش از این نسخه روشنش کرده بود.
+     * پیامک‌های پیش از این لحظه خوانده نمی‌شوند: کاربر موجودی حساب‌ها را با همان وضعیت وارد کرده و ثبت
+     * دوبارهٔ آن تراکنش‌ها موجودی را دو بار تغییر می‌داد.
+     */
+    fun enabledAt(context: Context): Long = prefs(context).getLong(KEY_ENABLED_AT, 0L)
 
     /** زمان (date صندوق ورودی) آخرین پیامکی که بررسی صندوق ورودی دیده؛ ۰ یعنی هنوز هیچ. */
     fun lastInboxScan(context: Context): Long = prefs(context).getLong(KEY_LAST_SCAN, 0L)

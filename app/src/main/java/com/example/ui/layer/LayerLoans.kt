@@ -73,12 +73,15 @@ internal fun ColumnScope.LoansSection(
     loans: List<Loan>,
     onAddLoan: () -> Unit,
     onPay: (Loan) -> Unit,
-    onOpenLoan: (Loan) -> Unit
+    onOpenLoan: (Loan) -> Unit,
+    payments: List<com.example.data.LoanPayment> = emptyList()
 ) {
 
     val now = System.currentTimeMillis()
     val active = loans.filter { !it.isSettled }
-    val withDue = active.map { it to JalaliDate.nextDueTimestamp(it.dueDay, now) }.sortedBy { it.second }
+    // ماه‌هایی که قسطشان پرداخت شده: قسط بعدیِ چنین وامی ماه بعد است، نه همین ماه که پرداخت شده
+    val paidKeys = remember(payments) { payments.groupBy { it.loanId }.mapValues { (_, l) -> l.map { it.monthKey }.toSet() } }
+    val withDue = active.map { it to JalaliDate.nextUnpaidDueTimestamp(it.dueDay, paidKeys[it.id].orEmpty(), now) }.sortedBy { it.second }
     val today = JalaliDate.today()
 
     var monthShift by remember { mutableIntStateOf(0) }
@@ -136,6 +139,7 @@ internal fun ColumnScope.LoansSection(
         val firstCol = saturdayFirstIndex(JalaliDate.toTimestamp(year, month, 1))
         val dueByDay: Map<Int, List<Loan>> = active.groupBy { it.dueDay.coerceIn(1, dim) }
         val firstDueLoanId = withDue.firstOrNull()?.first?.id
+        val firstDueKey = withDue.firstOrNull()?.second?.let { JalaliDate.fromTimestamp(it).monthKey() }
 
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp).fillMaxWidth().cardSurface(22.dp).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 14.dp)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -164,7 +168,7 @@ internal fun ColumnScope.LoansSection(
                                 val isToday = monthShift == 0 && day == today.day
                                 val past = monthShift < 0 || (monthShift == 0 && day < today.day)
                                 val dues = dueByDay[day]
-                                val isFirst = dues?.any { it.id == firstDueLoanId } == true && monthShift == 0
+                                val isFirst = dues?.any { it.id == firstDueLoanId } == true && year * 100 + month == firstDueKey
                                 val bg = when { isToday -> L.Primary; isFirst -> L.AmberText; else -> Color.Transparent }
                                 val fg = when { isToday || isFirst -> Color.White; past -> L.Faint; else -> L.Ink }
                                 Box(
@@ -266,7 +270,8 @@ fun LayerPaySheet(
     val fromCard = cards.firstOrNull { it.bankName == from }
     val remainingBefore = remainingInstallments(loan)
     // آخرین قسط ممکن است کمتر از قسط عادی باشد؛ همان باقی‌مانده پرداخت می‌شود
-    val payAmount = minOf(loan.installmentAmount, (loan.totalAmount - loan.paidAmount).coerceAtLeast(0))
+    val leftToPay = (loan.totalAmount - loan.paidAmount).coerceAtLeast(0)
+    val payAmount = minOf(loan.installmentAmount.takeIf { it > 0 } ?: leftToPay, leftToPay)
     val total = totalInstallments(loan)
     val nextDue = JalaliDate.nextDueTimestamp(loan.dueDay, System.currentTimeMillis() + DAY_MS * 2)
 

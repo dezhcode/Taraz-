@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,14 +38,9 @@ import com.example.data.BankCard
 import com.example.data.BankSender
 import com.example.data.Category
 import com.example.data.PendingTransaction
+import com.example.data.SmsApproval
 import com.example.data.SmsIngest
 import com.example.utils.JalaliDate
-
-/** دستهٔ پیشنهادی یک تراکنش پیامکی: دسته‌ای که نامش در عنوان یا متن آمده، وگرنه «سایر» یا «درآمد». */
-fun guessCategory(p: PendingTransaction, categories: List<Category>): String {
-    val kind = categories.filter { it.isIncome == !p.isExpense }.map { it.name }
-    return kind.firstOrNull { p.title.contains(it) || p.smsBody.contains(it) } ?: if (p.isExpense) "سایر" else "درآمد"
-}
 
 /**
  * شیت «تراکنش‌های تازه» که با باز شدن تراز (یا زدن روی نوتیفیکیشن) می‌آید. هر ردیف با یک «ثبت» در
@@ -61,6 +57,8 @@ fun LayerPendingSheet(
     senders: List<BankSender>,
     focusId: Int?,
     onApprove: (PendingTransaction, String) -> Unit,
+    /** «ثبت همه»: همهٔ ردیف‌ها با دسته‌شان، یک‌جا (به ترتیب زمان ثبت می‌شوند). */
+    onApproveAll: (List<Pair<PendingTransaction, String>>) -> Unit,
     onReject: (PendingTransaction) -> Unit,
     onEdit: (PendingTransaction) -> Unit,
     onLater: () -> Unit
@@ -80,17 +78,17 @@ fun LayerPendingSheet(
         bottomBar = {
             if (items.size > 1) {
                 BigButton("ثبت همه (${fa(items.size)})", Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
-                    items.forEach { p -> onApprove(p, chosen[p.id] ?: guessCategory(p, categories)) }
+                    onApproveAll(items.map { p -> p to (chosen[p.id] ?: SmsApproval.guessCategory(p, categories)) })
                 }
             }
         }
     ) {
         Text(
-            "تراز این تراکنش‌ها را از پیامک‌های بانکی پیدا کرد. با «ثبت» به حساب‌ها اضافه می‌شوند؛ برای تغییر عنوان، حساب یا مبلغ روی تراکنش بزنید.",
+            "تراز این تراکنش‌ها را از پیامک‌های بانکی پیدا کرد. با «ثبت» به حساب‌ها اضافه می‌شوند؛ برای تغییر عنوان، حساب، مبلغ یا نوع تراکنش روی آن بزنید.",
             style = lt(12.sp, color = L.Muted, lineHeight = 21.sp)
         )
-        items.forEach { p ->
-            val category = chosen[p.id] ?: guessCategory(p, categories)
+        items.forEach { p -> key(p.id) {
+            val category = chosen[p.id] ?: SmsApproval.guessCategory(p, categories)
             val account = remember(p.id, cards, senders) { SmsIngest.accountFor(p, cards, senders) }
             PendingRow(
                 p = p,
@@ -106,7 +104,7 @@ fun LayerPendingSheet(
                 onReject = { onReject(p) },
                 onEdit = { onEdit(p) }
             )
-        }
+        } }
     }
 }
 

@@ -8,7 +8,6 @@ import androidx.core.app.NotificationManagerCompat
 import com.example.utils.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -28,7 +27,7 @@ class SmsQuickAction : BroadcastReceiver() {
                 val db = AppDatabase.getDatabase(appContext, CoroutineScope(Dispatchers.IO))
                 when (intent.action) {
                     ACTION_APPROVE -> approve(db, id)
-                    ACTION_DISMISS -> db.pendingTransactionDao().setStatus(id, PendingStatus.REJECTED)
+                    ACTION_DISMISS -> SmsApproval.reject(db, id)
                 }
                 NotificationManagerCompat.from(appContext).cancel(notificationId(id))
                 refreshSummary(appContext, db)
@@ -110,30 +109,9 @@ class SmsQuickAction : BroadcastReceiver() {
             nm.cancel(SUMMARY_ID)
         }
 
-        /** Same result as approving in the review sheet without changing anything. */
+        /** Same result as approving in the sheet without changing anything; see [SmsApproval]. */
         suspend fun approve(db: AppDatabase, id: Int) {
-            val dao = db.pendingTransactionDao()
-            val p = dao.getById(id) ?: return
-            if (p.status != PendingStatus.PENDING) return
-            val repo = FinanceRepository(db)
-            val name = SmsIngest.accountFor(p, repo.allCardsNow(), db.bankSenderDao().getAllSenders())
-            if (repo.getCardByName(name) == null) {
-                val delta = if (p.isExpense) -p.amount else p.amount
-                repo.insertCard(
-                    BankCard(bankName = name, cardNumber = "", balance = if (p.balance > 0) p.balance - delta else 0L, accountType = AccountType.BANK)
-                )
-            }
-            val categories = db.categoryDao().getAllCategories().first()
-            val category = categories.firstOrNull { c -> c.isIncome == !p.isExpense && p.title.contains(c.name) }?.name
-                ?: if (p.isExpense) "سایر" else "درآمد"
-            repo.insertTransaction(
-                Transaction(
-                    title = p.title.ifBlank { "تراکنش بانکی" }, amount = p.amount, category = category, date = p.date,
-                    isExpense = p.isExpense, bankName = name,
-                    type = if (p.isExpense) TransactionType.EXPENSE else TransactionType.INCOME
-                )
-            )
-            dao.setStatus(id, PendingStatus.APPROVED)
+            SmsApproval.approve(db, id)
         }
     }
 }

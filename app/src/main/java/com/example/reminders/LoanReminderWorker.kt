@@ -87,7 +87,7 @@ class LoanReminderWorker(
                 val title = when (daysLeft) {
                     0 -> "امروز سررسید قسط ${loan.loanName}"
                     1 -> "فردا سررسید قسط ${loan.loanName}"
-                    else -> "$daysLeft روز تا سررسید قسط ${loan.loanName}"
+                    else -> "${JalaliDate.toPersianDigits(daysLeft)} روز تا سررسید قسط ${loan.loanName}"
                 }
                 val message = "$amount تومان — ${loan.bankName} — ${dueDate.formatLong()}"
 
@@ -145,7 +145,7 @@ class LoanReminderWorker(
         prefs.edit().putBoolean(key, true).apply()
     }
 
-    private fun whenText(days: Int) = when (days) { 0 -> "امروز"; 1 -> "فردا"; else -> "$days روز دیگر" }
+    private fun whenText(days: Int) = when (days) { 0 -> "امروز"; 1 -> "فردا"; else -> "${JalaliDate.toPersianDigits(days)} روز دیگر" }
 
     /** سه روز و یک روز قبل و روز سررسید چک‌های در انتظار */
     private suspend fun remindCheques(database: AppDatabase, prefs: android.content.SharedPreferences) {

@@ -62,7 +62,11 @@ class TodayWidget : AppWidgetProvider() {
 
             val next = db.loanDao().getAllLoans().first()
                 .filter { !it.isSettled }
-                .map { it to JalaliDate.nextDueTimestamp(it.dueDay, now) }
+                .map { loan ->
+                    // قسطی که برای این ماه پرداخت شده دیگر «پیش رو» نیست
+                    val paid = db.loanPaymentDao().forLoan(loan.id).map { it.monthKey }.toSet()
+                    loan to JalaliDate.nextUnpaidDueTimestamp(loan.dueDay, paid, now)
+                }
                 .minByOrNull { it.second }
 
             val views = RemoteViews(context.packageName, R.layout.widget_today)

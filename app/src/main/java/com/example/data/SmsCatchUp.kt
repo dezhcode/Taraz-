@@ -20,7 +20,10 @@ import kotlinx.coroutines.withContext
  */
 object SmsCatchUp {
 
-    /** بار اول فقط پیامک‌های همین چند روز اخیر، نه کل صندوق ورودی. */
+    /**
+     * بار اول (برای کسی که پیامک‌خوان را پیش از این نسخه روشن کرده بود) فقط پیامک‌های همین چند روز اخیر،
+     * نه کل صندوق ورودی. برای بقیه مرز همان لحظهٔ روشن شدن پیامک‌خوان است ([SmsPrefs.enabledAt]).
+     */
     private const val FIRST_RUN_WINDOW_MS = 3L * 24 * 3600 * 1000
 
     /** کمی هم‌پوشانی با بررسی قبل، برای پیامکی که دیرتر از زمان خودش در صندوق ثبت شده. */
@@ -38,7 +41,8 @@ object SmsCatchUp {
 
         val now = System.currentTimeMillis()
         val last = SmsPrefs.lastInboxScan(app)
-        val since = if (last <= 0L) now - FIRST_RUN_WINDOW_MS else last - OVERLAP_MS
+        // هرگز پیش از روشن شدن پیامک‌خوان: آن پیامک‌ها در موجودی‌ای که کاربر وارد کرده هستند.
+        val since = maxOf(if (last <= 0L) now - FIRST_RUN_WINDOW_MS else last - OVERLAP_MS, SmsPrefs.enabledAt(app))
 
         val messages = ArrayList<Triple<String, String, Long>>()
         try {
@@ -66,7 +70,13 @@ object SmsCatchUp {
         val db = AppDatabase.getDatabase(app, CoroutineScope(Dispatchers.IO))
         val found = ArrayList<PendingTransaction>()
         var newest = maxOf(last, 0L)
+        // سرشماره‌هایی که پیش از این بررسی ثبت شده‌اند. موجودی حساب هنگام ثبت سرشماره با آخرین پیامک بانک
+        // یکی می‌شود؛ پیامک‌های پیش از آن در همان موجودی هستند و ثبت دوباره‌شان موجودی را دو بار تغییر می‌داد.
+        val registered = db.bankSenderDao().getAllSenders()
         for ((address, body, date) in messages) {
+            if (date > newest) newest = date
+            val sender = registered.firstOrNull { SmsIngest.sameSender(it.senderNumber, address) }
+            if (sender != null && date < sender.lastUpdated) continue
             try {
                 val outcome = SmsIngest.process(db, address, body, if (date > 0) date else now)
                 if (outcome is SmsIngest.Outcome.Pending) {
@@ -76,7 +86,6 @@ object SmsCatchUp {
             } catch (e: Exception) {
                 Log.e("SmsCatchUp", "Could not process an SMS", e)
             }
-            if (date > newest) newest = date
         }
         SmsPrefs.setLastInboxScan(app, if (newest > 0) newest else now)
         if (notify && found.isNotEmpty()) SmsQuickAction.notifySummary(app)

@@ -48,7 +48,6 @@ class SmsParserViewModel(application: Application) : AndroidViewModel(applicatio
     fun setReaderEnabled(on: Boolean) {
         SmsPrefs.setEnabled(getApplication(), on)
         _readerEnabled.value = on
-        if (on && com.example.sms.permission.SmsPermissionHelper.hasSmsPermissions(getApplication())) triggerScan()
     }
 
     // پیامک‌های اخیر برای «انتخاب سرشماره از میان پیام‌ها»
@@ -91,7 +90,6 @@ class SmsParserViewModel(application: Application) : AndroidViewModel(applicatio
             )
             saveSelectedSendersUseCase(listOf(model))
             repository.setInitialBalanceFromLatestSms(model.senderNumber, name)
-            triggerScan()
             null
         } catch (e: Exception) {
             Log.e("SmsParserViewModel", "Could not save the sender", e)
@@ -137,12 +135,8 @@ class SmsParserViewModel(application: Application) : AndroidViewModel(applicatio
     val unknownSmsList: StateFlow<List<UnknownSms>> = db.unknownSmsDao().getUnknownSmsFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    init {
-        // Automatically perform scanning if permissions are already given
-        if (com.example.sms.permission.SmsPermissionHelper.hasSmsPermissions(application)) {
-            triggerScan()
-        }
-    }
+    // کل صندوق پیامک دیگر با هر بار باز شدن این صفحه خوانده نمی‌شود: فهرست فرستنده‌ها از [loadMessages]
+    // می‌آید و نتیجهٔ آن اسکن را هیچ صفحه‌ای نشان نمی‌داد.
 
     fun setSearchQuery(query: String) {
         _searchQuery.value = query

@@ -112,6 +112,12 @@ class SmsRepositoryImpl(
     }
     override suspend fun setInitialBalanceFromLatestSms(senderNumber: String, bankName: String) { withContext(Dispatchers.IO) {
         try {
+            // اگر پیامک‌هایی از همین فرستنده منتظر تأییدند، موجودی دست نمی‌خورد: آن پیامک‌ها در «مانده»ٔ آخرین
+            // پیامک هستند و با تأییدشان دوباره روی موجودی می‌نشستند. بعد از تأیید، تراز خودش موجودی را با
+            // «مانده»ٔ پیامک می‌سنجد.
+            val waiting = pendingTransactionDao.getPendingTransactions()
+                .any { com.example.data.SmsIngest.sameSender(it.senderNumber, senderNumber) }
+            if (waiting) return@withContext
             val inboxUri = android.net.Uri.parse("content://sms/inbox")
             val projection = arrayOf("body")
             // آخرین پیامک ممکن است رمز یک‌بارمصرف باشد؛ از میان چند پیامک اخیر، اولین تراکنش واقعی را بگیر.

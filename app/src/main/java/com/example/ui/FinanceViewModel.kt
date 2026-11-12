@@ -1213,7 +1213,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             finalTitle = proposal.title,
             finalCategory = proposal.category,
             finalAmount = tx.amount,
-            finalCard = tx.card,
+            // null: the account is worked out from the card digits and the sender, never named after them
+            finalCard = null,
             isExpense = tx.isExpense
         )
         _smsAiProposal.value = null
@@ -1433,6 +1434,11 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     // Transaction management
     fun addTransaction(title: String, amount: Long, category: String, isExpense: Boolean, bankName: String, date: Long? = null, tags: List<String> = emptyList()) {
         viewModelScope.launch {
+            // هنوز هیچ حسابی ساخته نشده: شیت ثبت نام «کیف پول» را می‌فرستد. بدون حساب، تراکنش ثبت می‌شد ولی
+            // هیچ موجودی‌ای تغییر نمی‌کرد؛ پس همان «کیف پول» به‌عنوان حساب نقدی ساخته می‌شود.
+            if (repository.allCardsNow().isEmpty()) {
+                repository.insertCard(BankCard(bankName = bankName.trim().ifEmpty { "کیف پول" }, balance = 0L, accountType = AccountType.CASH))
+            }
             repository.insertTransaction(
                 Transaction(
                     title = title,
@@ -1440,7 +1446,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     category = category,
                     date = date ?: System.currentTimeMillis(),
                     isExpense = isExpense,
-                    bankName = bankName,
+                    bankName = bankName.trim().ifEmpty { "کیف پول" },
                     type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME,
                     tags = tags.joinToString(",")
                 )
@@ -1525,7 +1531,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             repository.insertCard(
                 BankCard(
                     bankName = clean,
-                    cardNumber = cardNumber,
+                    // always Latin digits, whatever keyboard typed them
+                    cardNumber = BankBin.digitsOf(cardNumber),
                     balance = balance,
                     cardHolderName = cardHolderName,
                     accountType = accountType,
@@ -1549,7 +1556,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
      */
     fun saveAccount(card: BankCard, newName: String, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
-            repository.insertCard(card)
+            repository.insertCard(card.copy(cardNumber = BankBin.digitsOf(card.cardNumber)))
             onResult(repository.renameAccount(card, newName))
         }
     }
@@ -1762,6 +1769,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
      * review screen; null means «work it out» (see [SmsIngest.accountFor]). When
      * that account does not exist yet it is created with the balance the SMS
      * reports, so after this transaction it matches the bank exactly.
+     *
+     * The work itself is in [SmsApproval], one approval at a time, so a double tap
+     * or «ثبت همه» can never record the same SMS twice.
      */
     fun approvePendingTransaction(
         pendingTx: PendingTransaction,
@@ -1772,34 +1782,32 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         isExpense: Boolean
     ) {
         viewModelScope.launch {
-            val name = finalCard?.trim()?.takeIf { it.isNotEmpty() }
-                ?: SmsIngest.accountFor(pendingTx, repository.allCardsNow(), smsParserRepository.getAllSenders())
-            if (repository.getCardByName(name) == null) {
-                val delta = if (isExpense) -finalAmount else finalAmount
-                repository.insertCard(
-                    BankCard(
-                        bankName = name,
-                        cardNumber = "",
-                        balance = if (pendingTx.balance > 0) pendingTx.balance - delta else 0L,
-                        accountType = AccountType.BANK
-                    )
-                )
+            approveOne(pendingTx.id, finalTitle, finalCategory, finalAmount, finalCard, isExpense)
+            settleSmsBalanceChecks()
+        }
+    }
+
+    /**
+     * «ثبت همه»: هر تراکنش با دسته‌اش. به ترتیب زمان پیامک‌ها (قدیمی‌تر اول) ثبت می‌شوند تا حسابی که
+     * با همین پیامک‌ها ساخته می‌شود از ماندهٔ قدیمی‌ترین پیامک شروع کند و به ماندهٔ تازه‌ترین برسد.
+     */
+    fun approvePendingBatch(items: List<Pair<PendingTransaction, String>>) {
+        if (items.isEmpty()) return
+        viewModelScope.launch {
+            items.sortedBy { it.first.date }.forEach { (p, category) ->
+                approveOne(p.id, p.title.ifBlank { "تراکنش بانکی" }, category, p.amount, null, p.isExpense)
             }
-            repository.insertTransaction(
-                Transaction(
-                    title = finalTitle,
-                    amount = finalAmount,
-                    category = finalCategory,
-                    date = pendingTx.date,
-                    isExpense = isExpense,
-                    bankName = name,
-                    type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME
-                )
-            )
-            // Kept as approved (not deleted) so the same SMS is never offered again.
-            smsParserRepository.setPendingStatus(pendingTx.id, PendingStatus.APPROVED)
-            com.example.data.SmsQuickAction.cancel(getApplication<android.app.Application>(), listOf(pendingTx.id))
-            checkBalanceAgainstSms(name, pendingTx.balance)
+            settleSmsBalanceChecks()
+        }
+    }
+
+    private suspend fun approveOne(id: Int, title: String, category: String, amount: Long, account: String?, isExpense: Boolean) {
+        val done = SmsApproval.approve(db, id, title, category, amount, account, isExpense) ?: return
+        SmsQuickAction.cancel(getApplication<Application>(), listOf(id))
+        val p = done.pending
+        if (p.balance > 0) {
+            val known = latestSmsBalance[done.account]
+            if (known == null || p.date >= known.first) latestSmsBalance[done.account] = p.date to p.balance
         }
     }
 
@@ -1809,10 +1817,31 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     private val _balanceMismatch = MutableStateFlow<BalanceMismatch?>(null)
     val balanceMismatch: StateFlow<BalanceMismatch?> = _balanceMismatch.asStateFlow()
 
-    private suspend fun checkBalanceAgainstSms(account: String, smsBalance: Long) {
-        if (smsBalance <= 0) return
-        val card = repository.getCardByName(account) ?: return
-        if (card.balance != smsBalance) _balanceMismatch.value = BalanceMismatch(account, card.balance, smsBalance)
+    /** «مانده»ٔ تازه‌ترین پیامکِ تأییدشدهٔ هر حساب در همین نشست: نام حساب ← (زمان پیامک، مانده). */
+    private val latestSmsBalance = HashMap<String, Pair<Long, Long>>()
+
+    /**
+     * موجودی حساب را با «مانده»ٔ پیامک بانک می‌سنجد، ولی فقط وقتی معنا دارد: پیامک دیگری برای همان
+     * حساب منتظر تأیید نباشد (وگرنه موجودی هنوز کامل نیست) و بعد از آن پیامک تراکنشی روی حساب ثبت
+     * نشده باشد (وگرنه «مانده»ٔ پیامک قدیمی است). پیش‌تر بعد از هر تأیید سنجیده می‌شد؛ با تأیید
+     * پیامک‌ها از تازه به قدیم، هشدار نادرست می‌داد و پذیرفتنش موجودی را به عددی قدیمی برمی‌گرداند.
+     */
+    private suspend fun settleSmsBalanceChecks() {
+        if (latestSmsBalance.isEmpty() || _balanceMismatch.value != null) return
+        val cardsNow = repository.allCardsNow()
+        val senders = smsParserRepository.getAllSenders()
+        val waiting = db.pendingTransactionDao().getPendingTransactions()
+            .map { SmsIngest.accountFor(it, cardsNow, senders) }.toSet()
+        for (account in latestSmsBalance.keys.toList()) {
+            if (account in waiting) continue
+            val (smsDate, smsBalance) = latestSmsBalance.remove(account) ?: continue
+            if (db.transactionDao().inRangeForAccount(account, smsDate + 1, Long.MAX_VALUE).isNotEmpty()) continue
+            val card = repository.getCardByName(account) ?: continue
+            if (card.balance != smsBalance) {
+                _balanceMismatch.value = BalanceMismatch(account, card.balance, smsBalance)
+                return // یکی‌یکی؛ بقیه بعد از پاسخ کاربر به همین یکی
+            }
+        }
     }
 
     /** موجودی حساب را برابر عدد پیامک بانک می‌کند */
@@ -1821,17 +1850,20 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         _balanceMismatch.value = null
         viewModelScope.launch {
             repository.getCardByName(m.account)?.let { repository.insertCard(it.copy(balance = m.inSms)) }
+            settleSmsBalanceChecks()
         }
     }
 
     fun dismissBalanceMismatch() {
         _balanceMismatch.value = null
+        viewModelScope.launch { settleSmsBalanceChecks() }
     }
 
     fun rejectPendingTransaction(id: Int) {
         viewModelScope.launch {
-            smsParserRepository.setPendingStatus(id, PendingStatus.REJECTED)
-            com.example.data.SmsQuickAction.cancel(getApplication<android.app.Application>(), listOf(id))
+            SmsApproval.reject(db, id)
+            SmsQuickAction.cancel(getApplication<Application>(), listOf(id))
+            settleSmsBalanceChecks()
         }
     }
 

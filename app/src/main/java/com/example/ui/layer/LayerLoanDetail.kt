@@ -72,7 +72,9 @@ fun LayerLoanDetailScreen(
     val paidCount = (total - remaining).coerceAtLeast(0)
     val left = (loan.totalAmount - loan.paidAmount).coerceAtLeast(0)
     val now = System.currentTimeMillis()
-    val nextDue = JalaliDate.nextDueTimestamp(loan.dueDay, now)
+    val nextDue = JalaliDate.nextUnpaidDueTimestamp(
+        loan.dueDay, payments.filter { it.loanId == loan.id }.map { it.monthKey }.toSet(), now
+    )
     val finalDue = if (remaining > 0) dueAfter(loan.dueDay, nextDue, remaining - 1) else null
     var askDelete by remember { mutableStateOf(false) }
 

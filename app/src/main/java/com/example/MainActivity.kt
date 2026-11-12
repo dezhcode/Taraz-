@@ -54,6 +54,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     private val quickAction = mutableStateOf<String?>(null)
     /** تراکنش پیامکی‌ای که نوتیفیکیشنش زده شد (همراه [quickAction] = SMS_REVIEW)؛ ۰ یعنی هیچ. */
     private val quickTargetId = mutableStateOf(0)
+    /** با هر بار جلو آمدن برنامه یکی بیشتر می‌شود؛ شیت «تراکنش‌های تازه» با آن دوباره بررسی می‌شود. */
+    private val resumeTick = androidx.compose.runtime.mutableIntStateOf(0)
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
@@ -76,6 +78,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         // grace period covers a quick look at another app or a system dialog.
         if (backgroundedAt > 0 && System.currentTimeMillis() - backgroundedAt > LOCK_GRACE_MS) viewModel.lockApp()
         backgroundedAt = 0L
+        resumeTick.intValue++
         // هر بار که تراز جلو می‌آید، پیامک‌های بانکی تازهٔ صندوق ورودی خوانده می‌شوند؛ شیت تراکنش‌ها نشانشان می‌دهد.
         if (com.example.Features.SMS) {
             lifecycleScope.launch { com.example.data.SmsCatchUp.run(this@MainActivity, notify = false) }
@@ -199,9 +202,6 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 }
                 val sheetContext = LocalContext.current
                 val newestPendingId = pendingSms.maxOfOrNull { it.id } ?: 0
-                LaunchedEffect(newestPendingId) {
-                    if (newestPendingId > com.example.data.SmsPrefs.sheetSeenMaxId(sheetContext)) openPendingSheet(pendingFocusId)
-                }
                 var selectedTransactionForEdit by remember { mutableStateOf<com.example.data.Transaction?>(null) }
                 var isAiSheetOpen by remember { mutableStateOf(false) }
                 var isBudgetOpen by remember { mutableStateOf(false) }
@@ -402,6 +402,22 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 
                 // راهنمای گام‌به‌گام صفحه‌ها (بار اول هر صفحه)
                 val tourState = remember { com.example.ui.layer.TourState() }
+
+                // شیت «تراکنش‌های تازه» خودش باز می‌شود: وقتی تراز جلو می‌آید یا تراکنش تازه‌ای می‌رسد، ولی
+                // نه وسط کار کاربر (روی برگه یا فرم دیگری که باز است). آن‌وقت بنر خانه و نوتیفیکیشن می‌مانند
+                // و بار بعد که برنامه جلو بیاید باز می‌شود.
+                val resumed = resumeTick.intValue
+                LaunchedEffect(newestPendingId, resumed, screenState, isAppLocked, activeSubScreen) {
+                    if (screenState != Screen.MAIN || isAppLocked) return@LaunchedEffect
+                    if (newestPendingId <= com.example.data.SmsPrefs.sheetSeenMaxId(sheetContext)) return@LaunchedEffect
+                    val busy = isAddTransactionOpen || selectedTransactionForEdit != null || isAiSheetOpen || isBudgetOpen ||
+                        isAddCardOpen || accountToEdit != null || isTransferOpen || isAssetSheetOpen || loanToPay != null ||
+                        isPersonSheetOpen || isEntrySheetOpen || isSplitOpen || chequeSheetOpen || shareMonthTs != null ||
+                        homeLayoutOpen || txFilterOpen || allToolsOpen || billToPay != null || creditToRepay != null ||
+                        searchOpen || weeklyOpen || quickCategory != null || showSmsAssistantSheet ||
+                        activeSubScreen in setOf("add_loan", "add_category", "backup", "sms_setup")
+                    if (!busy) openPendingSheet(pendingFocusId)
+                }
 
                 CompositionLocalProvider(
                     com.example.ui.layer.LocalCreators provides creators,
@@ -748,7 +764,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         onAlertsChange = { viewModel.setAlertsEnabled(it) },
                                         onBack = { closeSub() },
                                         onPay = { loanToPay = it },
-                                        onReviewSms = { openPendingSheet() }
+                                        onReviewSms = { openPendingSheet() },
+                                        payments = loanPayments
                                     )
                                 }
 
@@ -888,9 +905,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             },
                                                             onPayLoan = { loanToPay = it },
                                                             onApproveSms = { p ->
-                                                                val cat = categories.firstOrNull { c ->
-                                                                    c.isIncome == !p.isExpense && p.title.contains(c.name)
-                                                                }?.name ?: if (p.isExpense) "سایر" else "درآمد"
+                                                                val cat = com.example.data.SmsApproval.guessCategory(p, categories)
                                                                 viewModel.approvePendingTransaction(p, p.title.ifBlank { "تراکنش بانکی" }, cat, p.amount, null, p.isExpense)
                                                             },
                                                             onDismissSms = { p -> viewModel.rejectPendingTransaction(p.id) },
@@ -947,7 +962,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             onOpenCheque = { chequeEditing = it; chequeSheetOpen = true },
                                                             creditUsed = cards.filter { it.accountType == com.example.data.AccountType.CREDIT && it.balance < 0 }.sumOf { -it.balance },
                                                             segment = loansSegment,
-                                                            onSegment = { loansSegment = it }
+                                                            onSegment = { loansSegment = it },
+                                                            loanPayments = loanPayments
                                                         )
                                                     }
 
@@ -1142,8 +1158,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             }
 
                             if (weeklyOpen) {
-                                val digest = remember(transactions, loans, cheques, bills) {
-                                    com.example.data.WeeklyDigest.build(transactions, loans, cheques, bills)
+                                val digest = remember(transactions, loans, cheques, bills, loanPayments) {
+                                    com.example.data.WeeklyDigest.build(transactions, loans, cheques, bills, payments = loanPayments)
                                 }
                                 com.example.ui.layer.WeeklySummarySheet(
                                     digest = digest,
@@ -1320,6 +1336,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     onApprove = { p, category ->
                                         viewModel.approvePendingTransaction(p, p.title.ifBlank { "تراکنش بانکی" }, category, p.amount, null, p.isExpense)
                                     },
+                                    onApproveAll = { viewModel.approvePendingBatch(it) },
                                     onReject = { p -> viewModel.rejectPendingTransaction(p.id) },
                                     onEdit = { p -> reviewFocusId = p.id; viewModel.setSmsAssistantSheetOpen(true) },
                                     onLater = {

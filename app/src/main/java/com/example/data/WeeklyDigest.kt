@@ -62,7 +62,9 @@ object WeeklyDigest {
         loans: List<Loan>,
         cheques: List<Cheque>,
         bills: List<Bill>,
-        now: Long = System.currentTimeMillis()
+        now: Long = System.currentTimeMillis(),
+        /** پرداخت‌های ثبت‌شده؛ قسطی که این ماه پرداخت شده در «پیش رو» نمی‌آید. */
+        payments: List<LoanPayment> = emptyList()
     ): Digest {
         val weekStart = now - 7 * DAY
         val prevStart = now - 14 * DAY
@@ -74,8 +76,9 @@ object WeeklyDigest {
 
         val horizon = now + 7 * DAY
         val upcoming = buildList {
+            val paidKeys = payments.groupBy { it.loanId }.mapValues { (_, p) -> p.map { it.monthKey }.toSet() }
             loans.filter { !it.isSettled }.forEach { l ->
-                val due = JalaliDate.nextDueTimestamp(l.dueDay, now)
+                val due = JalaliDate.nextUnpaidDueTimestamp(l.dueDay, paidKeys[l.id].orEmpty(), now)
                 if (due <= horizon) add(Upcoming("قسط ${l.loanName}", l.installmentAmount, due))
             }
             cheques.filter { it.status == ChequeStatus.PENDING && it.issued && it.dueDate in (now - DAY)..horizon }

@@ -21,7 +21,8 @@ class WeeklySummaryWorker(context: Context, params: WorkerParameters) : Coroutin
                 db.transactionDao().getAllTransactions().first(),
                 db.loanDao().getAllLoans().first(),
                 db.chequeDao().getAllNow(),
-                db.billDao().getAllNow()
+                db.billDao().getAllNow(),
+                payments = db.loanPaymentDao().getAll().first()
             )
             // Nothing recorded and nothing coming up: stay quiet.
             if (digest.count > 0 || digest.upcoming.isNotEmpty()) {

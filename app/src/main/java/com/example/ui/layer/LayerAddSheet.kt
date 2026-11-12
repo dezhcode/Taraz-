@@ -434,7 +434,9 @@ fun LayerAddSheet(
                         } else if (pid != null) {
                             onPersonMoney(pid, n, type == EntryType.EXPENSE, account, note)
                         } else {
-                            val cat = category ?: typeCats.firstOrNull()?.name ?: if (type == EntryType.INCOME) "درآمد" else "سایر"
+                            // دسته‌ای انتخاب نشده: «سایر» (یا «سایر درآمدها»)، نه اولین دستهٔ فهرست که «غذا» است
+                            val other = if (type == EntryType.INCOME) "سایر درآمدها" else "سایر"
+                            val cat = category ?: typeCats.firstOrNull { it.name == other }?.name ?: typeCats.lastOrNull()?.name ?: other
                             onSave(note.ifBlank { cat }, n, cat, type == EntryType.EXPENSE, account ?: "کیف پول", dateOverride, tags)
                         }
                         onDismiss()

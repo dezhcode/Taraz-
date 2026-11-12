@@ -47,7 +47,20 @@ class FinanceRepository(private val db: AppDatabase) {
 
     // ─── Cheques ───
 
-    suspend fun saveCheque(c: Cheque) = chequeDao.insert(c)
+    /**
+     * Saves a cheque. One that has already cleared carries an account transaction:
+     * when its amount, account, category or direction is edited, that transaction is
+     * recorded again with the new figures (on its original date), so the cheque and
+     * the balance never disagree.
+     */
+    suspend fun saveCheque(c: Cheque) = db.withTransaction {
+        val old = c.transactionId?.takeIf { c.status == ChequeStatus.CLEARED }?.let { transactionDao.getById(it) }
+        if (old != null && (old.amount != c.amount || old.bankName != c.bankName || old.category != c.category || old.isExpense != c.issued)) {
+            setChequeStatus(c, ChequeStatus.CLEARED, c.bankName, at = old.date)
+        } else {
+            chequeDao.insert(c)
+        }
+    }
 
     /** Deleting a cleared cheque also takes back the account transaction it made. */
     suspend fun deleteCheque(c: Cheque) = db.withTransaction {
@@ -69,7 +82,8 @@ class FinanceRepository(private val db: AppDatabase) {
                     Transaction(
                         title = if (c.issued) "پرداخت چک به ${c.person}" else "دریافت چک از ${c.person}",
                         amount = c.amount, category = c.category, date = at,
-                        isExpense = c.issued, bankName = account
+                        isExpense = c.issued, bankName = account,
+                        type = if (c.issued) TransactionType.EXPENSE else TransactionType.INCOME
                     )
                 ).toInt()
             }
@@ -274,6 +288,10 @@ class FinanceRepository(private val db: AppDatabase) {
         bankCardDao.rename(card.id, clean)
         transactionDao.renameAccount(card.bankName, clean)
         recurringDao.renameAccount(card.bankName, clean)
+        // Cheques and bills name the account they are paid from; left behind, a cheque
+        // cleared later was recorded on the old name and moved no balance.
+        chequeDao.renameAccount(card.bankName, clean)
+        billDao.renameAccount(card.bankName, clean)
         true
     }
 

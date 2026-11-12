@@ -367,7 +367,7 @@ fun LayerAddAccountSheet(
     // در کارت اعتباری «موجودی» یعنی مبلغ استفاده‌شده، که منفی ذخیره می‌شود
     val balance = if (credit) -parseAmount(balanceText) else parseAmount(balanceText)
     val limit = parseAmount(limitText)
-    val numberDigits = number.filter { it.isDigit() }
+    val numberDigits = BankBin.digitsOf(number)
     val canSave = cleanName.isNotEmpty() && !duplicate && (type != AccountType.BANK || numberDigits.isEmpty() || numberDigits.length == 16) &&
         (!credit || limit > 0)
 
@@ -385,7 +385,7 @@ fun LayerAddAccountSheet(
         if (type == AccountType.BANK) {
             LField(
                 value = number,
-                onChange = { number = it.filter { c -> c.isDigit() }.take(16) },
+                onChange = { number = BankBin.digitsOf(it).take(16) },
                 label = "شمارهٔ کارت (اختیاری)",
                 placeholder = "۶۱۰۴ ۳۳۷۴ …",
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -481,8 +481,8 @@ fun LayerEditAccountSheet(
     var limitText by remember { mutableStateOf(money(card.creditLimit)) }
     var dueDay by remember { mutableStateOf(card.dueDay.coerceIn(1, 30)) }
     var holder by remember { mutableStateOf(card.cardHolderName) }
-    var number by remember { mutableStateOf(card.cardNumber) }
-    val digits = number.filter { it.isDigit() }
+    var number by remember { mutableStateOf(BankBin.digitsOf(card.cardNumber)) }
+    val digits = BankBin.digitsOf(number)
     val canSave = cleanName.isNotEmpty() && !nameTaken &&
         !(card.accountType == AccountType.BANK && digits.isNotEmpty() && digits.length != 16)
 
@@ -517,7 +517,7 @@ fun LayerEditAccountSheet(
         }
         if (!card.isCash) {
             LField(
-                value = number, onChange = { number = it.filter { c -> c.isDigit() }.take(16) }, label = "شمارهٔ کارت (اختیاری)",
+                value = number, onChange = { number = BankBin.digitsOf(it).take(16) }, label = "شمارهٔ کارت (اختیاری)",
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), visualTransformation = CardNumberTransformation,
                 ltr = true
             )

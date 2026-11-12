@@ -67,9 +67,24 @@ object BankBin {
         "636795" to "بانک مرکزی"
     )
 
+    /**
+     * Only the digits of [raw], as Latin digits. A Persian or Arabic keyboard types
+     * «۶۱۰۴…»; stored like that, the prefix table never matched and a bank SMS, whose
+     * card digits are Latin, never found the card.
+     */
+    fun digitsOf(raw: String): String = buildString(raw.length) {
+        for (ch in raw) {
+            when (ch) {
+                in '0'..'9' -> append(ch)
+                in '۰'..'۹' -> append('0' + (ch - '۰'))
+                in '٠'..'٩' -> append('0' + (ch - '٠'))
+            }
+        }
+    }
+
     /** The bank for a card number, or null when the prefix is not one we know. */
     fun bankFor(cardNumber: String): String? {
-        val digits = cardNumber.filter { it.isDigit() }
+        val digits = digitsOf(cardNumber)
         if (digits.length < 6) return null
         return prefixes[digits.take(6)]
     }

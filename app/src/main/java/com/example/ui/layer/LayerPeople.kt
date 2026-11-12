@@ -80,7 +80,8 @@ fun LayerObligationsScreen(
     onOpenCheque: (com.example.data.Cheque) -> Unit = {},
     creditUsed: Long = 0,
     segment: Int? = null,
-    onSegment: (Int) -> Unit = {}
+    onSegment: (Int) -> Unit = {},
+    loanPayments: List<com.example.data.LoanPayment> = emptyList()
 ) {
     var ownSegment by rememberSaveable { mutableIntStateOf(0) }
     val current = segment ?: ownSegment
@@ -133,7 +134,7 @@ fun LayerObligationsScreen(
         )
 
         when (current) {
-            0 -> LoansSection(loans, onAddLoan, onPay, onOpenLoan)
+            0 -> LoansSection(loans, onAddLoan, onPay, onOpenLoan, loanPayments)
             1 -> PeopleSection(persons, balances, onOpenPerson, onAddPerson, onAddEntry, onSplit)
             else -> ChequesSection(cheques, onAddCheque, onOpenCheque)
         }

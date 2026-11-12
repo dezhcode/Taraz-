@@ -691,11 +691,13 @@ fun LayerNotificationsScreen(
     onAlertsChange: (Boolean) -> Unit,
     onBack: () -> Unit,
     onPay: (Loan) -> Unit,
-    onReviewSms: () -> Unit
+    onReviewSms: () -> Unit,
+    payments: List<com.example.data.LoanPayment> = emptyList()
 ) {
     val now = System.currentTimeMillis()
+    val paidKeys = payments.groupBy { it.loanId }.mapValues { (_, l) -> l.map { it.monthKey }.toSet() }
     val dueSoon = loans.filter { !it.isSettled }
-        .map { it to JalaliDate.nextDueTimestamp(it.dueDay, now) }
+        .map { it to JalaliDate.nextUnpaidDueTimestamp(it.dueDay, paidKeys[it.id].orEmpty(), now) }
         .filter { JalaliDate.daysUntil(it.second, now) in 0..7 }
         .sortedBy { it.second }
     val budgetPct = if (dailyBudget > 0) (todayExpense * 100 / dailyBudget).toInt() else -1

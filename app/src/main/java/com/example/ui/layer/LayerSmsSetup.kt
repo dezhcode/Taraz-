@@ -520,7 +520,7 @@ fun LayerSmsSetupScreen(
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { p ->
         hasPermission = (p[android.Manifest.permission.READ_SMS] ?: false) && (p[android.Manifest.permission.RECEIVE_SMS] ?: false)
         if (hasPermission) {
-            smsVm.setReaderEnabled(true); smsVm.triggerScan()
+            smsVm.setReaderEnabled(true)
             if (!managing && step == 0) step = 1
         }
     }

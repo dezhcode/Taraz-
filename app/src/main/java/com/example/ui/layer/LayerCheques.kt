@@ -158,7 +158,13 @@ fun ChequeSheet(
     var amountText by remember { mutableStateOf(cheque?.amount?.let { money(it) } ?: "") }
     var person by remember { mutableStateOf(cheque?.person ?: "") }
     var due by remember { mutableLongStateOf(cheque?.dueDate ?: (startOfDay(System.currentTimeMillis()) + 30 * DAY_MS + 10 * 3_600_000L)) }
-    var account by remember { mutableStateOf(cheque?.bankName ?: cards.firstOrNull { !it.isCash }?.bankName ?: cards.firstOrNull()?.bankName ?: "") }
+    // حساب چک اگر هنوز هست؛ وگرنه (حذف شده) اولین حساب، تا «وصول شد» روی حسابی که وجود ندارد ثبت نشود
+    var account by remember {
+        mutableStateOf(
+            cheque?.bankName?.takeIf { n -> cards.isEmpty() || cards.any { it.bankName == n } }
+                ?: cards.firstOrNull { !it.isCash }?.bankName ?: cards.firstOrNull()?.bankName ?: ""
+        )
+    }
     var sayadi by remember { mutableStateOf(cheque?.sayadi ?: "") }
     var category by remember { mutableStateOf(cheque?.category ?: "سایر") }
     var note by remember { mutableStateOf(cheque?.note ?: "") }

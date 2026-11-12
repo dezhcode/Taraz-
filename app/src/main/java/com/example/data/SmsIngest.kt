@@ -192,9 +192,10 @@ object SmsIngest {
      * turn into an account called «۳۱۴۲».
      */
     fun accountFor(p: PendingTransaction, cards: List<BankCard>, senders: List<BankSender>): String {
-        val last4 = p.card.filter { it.isDigit() }.takeLast(4)
+        val last4 = BankBin.digitsOf(p.card).takeLast(4)
         if (last4.length == 4) {
-            cards.firstOrNull { !it.isCash && it.cardNumber.endsWith(last4) }?.let { return it.bankName }
+            // شمارهٔ کارتی که با ارقام فارسی ذخیره شده هم باید پیدا شود
+            cards.firstOrNull { !it.isCash && BankBin.digitsOf(it.cardNumber).endsWith(last4) }?.let { return it.bankName }
         }
         val bank = senders.firstOrNull { sameSender(it.senderNumber, p.senderNumber) }?.bankName?.trim()
             ?.takeIf { it.isNotEmpty() } ?: "حساب بانکی"
