@@ -1095,6 +1095,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     loan = loan,
                                     cards = cards,
                                     onConfirm = { l, from -> viewModel.payInstallmentFrom(l, from) },
+                                    payments = loanPayments,
                                     onDismiss = { loanToPay = null },
                                     onGoHome = {
                                         loanToPay = null

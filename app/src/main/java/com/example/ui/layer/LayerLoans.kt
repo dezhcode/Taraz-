@@ -261,7 +261,8 @@ fun LayerPaySheet(
     cards: List<BankCard>,
     onConfirm: (loan: Loan, fromBank: String) -> Unit,
     onDismiss: () -> Unit,
-    onGoHome: () -> Unit
+    onGoHome: () -> Unit,
+    payments: List<com.example.data.LoanPayment> = emptyList()
 ) {
     BackHandler(onBack = onDismiss)
     var done by remember { mutableStateOf(false) }
@@ -273,7 +274,13 @@ fun LayerPaySheet(
     val leftToPay = (loan.totalAmount - loan.paidAmount).coerceAtLeast(0)
     val payAmount = minOf(loan.installmentAmount.takeIf { it > 0 } ?: leftToPay, leftToPay)
     val total = totalInstallments(loan)
-    val nextDue = JalaliDate.nextDueTimestamp(loan.dueDay, System.currentTimeMillis() + DAY_MS * 2)
+    // قسط بعد از همین پرداخت: ماهی که این پرداخت صاف می‌کند هم پرداخت‌شده حساب می‌شود. یک بار هنگام باز شدن
+    // شیت حساب می‌شود؛ بعد از تأیید، خود این پرداخت به فهرست اضافه می‌شود و نباید دو بار حساب شود.
+    val nextDue = remember(loan.id) {
+        val now = System.currentTimeMillis()
+        val paid = payments.filter { it.loanId == loan.id }.map { it.monthKey }.toSet()
+        JalaliDate.nextUnpaidDueTimestamp(loan.dueDay, paid + JalaliDate.settledMonthKey(loan.dueDay, now, paid), now)
+    }
 
     Box(Modifier.fillMaxSize().background(Color(0x990E1116)).pointerInput(Unit) { detectTapGestures { onDismiss() } }) {
         Column(

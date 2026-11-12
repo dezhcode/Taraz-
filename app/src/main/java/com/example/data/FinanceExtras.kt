@@ -133,6 +133,9 @@ interface RecurringDao {
     @Query("SELECT * FROM recurring_transactions WHERE enabled = 1")
     suspend fun getEnabled(): List<RecurringTransaction>
 
+    @Query("SELECT * FROM recurring_transactions WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Int): RecurringTransaction?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(item: RecurringTransaction): Long
 

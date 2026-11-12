@@ -257,6 +257,10 @@ class FinanceRepository(private val db: AppDatabase) {
         )
         transactionDao.insertTransaction(merged)
         bankCardDao.adjustBalance(merged.bankName, signed(merged))
+        // چک وصول‌شده‌ای که این تراکنش را ساخته با آن هم‌خوان می‌ماند (مبلغ، حساب، دسته).
+        chequeDao.getAllNow().filter { it.transactionId == old.id }.forEach { c ->
+            chequeDao.insert(c.copy(amount = merged.amount, bankName = merged.bankName, category = merged.category))
+        }
         val loanId = old.loanId
         if (loanId != null && merged.amount != old.amount) {
             loanDao.getById(loanId)?.let { loan ->
@@ -376,11 +380,15 @@ class FinanceRepository(private val db: AppDatabase) {
         val today = JalaliDate.fromTimestamp(now)
         val key = today.monthKey()
         var count = 0
-        for (item in recurringDao.getEnabled()) {
-            if (item.lastRunKey >= key) continue
-            val day = item.dayOfMonth.coerceIn(1, 31).coerceAtMost(JalaliDate.daysInMonth(today.year, today.month))
+        for (listed in recurringDao.getEnabled()) {
+            if (listed.lastRunKey >= key) continue
+            val day = listed.dayOfMonth.coerceIn(1, 31).coerceAtMost(JalaliDate.daysInMonth(today.year, today.month))
             if (today.day < day) continue
-            db.withTransaction {
+            val recorded = db.withTransaction {
+                // دوباره و داخل همان تراکنش خوانده می‌شود: باز شدن برنامه و کار روزانهٔ پس‌زمینه ممکن است
+                // هم‌زمان اجرا شوند و هر دو همان مورد را برای این ماه ثبت کنند.
+                val item = recurringDao.getById(listed.id)?.takeIf { it.enabled && it.lastRunKey < key }
+                    ?: return@withTransaction false
                 insertTransaction(
                     Transaction(
                         title = item.title, amount = item.amount, category = item.category,
@@ -390,8 +398,9 @@ class FinanceRepository(private val db: AppDatabase) {
                     )
                 )
                 recurringDao.insert(item.copy(lastRunKey = key))
+                true
             }
-            count++
+            if (recorded) count++
         }
         return count
     }

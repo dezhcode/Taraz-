@@ -38,7 +38,7 @@ import com.example.data.Bill
 import com.example.data.BillKind
 import com.example.utils.JalaliDate
 
-private fun billDays(b: Bill): Int = ((startOfDay(b.dueDate) - startOfDay(System.currentTimeMillis())) / DAY_MS).toInt()
+private fun billDays(b: Bill): Int = JalaliDate.daysUntil(b.dueDate)
 
 /** قبض‌هایی که تا سه روز دیگر یا زودتر موعدشان است */
 fun billsDueSoon(bills: List<Bill>): Int = bills.count { it.enabled && billDays(it) <= 3 }

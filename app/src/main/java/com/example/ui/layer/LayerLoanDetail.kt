@@ -79,7 +79,12 @@ fun LayerLoanDetailScreen(
     var askDelete by remember { mutableStateOf(false) }
 
     val history = remember(transactions, loan) {
-        transactions.filter { it.isExpense && it.category == "قسط" && it.title.contains(loan.loanName) }
+        // پرداخت‌های همین وام از روی شناسه‌اش؛ عنوان فقط برای ثبت‌های قدیمی بی‌شناسه. با «contains» تنها،
+        // پرداخت‌های «وام مسکن» در تاریخچهٔ «وام» هم می‌آمد.
+        transactions.filter {
+            it.loanId == loan.id ||
+                (it.loanId == null && it.isExpense && it.category == "قسط" && it.title.trim() == "پرداخت قسط ${loan.loanName}".trim())
+        }
             .sortedByDescending { it.date }.take(6)
     }
 
