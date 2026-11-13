@@ -749,6 +749,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
     fun saveAsset(asset: Asset) {
         if (asset.quantity <= 0) return
+        // صندوقی که از جست‌وجو انتخاب شد: قیمتش همان لحظه، پیش از دریافت تازه
+        if (asset.code !in _prices.value) searchedFundQuotes[asset.code]?.let { _prices.value = _prices.value + (asset.code to it) }
         viewModelScope.launch {
             repository.saveAsset(asset)
             refreshPrices(force = asset.manualPrice <= 0 && _prices.value[asset.code] == null)
@@ -827,15 +829,24 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { repository.deleteAsset(id) }
     }
 
+    /** قیمت صندوق‌هایی که در جست‌وجو دیده شدند (به تومان)، تا با ذخیرهٔ صندوق قیمتش فوراً معلوم باشد */
+    private val searchedFundQuotes = mutableMapOf<String, PriceQuote>()
+
     fun searchFunds(query: String, onResult: (List<FundMatch>, String?) -> Unit) {
         viewModelScope.launch {
             try {
-                onResult(PriceService.searchFunds(query), null)
+                val k = bookPerToman()
+                val now = System.currentTimeMillis()
+                val list = PriceService.searchFunds(getApplication(), query).map { m ->
+                    m.priceToman?.let { searchedFundQuotes[m.code] = PriceQuote.of(it, m.changePct, now, m.source) }
+                    m.copy(price = m.priceToman?.let { p -> k?.let { p * it } })
+                }
+                onResult(list, null)
             } catch (e: Exception) {
                 onResult(
                     emptyList(),
-                    "سایت بورس پاسخ نداد (${e.message ?: e.javaClass.simpleName}). اگر فیلترشکن روشن است خاموش کنید؛ " +
-                        "سایت بورس به نشانی‌های خارج از ایران پاسخ نمی‌دهد. صندوق را می‌توانید با نام و قیمت دستی هم ثبت کنید."
+                    "فهرست صندوق‌ها دریافت نشد (${e.message ?: e.javaClass.simpleName}). اگر فیلترشکن روشن است خاموش کنید؛ " +
+                        "سایت‌های فیپیران و بورس به نشانی‌های خارج از ایران پاسخ نمی‌دهند. صندوق را می‌توانید با نام و قیمت دستی هم ثبت کنید."
                 )
             }
         }

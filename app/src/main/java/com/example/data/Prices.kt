@@ -39,7 +39,22 @@ fun valueOf(a: Asset, prices: Map<String, PriceQuote>): Long = Math.round(unitPr
 data class CatalogItem(val code: String, val name: String, val kind: String, val unit: String)
 
 /** A fund found on the stock exchange (TSETMC). */
-data class FundMatch(val insCode: String, val symbol: String, val name: String)
+data class FundMatch(
+    val insCode: String,
+    val symbol: String,
+    val name: String,
+    /** The asset code to save: "fund:<insCode>" (exchange price, NAV as fallback) or "fund:fip:<regNo>" (NAV only). */
+    val code: String = "fund:$insCode",
+    /** Today's unit price in toman when known (NAV for funds), and its daily change. */
+    val priceToman: Double? = null,
+    val changePct: Double? = null,
+    val source: String = "",
+    /** The same price in the book's currency; the ViewModel fills it in for the screen. */
+    val price: Double? = null
+)
+
+/** A fund in Fipiran's list: every Iranian investment fund with its NAV (rials), traded or not. */
+data class FundInfo(val regNo: String, val name: String, val symbol: String, val insCode: String, val navRial: Double, val changePct: Double?)
 
 /** What can be priced automatically, and where each price is read from. */
 object PriceCatalog {
@@ -83,6 +98,9 @@ object PriceCatalog {
 
     fun isFund(code: String) = code.startsWith("fund:")
     fun fundInsCode(code: String) = code.removePrefix("fund:")
+    /** A fund priced only by its NAV from Fipiran (funds not traded on the exchange). */
+    fun isFipiran(code: String) = code.startsWith("fund:fip:")
+    fun fipRegNo(code: String) = code.removePrefix("fund:fip:")
 }
 
 /**
@@ -228,7 +246,17 @@ object PriceService {
                     }
                 } catch (_: Exception) {}
             }
-            for (code in codes.filter { PriceCatalog.isFund(it) }) async {
+            // صندوق‌ها: فهرست فیپیران (قیمت ابطال همهٔ صندوق‌ها با یک درخواست) و قیمت بازار بورس برای صندوق‌های بورسی
+            val fundCodes = codes.filter { PriceCatalog.isFund(it) }
+            val directory = if (fundCodes.isEmpty()) null else async {
+                try { fundDirectory(context) } catch (e: Exception) { errors["فیپیران"] = reason(e); null }
+            }
+            fun fromDirectory(f: FundInfo) = PriceQuote.of(f.navRial / 10, f.changePct, now, "fipiran")
+            for (code in fundCodes) async {
+                if (PriceCatalog.isFipiran(code)) {
+                    directory?.await()?.firstOrNull { it.regNo == PriceCatalog.fipRegNo(code) }?.let { fresh[code] = fromDirectory(it) }
+                    return@async
+                }
                 val ins = PriceCatalog.fundInsCode(code)
                 try {
                     val info = JSONObject(get("https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceInfo/$ins", referer = TSE_REFERER))
@@ -245,7 +273,11 @@ object PriceService {
                         val last = num(f.getOrNull(2))?.takeIf { it > 0 } ?: num(f.getOrNull(3))?.takeIf { it > 0 } ?: throw java.io.IOException("پاسخ نامعتبر")
                         val yesterday = num(f.getOrNull(5))?.takeIf { it > 0 }
                         fresh[code] = PriceQuote.of(last / 10, yesterday?.let { (last - it) * 100 / it }, now, "tsetmc")
-                    } catch (e2: Exception) { errors["بورس"] = reason(e) + " / " + reason(e2) }
+                    } catch (e2: Exception) {
+                        // سایت بورس جواب نداد: قیمت ابطال همان صندوق از فیپیران
+                        val f = directory?.await()?.firstOrNull { it.insCode == ins }
+                        if (f != null) fresh[code] = fromDirectory(f) else errors["بورس"] = reason(e) + " / " + reason(e2)
+                    }
                 }
             }
         }
@@ -342,34 +374,117 @@ object PriceService {
 
     private fun faLetters(s: String) = s.replace('ي', 'ی').replace('ك', 'ک').trim()
 
-    /**
-     * Funds and other instruments on the stock exchange whose name or symbol matches [query]. Tries
-     * the exchange site's API, then its older address; if both fail, throws with both reasons so the
-     * screen can say what went wrong ("HTTP 403", "سایت پیدا نشد"…).
-     */
-    suspend fun searchFunds(query: String): List<FundMatch> = withContext(Dispatchers.IO) {
+    private const val FUND_FILE = "fund_directory.json"
+    private const val FUND_MAX_AGE = 3 * 60 * 60 * 1000L
+
+    private fun norm(s: String) = faLetters(s).lowercase().replace("\u200c", "").replace(" ", "")
+
+    /** Fipiran's list of funds (prices in rials), parsed leniently: the field names are read with fallbacks. */
+    internal fun parseFunds(text: String): List<FundInfo> {
+        val t = text.trim()
+        val arr = if (t.startsWith("[")) JSONArray(t) else JSONObject(t).let { o ->
+            o.optJSONArray("items") ?: o.optJSONArray("data") ?: o.optJSONArray("result") ?: o.optJSONObject("data")?.optJSONArray("items") ?: JSONArray()
+        }
+        return (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.mapNotNull { o ->
+            fun str(vararg keys: String) = keys.firstNotNullOfOrNull { k -> o.optString(k).takeIf { it.isNotBlank() && it != "null" } }.orEmpty()
+            val nav = listOf("cancelNav", "statisticalNav", "issueNav", "nav").firstNotNullOfOrNull { k -> num(o.opt(k))?.takeIf { it > 0 } }
+                ?: return@mapNotNull null
+            val reg = str("regNo", "regNumber", "id").ifBlank { return@mapNotNull null }
+            FundInfo(
+                regNo = reg, name = faLetters(str("name", "fundName", "title")), symbol = faLetters(str("smallSymbolName", "symbol", "insName")),
+                insCode = str("insCode"), navRial = nav, changePct = num(o.opt("dailyEfficiency"))
+            )
+        }
+    }
+
+    /** The fund list, from the phone if read in the last three hours, else from Fipiran (the old copy if that fails). */
+    internal suspend fun fundDirectory(context: Context): List<FundInfo> = withContext(Dispatchers.IO) {
+        val f = java.io.File(context.filesDir, FUND_FILE)
+        if (f.exists() && System.currentTimeMillis() - f.lastModified() < FUND_MAX_AGE) {
+            runCatching { parseFunds(f.readText()) }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return@withContext it }
+        }
+        try {
+            val text = get("https://fund.fipiran.ir/api/v1/fund/fundcompare", referer = "https://fund.fipiran.ir/")
+            val list = parseFunds(text)
+            if (list.isEmpty()) throw java.io.IOException("فهرست خالی")
+            runCatching { f.writeText(text) }
+            list
+        } catch (e: Exception) {
+            if (f.exists()) runCatching { parseFunds(f.readText()) }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return@withContext it }
+            throw e
+        }
+    }
+
+    /** TSETMC's search: its API, then its older address; throws with both reasons. */
+    private fun tseSearch(query: String): List<FundMatch> {
         // TSETMC writes with Arabic ي and ك.
         val q = query.trim().replace('ی', 'ي').replace('ک', 'ك')
-        if (q.length < 2) return@withContext emptyList()
         val enc = URLEncoder.encode(q, "UTF-8").replace("+", "%20")
         val why = mutableListOf<String>()
         try {
             val arr: JSONArray = JSONObject(get("https://cdn.tsetmc.com/api/Instrument/GetInstrumentSearch/$enc", referer = TSE_REFERER))
                 .optJSONArray("instrumentSearch") ?: JSONArray()
-            return@withContext (0 until arr.length()).map { arr.getJSONObject(it) }.map { o ->
+            return (0 until arr.length()).map { arr.getJSONObject(it) }.map { o ->
                 FundMatch(insCode = o.optString("insCode"), symbol = faLetters(o.optString("lVal18AFC")), name = faLetters(o.optString("lVal30")))
             }.filter { it.insCode.isNotBlank() }.take(20)
         } catch (e: Exception) { why += "tsetmc: " + reason(e) }
         try {
             // «نماد,نام,کد,…;نماد,نام,کد,…»
             val text = get("https://old.tsetmc.com/tsev2/data/search.aspx?skey=$enc", referer = "https://old.tsetmc.com/")
-            return@withContext text.split(';').mapNotNull { rec ->
+            return text.split(';').mapNotNull { rec ->
                 val f = rec.split(',')
                 val ins = f.firstOrNull { it.trim().length in 12..20 && it.trim().all(Char::isDigit) }?.trim() ?: return@mapNotNull null
                 FundMatch(insCode = ins, symbol = faLetters(f.getOrNull(0).orEmpty()), name = faLetters(f.getOrNull(1).orEmpty()))
             }.distinctBy { it.insCode }.take(20)
         } catch (e: Exception) { why += "old.tsetmc: " + reason(e) }
         throw java.io.IOException(why.joinToString(" · "))
+    }
+
+    /**
+     * Funds (and other exchange instruments) whose name or symbol matches [query], each with today's
+     * unit price where one is found: Fipiran's list (every fund, with its NAV) and the exchange's search
+     * are asked together. A traded fund keeps its exchange code, so its market price is used and the
+     * NAV only when the exchange does not answer. Throws only when both sources failed.
+     */
+    suspend fun searchFunds(context: Context, query: String): List<FundMatch> = withContext(Dispatchers.IO) {
+        val qn = norm(query)
+        if (qn.length < 2) return@withContext emptyList()
+        coroutineScope {
+            val dirJob = async { runCatching { fundDirectory(context) } }
+            val tseJob = async { runCatching { tseSearch(query) } }
+            val dir = dirJob.await()
+            val tse = tseJob.await()
+            if (dir.isFailure && tse.isFailure) {
+                throw java.io.IOException("فیپیران: ${dir.exceptionOrNull()?.let { reason(it) }} · ${tse.exceptionOrNull()?.message}")
+            }
+            val all = dir.getOrNull().orEmpty()
+            val byIns = all.filter { it.insCode.isNotBlank() }.associateBy { it.insCode }
+            val fromDir = all.filter { norm(it.name).contains(qn) || norm(it.symbol).contains(qn) }.take(20).map { f ->
+                FundMatch(
+                    insCode = f.insCode, symbol = f.symbol.ifBlank { f.name }, name = f.name,
+                    code = if (f.insCode.isNotBlank()) "fund:${f.insCode}" else "fund:fip:${f.regNo}",
+                    priceToman = f.navRial / 10, changePct = f.changePct, source = "fipiran"
+                )
+            }
+            // نتیجه‌های بورس: قیمت ابطال اگر در فهرست فیپیران هست، وگرنه آخرین قیمت بورس (چند مورد اول)
+            val fromTse = tse.getOrNull().orEmpty().filter { m -> fromDir.none { it.code == m.code } }.mapIndexed { i, m ->
+                val f = byIns[m.insCode]
+                when {
+                    f != null -> async { m.copy(priceToman = f.navRial / 10, changePct = f.changePct, source = "fipiran") }
+                    i < 6 -> async {
+                        runCatching {
+                            val info = JSONObject(get("https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceInfo/${m.insCode}", referer = TSE_REFERER))
+                                .getJSONObject("closingPriceInfo")
+                            val last = num(info.opt("pDrCotVal"))?.takeIf { it > 0 } ?: num(info.opt("pClosing"))?.takeIf { it > 0 }
+                            val y = num(info.opt("priceYesterday"))?.takeIf { it > 0 }
+                            if (last == null) m else m.copy(priceToman = last / 10, changePct = y?.let { (last - it) * 100 / it }, source = "tsetmc")
+                        }.getOrDefault(m)
+                    }
+                    else -> async { m }
+                }
+            }.map { it.await() }
+            (fromDir + fromTse).distinctBy { it.code }.take(25)
+        }
     }
 }
 

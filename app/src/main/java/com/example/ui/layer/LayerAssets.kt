@@ -117,6 +117,7 @@ internal fun sourceLabel(s: String): String = when (s) {
     "wallex" -> "والکس"
     "bitpin" -> "بیت‌پین"
     "tsetmc" -> "بورس"
+    "fipiran" -> "فیپیران · قیمت ابطال"
     "intl" -> "نرخ جهانی"
     "intl-gold" -> "نرخ جهانی طلا"
     else -> if (s.endsWith("-usdt")) "نرخ تتر" else s
@@ -548,7 +549,8 @@ fun AssetSheet(
 
     val qty = parseQuantity(qtyText)
     val manual = parseAmount(manualText)
-    val livePrice = code?.let { prices[it]?.exact }
+    var pickedPrice by remember { mutableStateOf<Double?>(null) }
+    val livePrice = code?.let { prices[it]?.exact } ?: pickedPrice
     val unit = if (manual > 0) manual.toDouble() else livePrice ?: 0.0
     // صندوق بدون انتخاب از بورس هم با قیمت دستی قابل ثبت است
     val ok = qty > 0 && name.isNotBlank() && (code != null || manual > 0)
@@ -585,10 +587,10 @@ fun AssetSheet(
                 LField(
                     value = query, onChange = { query = it }, label = "نام یا نماد صندوق",
                     placeholder = "مثلاً عیار، طلا، کهربا، فیروزه",
-                    hint = "صندوق‌هایی که در بورس معامله می‌شوند قیمت روز دارند؛ سایر صندوق‌ها را با قیمت دستی ثبت کنید."
+                    hint = "قیمت هر واحد خودکار است: صندوق‌های بورسی با قیمت بازار، بقیه با قیمت ابطال (فیپیران)."
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SoftButton(if (searching) "در حال جست‌وجو…" else "جست‌وجو در بورس", height = 38.dp) {
+                    SoftButton(if (searching) "در حال جست‌وجو…" else "جست‌وجوی صندوق", height = 38.dp) {
                         if (!searching && query.trim().length >= 2) {
                             searching = true
                             onSearchFunds(query) { list, err ->
@@ -602,15 +604,24 @@ fun AssetSheet(
                 if (results.isNotEmpty()) {
                     LayerCard(radius = 16.dp, padding = 0.dp) {
                         results.forEachIndexed { i, r ->
-                            val on = code == "fund:${r.insCode}"
+                            val on = code == r.code
                             Row(
-                                Modifier.fillMaxWidth().clickable { code = "fund:${r.insCode}"; name = r.symbol.ifBlank { r.name } }
+                                Modifier.fillMaxWidth().clickable { code = r.code; name = r.symbol.ifBlank { r.name }; pickedPrice = r.price }
                                     .background(if (on) L.PrimarySoft else Color.Transparent).padding(horizontal = 12.dp, vertical = 9.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 Column(Modifier.weight(1f)) {
-                                    Text(r.symbol, style = lt(14.sp, FontWeight.SemiBold, if (on) L.PrimaryText else L.Ink))
+                                    Text(r.symbol, style = lt(14.sp, FontWeight.SemiBold, if (on) L.PrimaryText else L.Ink), maxLines = 1)
                                     Text(r.name, style = lt(11.sp, color = L.Muted), maxLines = 1)
+                                }
+                                // قیمت هر واحد و تغییر امروز
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(r.price?.let { unitPriceText(it) } ?: "—", style = lt(13.sp, FontWeight.Bold))
+                                    Text(
+                                        r.changePct?.let { signedPct(it) } ?: if (r.price != null) "هر واحد" else "بدون قیمت",
+                                        style = lt(10.sp, color = when { r.changePct == null -> L.Muted; r.changePct >= 0 -> L.GreenText; else -> L.RedText })
+                                    )
                                 }
                             }
                             if (i < results.size - 1) Box(Modifier.fillMaxWidth().height(1.dp).background(L.Line))
@@ -627,6 +638,9 @@ fun AssetSheet(
             placeholder = "مثلاً ۱۰ یا ۰٫۰۰۵",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
         )
+        if (kind == AssetKind.FUND && manual <= 0 && livePrice != null && qty <= 0) {
+            Text("قیمت هر واحد: ${unitPriceText(livePrice)} ${com.example.data.Money.label} (خودکار)", style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText))
+        }
         if (unit > 0 && qty > 0) {
             Text(
                 "ارزش امروز: ${money((unit * qty).roundToLong())} ${com.example.data.Money.label}" +
@@ -637,7 +651,7 @@ fun AssetSheet(
         }
         LField(
             value = buyText, onChange = { buyText = groupedInput(it) }, label = "بهای تمام‌شده (اختیاری، ${com.example.data.Money.label})",
-            keyboardOptions = moneyKeyboard, hint = "برای محاسبهٔ سود یا زیان"
+            keyboardOptions = moneyKeyboard, hint = "مبلغ کلی که برای این مقدار پرداختید؛ سود یا زیان با قیمت روز حساب می‌شود."
         )
         LField(
             value = manualText, onChange = { manualText = groupedInput(it) }, label = "قیمت هر واحد به‌صورت دستی (اختیاری)",
