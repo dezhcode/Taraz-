@@ -590,7 +590,13 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
     private fun inBookUnit(raw: Map<String, PriceQuote>): Map<String, PriceQuote> {
         val usd = raw["usd"]?.price
-        return raw.mapNotNull { (k, q) -> com.example.data.Money.fromToman(q.price, usd)?.let { k to q.copy(price = it) } }.toMap()
+        // ضریب تومان → واحد دفتر؛ کسر حفظ می‌شود (یک شیبا حدود یک تومان است)
+        val k = when (com.example.data.Money.current) {
+            com.example.data.AppCurrency.TOMAN -> 1.0
+            com.example.data.AppCurrency.RIAL -> 10.0
+            com.example.data.AppCurrency.USD -> usd?.takeIf { it > 0 }?.let { 100.0 / it } ?: return emptyMap()
+        }
+        return raw.mapValues { (_, q) -> PriceQuote.of(q.exact * k, q.changePct, q.at, q.source) }
     }
 
     private val _pricesRefreshing = MutableStateFlow(false)
@@ -601,14 +607,24 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     val priceErrors: StateFlow<List<String>> = _priceErrors.asStateFlow()
 
     /** قیمت هر واحد: قیمت دستی کاربر، وگرنه قیمت روز */
-    fun unitPrice(asset: Asset): Long = if (asset.manualPrice > 0) asset.manualPrice else prices.value[asset.code]?.price ?: 0L
+    fun unitPrice(asset: Asset): Long = Math.round(com.example.data.unitPriceOf(asset, prices.value))
 
-    /** قیمت‌های روز را می‌گیرد؛ بی [force] اگر کمتر از ۱۰ دقیقه از آخرین بار گذشته کاری نمی‌کند */
+    /** آخرین باری که از سایت‌ها قیمت گرفته شد (موفق یا ناموفق) */
+    @Volatile private var lastPriceFetch = 0L
+
+    /**
+     * قیمت‌های روز را از سایت‌ها می‌گیرد. صفحهٔ دارایی‌ها هر بار که باز یا دیده می‌شود و تا وقتی باز
+     * است هر دو دقیقه این را صدا می‌زند؛ بی [force] فقط اگر کمتر از ۳۰ ثانیه از دریافت قبلی گذشته
+     * باشد و همهٔ قیمت‌ها در دست باشند کاری نمی‌کند.
+     */
     fun refreshPrices(force: Boolean = false) {
         if (_pricesRefreshing.value) return
-        val codes = assets.value.filter { it.manualPrice <= 0 }.map { it.code }.toSet() + setOf("usd", "gold18", "coin_emami", "btc", "usdt")
-        val newest = codes.mapNotNull { _prices.value[it]?.at }.minOrNull() ?: 0L
-        if (!force && System.currentTimeMillis() - newest < 10 * 60 * 1000L) return
+        val codes = assets.value.filter { it.manualPrice <= 0 && !it.code.startsWith("manual:") }.map { it.code }.toSet() +
+            setOf("usd", "gold18", "coin_emami", "btc", "usdt")
+        val now = System.currentTimeMillis()
+        val haveAll = codes.all { it in _prices.value }
+        if (!force && haveAll && now - lastPriceFetch < 30_000L) return
+        lastPriceFetch = now
         viewModelScope.launch {
             _pricesRefreshing.value = true
             try {
@@ -663,7 +679,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     /** همان دارایی خالص صفحهٔ دارایی‌ها: حساب‌ها + دارایی‌ها − قرض و قسط و بدهی به اشخاص */
     fun currentNetWorth(): Long {
         val accounts = cards.value.sumOf { it.balance }
-        val held = assets.value.sumOf { (unitPrice(it) * it.quantity).toLong() }
+        val held = assets.value.sumOf { com.example.data.valueOf(it, prices.value) }
         val owed = loans.value.filter { !it.isSettled }.sumOf { (it.totalAmount - it.paidAmount).coerceAtLeast(0) } +
             personBalances.value.values.filter { it < 0 }.sumOf { -it }
         return accounts + held - owed

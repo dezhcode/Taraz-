@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.data.Asset
 import com.example.data.AssetKind
 import com.example.data.FundMatch
@@ -75,8 +76,21 @@ fun parseQuantity(text: String): Double {
     return latin.toDoubleOrNull() ?: 0.0
 }
 
-private fun agoText(at: Long): String {
-    val min = ((System.currentTimeMillis() - at) / 60_000).toInt()
+/**
+ * قیمت هر واحد برای نمایش. قیمت‌های بزرگ گرد می‌شوند؛ قیمت کمتر از ۱۰ واحد (مثل شیبا به تومان یا
+ * بیشتر رمزارزها به سنت در دفتر دلاری) با اعشار، تا چهار رقم معنادار.
+ */
+fun unitPriceText(exact: Double): String {
+    val dec = com.example.data.Money.current.decimals
+    val major = exact / Math.pow(10.0, dec.toDouble())
+    if (major >= 10 || exact <= 0) return money(Math.round(exact))
+    val digits = (3 - kotlin.math.floor(kotlin.math.log10(major)).toInt()).coerceIn(dec, 10)
+    val s = java.math.BigDecimal(major).setScale(digits, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
+    return fa(s.replace('.', '٫'))
+}
+
+private fun agoText(at: Long, now: Long = System.currentTimeMillis()): String {
+    val min = ((now - at) / 60_000).toInt()
     return when {
         min < 1 -> "هم‌اکنون"
         min < 60 -> "${fa(min)} دقیقه پیش"
@@ -105,9 +119,21 @@ fun LayerAssetsScreen(
     onOpen: (Asset) -> Unit,
     snapshots: List<com.example.data.NetWorthSnapshot> = emptyList()
 ) {
-    LaunchedEffect(Unit) { onRefresh(false) }
-    fun unit(a: Asset) = if (a.manualPrice > 0) a.manualPrice else prices[a.code]?.price ?: 0L
-    fun value(a: Asset) = (unit(a) * a.quantity).roundToLong()
+    // هر بار که صفحه دیده می‌شود (باز شدن، برگشتن از برنامهٔ دیگر) قیمت تازه، و تا وقتی باز است هر دو دقیقه
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            while (true) {
+                onRefresh(false)
+                kotlinx.coroutines.delay(120_000)
+            }
+        }
+    }
+    // «۳ دقیقه پیش» با گذر زمان به‌روز بماند
+    var clock by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(30_000); clock = System.currentTimeMillis() } }
+    fun unit(a: Asset) = com.example.data.unitPriceOf(a, prices)
+    fun value(a: Asset) = com.example.data.valueOf(a, prices)
     val assetsTotal = assets.sumOf { value(it) }
     val net = accountsTotal + assetsTotal - debtsTotal
     val lastAt = assets.filter { it.manualPrice <= 0 }.mapNotNull { prices[it.code]?.at }.minOrNull()
@@ -116,7 +142,7 @@ fun LayerAssetsScreen(
     LayerScreen(
         title = "دارایی‌ها",
         subtitle = if (refreshing) "در حال دریافت قیمت‌های روز…"
-        else lastAt?.let { "قیمت‌ها: ${agoText(it)}" } ?: "ارز، طلا، رمزارز و صندوق با قیمت روز",
+        else lastAt?.let { "قیمت‌ها: ${agoText(it, clock)}" } ?: "ارز، طلا، رمزارز و صندوق با قیمت روز",
         onBack = onBack,
         trailing = {
             Box(
@@ -190,6 +216,8 @@ fun LayerAssetsScreen(
                         val u = unit(a)
                         val v = value(a)
                         val profit = if (a.buyPrice > 0 && u > 0) v - a.buyPrice else null
+                        // قیمتی که این بار نرسید و از قبل مانده
+                        val stale = q != null && a.manualPrice <= 0 && clock - q.at > 30 * 60_000L
                         Row(
                             Modifier.fillMaxWidth().clickable { onOpen(a) }.padding(horizontal = 14.dp, vertical = 11.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -202,9 +230,10 @@ fun LayerAssetsScreen(
                                 Text(a.name, style = lt(14.sp, FontWeight.SemiBold), maxLines = 1)
                                 Text(
                                     "${faQuantity(a.quantity)} ${PriceCatalog.find(a.code)?.unit ?: "واحد"} · " +
-                                        (if (u > 0) "هر واحد ${money(u)}" else "قیمت نامعلوم") +
-                                        (if (a.manualPrice > 0) " (دستی)" else ""),
-                                    style = lt(11.sp, color = L.Muted), maxLines = 1
+                                        (if (u > 0) "هر واحد ${unitPriceText(u)}" else "قیمت نامعلوم") +
+                                        (if (a.manualPrice > 0) " (دستی)" else "") +
+                                        (if (stale) " · ${agoText(q!!.at, clock)}" else ""),
+                                    style = lt(11.sp, color = if (stale) L.AmberInk else L.Muted), maxLines = 1
                                 )
                             }
                             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -261,8 +290,8 @@ fun AssetSheet(
 
     val qty = parseQuantity(qtyText)
     val manual = parseAmount(manualText)
-    val livePrice = code?.let { prices[it]?.price }
-    val unit = if (manual > 0) manual else livePrice ?: 0L
+    val livePrice = code?.let { prices[it]?.exact }
+    val unit = if (manual > 0) manual.toDouble() else livePrice ?: 0.0
     // صندوق بدون انتخاب از بورس هم با قیمت دستی قابل ثبت است
     val ok = qty > 0 && name.isNotBlank() && (code != null || manual > 0)
 
@@ -342,7 +371,7 @@ fun AssetSheet(
         )
         if (unit > 0 && qty > 0) {
             Text(
-                "ارزش امروز: ${money((unit * qty).roundToLong())} ${com.example.data.Money.label}" + if (manual <= 0 && livePrice != null) " (هر واحد ${money(livePrice)})" else "",
+                "ارزش امروز: ${money((unit * qty).roundToLong())} ${com.example.data.Money.label}" + if (manual <= 0 && livePrice != null) " (هر واحد ${unitPriceText(livePrice)})" else "",
                 style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText)
             )
         }

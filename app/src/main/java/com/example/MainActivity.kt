@@ -170,10 +170,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 val netWorthSnapshots by viewModel.netWorthSnapshots.collectAsStateWithLifecycle()
                 val homeLayout by viewModel.homeLayout.collectAsStateWithLifecycle()
                 val homeTools by viewModel.homeTools.collectAsStateWithLifecycle()
-                val assetsTotal = assets.sumOf { a ->
-                    val u = if (a.manualPrice > 0) a.manualPrice else prices[a.code]?.price ?: 0L
-                    kotlin.math.round(u * a.quantity).toLong()
-                }
+                val assetsTotal = assets.sumOf { com.example.data.valueOf(it, prices) }
                 var assetSheetFor by remember { mutableStateOf<com.example.data.Asset?>(null) }
                 var isAssetSheetOpen by remember { mutableStateOf(false) }
 
