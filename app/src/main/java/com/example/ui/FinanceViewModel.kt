@@ -786,6 +786,17 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun updateTrade(old: AssetTrade, isBuy: Boolean, quantity: Double, total: Long, date: Long, bankName: String?) {
+        viewModelScope.launch {
+            try { repository.updateTrade(old, isBuy, quantity, total, date, bankName) }
+            catch (e: Exception) { _priceErrors.value = listOf("ویرایش نشد: ${e.message ?: e.javaClass.simpleName}") }
+        }
+    }
+
+    fun deleteAssetWithTrades(asset: Asset, undoMoney: Boolean) {
+        viewModelScope.launch { repository.deleteAssetWithTrades(asset, undoMoney) }
+    }
+
     fun deleteTrade(trade: AssetTrade) {
         viewModelScope.launch { repository.deleteTrade(trade) }
     }

@@ -533,8 +533,15 @@ fun AssetSheet(
     onSave: (Asset) -> Unit,
     onDelete: (Asset) -> Unit,
     /** از دکمهٔ «+» بازار: (کد، نام) از پیش انتخاب‌شده */
-    preset: Pair<String, String>? = null
+    preset: Pair<String, String>? = null,
+    /** خرید و فروش‌های ثبت‌شدهٔ این دارایی؛ اگر هست، مقدار و بهای خرید از روی آن‌هاست و این‌جا قفل است */
+    trades: List<com.example.data.AssetTrade> = emptyList(),
+    /** حذف دارایی با سابقه‌اش؛ true یعنی تراکنش‌های بانکی آن خرید و فروش‌ها هم برگردانده شوند */
+    onDeleteWithTrades: (Asset, Boolean) -> Unit = { a, _ -> onDelete(a) }
 ) {
+    // مقدار و بهای خرید دارایی‌ای که سابقهٔ خرید و فروش دارد فقط با ثبت یا ویرایش همان معامله‌ها عوض می‌شود
+    val locked = existing != null && trades.isNotEmpty()
+    var askDelete by remember { mutableStateOf(false) }
     val presetKind = preset?.first?.let { if (PriceCatalog.isFund(it)) AssetKind.FUND else PriceCatalog.find(it)?.kind }
     var kind by remember { mutableStateOf(existing?.kind ?: presetKind ?: AssetKind.CURRENCY) }
     var code by remember { mutableStateOf(existing?.code ?: preset?.first) }
@@ -553,7 +560,7 @@ fun AssetSheet(
     val livePrice = code?.let { prices[it]?.exact } ?: pickedPrice
     val unit = if (manual > 0) manual.toDouble() else livePrice ?: 0.0
     // صندوق بدون انتخاب از بورس هم با قیمت دستی قابل ثبت است
-    val ok = qty > 0 && name.isNotBlank() && (code != null || manual > 0)
+    val ok = (locked || qty > 0) && name.isNotBlank() && (code != null || manual > 0)
 
     LayerSheet(
         title = if (existing == null) "دارایی جدید" else "ویرایش ${existing.name}",
@@ -564,13 +571,14 @@ fun AssetSheet(
                 onSave(
                     (existing ?: Asset(code = "", name = "", kind = kind, quantity = 0.0)).copy(
                         code = code ?: "manual:${System.currentTimeMillis()}",
-                        name = name.trim(), kind = kind, quantity = qty,
-                        buyPrice = parseAmount(buyText), manualPrice = manual
+                        name = name.trim(), kind = kind,
+                        quantity = if (locked) existing!!.quantity else qty,
+                        buyPrice = if (locked) existing!!.buyPrice else parseAmount(buyText), manualPrice = manual
                     )
                 )
                 onDismiss()
             }
-            if (existing != null) SoftBigButton("حذف این دارایی") { onDelete(existing); onDismiss() }
+            if (existing != null) SoftBigButton("حذف این دارایی") { if (trades.isEmpty()) { onDelete(existing); onDismiss() } else askDelete = true }
         }
     ) {
         if (existing == null) {
@@ -632,7 +640,23 @@ fun AssetSheet(
             }
         }
 
-        LField(
+        if (locked) {
+            val unitName = code?.let { PriceCatalog.find(it)?.unit } ?: "واحد"
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(L.PrimaryTint).padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text("مقدار: ${faQuantityShown(existing!!.quantity)} $unitName", style = lt(14.sp, FontWeight.Bold))
+                Text(
+                    "بهای خرید: " + if (existing.buyPrice > 0) "${money(existing.buyPrice)} ${com.example.data.Money.label}" else "ثبت نشده",
+                    style = lt(13.sp, FontWeight.SemiBold)
+                )
+                Text(
+                    "این‌ها از روی ${fa(trades.size)} خرید و فروش ثبت‌شده حساب می‌شوند. برای تغییرشان در صفحهٔ دارایی خرید یا فروش ثبت کنید، یا روی یکی از معامله‌ها بزنید و ویرایشش کنید.",
+                    style = lt(12.sp, color = L.Muted, lineHeight = 20.sp)
+                )
+            }
+        } else LField(
             value = qtyText, onChange = { qtyText = it.take(20) },
             label = "مقدار (${code?.let { PriceCatalog.find(it)?.unit } ?: if (kind == AssetKind.FUND) "واحد" else "واحد"})",
             placeholder = "مثلاً ۱۰ یا ۰٫۰۰۵",
@@ -649,7 +673,7 @@ fun AssetSheet(
                 style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText)
             )
         }
-        LField(
+        if (!locked) LField(
             value = buyText, onChange = { buyText = groupedInput(it) }, label = "بهای تمام‌شده (اختیاری، ${com.example.data.Money.label})",
             keyboardOptions = moneyKeyboard, hint = "مبلغ کلی که برای این مقدار پرداختید؛ سود یا زیان با قیمت روز حساب می‌شود."
         )
@@ -659,6 +683,37 @@ fun AssetSheet(
             hint = "در صورت خالی بودن، قیمت روز اعمال می‌شود."
         )
         Spacer(Modifier.height(4.dp))
+    }
+
+    if (askDelete && existing != null) {
+        val withMoney = trades.filter { it.transactionId != null }
+        var undoMoney by remember { mutableStateOf(false) }
+        LayerSheet(
+            title = "حذف ${existing.name}؟", onDismiss = { askDelete = false }, topGap = 260.dp,
+            bottomBar = {
+                BigButton("بله، حذف شود", background = L.RedText) {
+                    onDeleteWithTrades(existing, undoMoney); askDelete = false; onDismiss()
+                }
+            }
+        ) {
+            Text(
+                "این دارایی و سابقهٔ ${fa(trades.size)} خرید و فروش آن حذف می‌شود.",
+                style = lt(13.sp, color = L.Muted, lineHeight = 23.sp)
+            )
+            if (withMoney.isNotEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Text("تراکنش‌های بانکی هم برگردد", style = lt(14.sp, FontWeight.SemiBold))
+                        Text(
+                            "${fa(withMoney.size)} تراکنش روی حساب‌ها ثبت شده. اگر روشن باشد حذف می‌شوند و موجودی حساب‌ها به قبل برمی‌گردد؛ " +
+                                "اگر خاموش باشد می‌مانند (پول واقعاً جابه‌جا شده است).",
+                            style = lt(12.sp, color = L.Muted, lineHeight = 20.sp)
+                        )
+                    }
+                    LSwitch(undoMoney, "تراکنش‌های بانکی هم برگردد") { undoMoney = it }
+                }
+            }
+        }
     }
 }
 

@@ -501,8 +501,11 @@ object PriceHistory {
     fun dayOf(ms: Long): Int = ((ms + TEHRAN_OFFSET_MS) / 86_400_000L).toInt()
 
     @Synchronized
-    fun load(context: Context): Map<String, List<Pair<Int, Double>>> = try {
-        val f = java.io.File(context.filesDir, FILE)
+    fun load(context: Context): Map<String, List<Pair<Int, Double>>> = load(context.filesDir)
+
+    @Synchronized
+    fun load(dir: java.io.File): Map<String, List<Pair<Int, Double>>> = try {
+        val f = java.io.File(dir, FILE)
         if (!f.exists()) emptyMap() else {
             val o = JSONObject(f.readText())
             o.keys().asSequence().associateWith { k ->
@@ -514,25 +517,39 @@ object PriceHistory {
 
     /** Today's entry for each quote, replacing an earlier one from the same day. */
     @Synchronized
-    fun record(context: Context, quotes: Map<String, PriceQuote>) {
-        val all = load(context).mapValues { it.value.toMutableList() }.toMutableMap()
-        for ((code, q) in quotes) {
-            if (q.exact <= 0) continue
+    fun record(context: Context, quotes: Map<String, PriceQuote>) =
+        merge(context.filesDir, quotes.filterValues { it.exact > 0 }.mapValues { (_, q) -> listOf(dayOf(q.at) to q.exact) })
+
+    /** Adds [entries] (code → (day, price)); a day already there takes the new price. */
+    @Synchronized
+    fun merge(dir: java.io.File, entries: Map<String, List<Pair<Int, Double>>>) {
+        if (entries.isEmpty()) return
+        val all = load(dir).mapValues { it.value.toMutableList() }.toMutableMap()
+        for ((code, add) in entries) {
             val list = all.getOrPut(code) { mutableListOf() }
-            val day = dayOf(q.at)
-            list.removeAll { it.first == day }
-            list += day to q.exact
+            for ((day, v) in add) {
+                if (v <= 0) continue
+                list.removeAll { it.first == day }
+                list += day to v
+            }
             list.sortBy { it.first }
             while (list.size > KEEP_DAYS) list.removeAt(0)
         }
-        val o = JSONObject()
-        all.forEach { (k, list) -> o.put(k, JSONArray().apply { list.forEach { (d, v) -> put(JSONArray().put(d).put(v)) } }) }
         try {
-            val f = java.io.File(context.filesDir, FILE)
-            val tmp = java.io.File(context.filesDir, "$FILE.tmp")
-            tmp.writeText(o.toString())
+            val f = java.io.File(dir, FILE)
+            val tmp = java.io.File(dir, "$FILE.tmp")
+            tmp.writeText(toJson(all).toString())
             if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
         } catch (_: Exception) {}
+    }
+
+    fun toJson(all: Map<String, List<Pair<Int, Double>>>): JSONObject = JSONObject().apply {
+        all.forEach { (k, list) -> put(k, JSONArray().apply { list.forEach { (d, v) -> put(JSONArray().put(d).put(v)) } }) }
+    }
+
+    fun fromJson(o: JSONObject): Map<String, List<Pair<Int, Double>>> = o.keys().asSequence().associateWith { k ->
+        val arr = o.optJSONArray(k) ?: JSONArray()
+        (0 until arr.length()).mapNotNull { i -> arr.optJSONArray(i)?.let { it.optInt(0) to it.optDouble(1) } }
     }
 
     /** The prices of the last [days] days that have one, oldest first. */

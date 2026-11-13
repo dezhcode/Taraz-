@@ -97,6 +97,30 @@ class AssetTradeDbTest {
     }
 
     @Test
+    fun editingATradeRedoesItAndDeletingTheAssetCanUndoTheMoney() = runBlocking {
+        repo.insertCard(BankCard(bankName = "ملت", balance = 500_000_000))
+        repo.recordTrade(null, "gold18", "طلا", AssetKind.GOLD, isBuy = true, quantity = 10.0, total = 80_000_000, date = 1L, bankName = "ملت")
+        var asset = db.assetDao().getAllNow().single()
+        repo.recordTrade(asset, asset.code, asset.name, asset.kind, isBuy = false, quantity = 10.0, total = 90_000_000, date = 2L, bankName = "ملت")
+        assertTrue(db.assetDao().getAllNow().isEmpty())
+
+        // فروشی که همه را فروخته بود به ۴ گرم اصلاح می‌شود: ۶ گرم برمی‌گردد
+        val sale = db.assetTradeDao().getAllNow().first { !it.isBuy }
+        repo.updateTrade(sale, isBuy = false, quantity = 4.0, total = 36_000_000, date = 2L, bankName = "ملت")
+        asset = db.assetDao().getAllNow().single()
+        assertEquals(6.0, asset.quantity, 1e-9)
+        assertEquals(48_000_000L, asset.buyPrice)
+        assertEquals(456_000_000L, db.bankCardDao().getAllCards().first().single().balance)
+        assertEquals(2, db.assetTradeDao().getAllNow().size)
+
+        // حذف دارایی با برگرداندن پول: موجودی به قبل از هر دو معامله برمی‌گردد
+        repo.deleteAssetWithTrades(asset, undoMoney = true)
+        assertTrue(db.assetDao().getAllNow().isEmpty())
+        assertTrue(db.assetTradeDao().getAllNow().isEmpty())
+        assertEquals(500_000_000L, db.bankCardDao().getAllCards().first().single().balance)
+    }
+
+    @Test
     fun alertsFireOnceTheyCross() {
         val gold = PriceAlert(id = 1, code = "gold18", name = "طلا", above = 8_000_000.0)
         val btc = PriceAlert(id = 2, code = "btc", name = "بیت‌کوین", below = 100_000.0, inUsd = true)

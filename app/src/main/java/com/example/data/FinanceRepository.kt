@@ -196,6 +196,40 @@ class FinanceRepository(private val db: AppDatabase) {
         db.assetTradeDao().delete(trade.id)
     }
 
+    /**
+     * Changes a recorded trade: it is taken back exactly as [deleteTrade] does (units, cost and the
+     * account's money), then recorded again with the new values, in one step. The holding keeps its
+     * row, name and manual price even when taking the old trade back emptied it.
+     */
+    suspend fun updateTrade(
+        old: AssetTrade, isBuy: Boolean, quantity: Double, total: Long, date: Long, bankName: String?
+    ) = db.withTransaction {
+        val before = assetDao.getById(old.assetId) ?: assetDao.getAllNow().firstOrNull { it.code == old.code }
+        deleteTrade(old)
+        // برگرداندن فروشی که همه را فروخته بود، دارایی را دوباره می‌سازد؛ وگرنه ردیف قبلی (یا پوستهٔ خالی‌اش)
+        val holding = assetDao.getById(before?.id ?: old.assetId)
+            ?: assetDao.getAllNow().firstOrNull { it.code == old.code }
+            ?: before?.copy(quantity = 0.0, buyPrice = 0)?.also { assetDao.insert(it) }
+        recordTrade(holding, old.code, old.name, old.kind, isBuy, quantity, total, date, bankName, old.note)
+        // خریدی که روی داراییِ خالی‌شده ثبت شد مقدارش را دارد؛ اگر چیزی نماند، ردیف خالی نماند
+        holding?.let { h -> assetDao.getById(h.id)?.takeIf { it.quantity <= 1e-9 }?.let { assetDao.delete(it.id) } }
+    }
+
+    /**
+     * Removes a holding and its purchase/sale history. With [undoMoney], the account transactions
+     * those trades made are deleted too, so the balances go back; without it they stay, since the
+     * money really moved.
+     */
+    suspend fun deleteAssetWithTrades(asset: Asset, undoMoney: Boolean) = db.withTransaction {
+        val others = assetDao.getAllNow().any { it.id != asset.id && it.code == asset.code }
+        val trades = db.assetTradeDao().getAllNow().filter { it.assetId == asset.id || (!others && it.code == asset.code) }
+        for (t in trades) {
+            if (undoMoney) t.transactionId?.let { id -> transactionDao.getById(id)?.let { deleteTransaction(it) } }
+            db.assetTradeDao().delete(t.id)
+        }
+        assetDao.delete(asset.id)
+    }
+
     suspend fun saveAlert(alert: PriceAlert) = db.priceAlertDao().insert(alert)
 
     suspend fun deleteAlert(id: Int) = db.priceAlertDao().delete(id)

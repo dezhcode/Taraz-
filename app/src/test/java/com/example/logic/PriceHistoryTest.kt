@@ -33,4 +33,16 @@ class PriceHistoryTest {
         assertEquals(listOf(90_000.0, 92_500.0), PriceHistory.lastDays(all["usd"], today, 7))
         assertEquals(listOf(1.5), all["btc"]!!.map { it.second })
     }
+
+    @Test
+    fun backupRoundTripMergesWithThisPhone() {
+        val dir = java.io.File(ApplicationProvider.getApplicationContext<Context>().filesDir, "h_test").apply { deleteRecursively(); mkdirs() }
+        PriceHistory.merge(dir, mapOf("usd" to listOf(10 to 90.0, 11 to 91.0)))
+        val json = PriceHistory.toJson(PriceHistory.load(dir))
+        // گوشی تازه که یک روز خودش دارد
+        val other = java.io.File(dir, "other").apply { mkdirs() }
+        PriceHistory.merge(other, mapOf("usd" to listOf(12 to 95.0)))
+        PriceHistory.merge(other, PriceHistory.fromJson(org.json.JSONObject(json.toString())))
+        assertEquals(listOf(10 to 90.0, 11 to 91.0, 12 to 95.0), PriceHistory.load(other)["usd"])
+    }
 }

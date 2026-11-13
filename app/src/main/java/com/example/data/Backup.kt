@@ -129,6 +129,8 @@ object Backup {
             JSONObject().put("id", a.id).put("code", a.code).put("name", a.name).put("kind", a.kind).put("quantity", a.quantity)
                 .put("buyPrice", a.buyPrice).put("manualPrice", a.manualPrice).put("note", a.note).put("createdAt", a.createdAt)
         }))
+        // قیمت روزانه برای نمودارها (کنار پوشهٔ عکس‌ها، در پوشهٔ برنامه)
+        photos?.parentFile?.let { dir -> PriceHistory.load(dir).takeIf { it.isNotEmpty() }?.let { root.put("priceHistory", PriceHistory.toJson(it)) } }
         root.put("assetTrades", JSONArray(db.assetTradeDao().getAllNow().map { t ->
             JSONObject().put("id", t.id).put("assetId", t.assetId).put("code", t.code).put("name", t.name).put("kind", t.kind)
                 .put("isBuy", t.isBuy).put("quantity", t.quantity).put("total", t.total).put("costBasis", t.costBasis).put("date", t.date)
@@ -315,6 +317,12 @@ object Backup {
             priceAlerts.forEach { db.priceAlertDao().insert(it) }
             personRows.forEach { db.personDao().insert(it) }
             senders.forEach { db.bankSenderDao().insertSender(it) }
+        }
+        // قیمت‌های روزانهٔ پشتیبان به تاریخچهٔ این گوشی افزوده می‌شود (روزهای این گوشی هم می‌ماند)
+        photos?.parentFile?.let { dir ->
+            root.optJSONObject("priceHistory")?.let { h ->
+                withContext(Dispatchers.IO) { runCatching { PriceHistory.merge(dir, PriceHistory.fromJson(h)) } }
+            }
         }
         return transactions.size
     }

@@ -123,6 +123,8 @@ fun LayerAssetDetailScreen(
     onEdit: (Asset) -> Unit,
     onTrade: (buy: Boolean) -> Unit,
     onDeleteTrade: (AssetTrade) -> Unit,
+    /** ویرایش یک خرید یا فروش (حذفش هم از همان‌جاست) */
+    onEditTrade: (AssetTrade) -> Unit = { onDeleteTrade(it) },
     onAddAlert: () -> Unit,
     onToggleAlert: (PriceAlert) -> Unit,
     onDeleteAlert: (PriceAlert) -> Unit
@@ -143,7 +145,6 @@ fun LayerAssetDetailScreen(
         else -> "${unitPriceText(v)} ${Money.label}"
     }
     var range by rememberSaveable { mutableStateOf(1) }
-    var tradeToDelete by remember { mutableStateOf<AssetTrade?>(null) }
     var alertToDelete by remember { mutableStateOf<PriceAlert?>(null) }
 
     LayerScreen(
@@ -316,11 +317,11 @@ fun LayerAssetDetailScreen(
 
         // ─── خرید و فروش
         if (trades.isNotEmpty()) {
-            SectionTitle("خرید و فروش · ${fa(trades.size)} مورد")
+            SectionTitle("خرید و فروش · ${fa(trades.size)} مورد · برای ویرایش بزنید")
             LayerCard(radius = 24.dp, padding = 0.dp) {
                 trades.forEachIndexed { i, t ->
                     Row(
-                        Modifier.fillMaxWidth().clickable { tradeToDelete = t }.padding(horizontal = 14.dp, vertical = 11.dp),
+                        Modifier.fillMaxWidth().clickable { onEditTrade(t) }.padding(horizontal = 14.dp, vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Box(
@@ -347,19 +348,6 @@ fun LayerAssetDetailScreen(
         Spacer(Modifier.height(4.dp))
     }
 
-    tradeToDelete?.let { t ->
-        LayerSheet(
-            title = "این ${if (t.isBuy) "خرید" else "فروش"} حذف شود؟", onDismiss = { tradeToDelete = null }, topGap = 320.dp,
-            bottomBar = { BigButton("بله، حذف شود", background = L.RedText) { onDeleteTrade(t); tradeToDelete = null } }
-        ) {
-            Text(
-                "${faQuantityShown(t.quantity)} $unitName · ${bookText(t.total)}\n" +
-                    (if (t.isBuy) "این مقدار از دارایی کم می‌شود" else "این مقدار به دارایی برمی‌گردد") +
-                    (if (t.transactionId != null) " و مبلغ آن به حساب ${t.bankName} برگردانده می‌شود." else "."),
-                style = lt(13.sp, color = L.Muted, lineHeight = 23.sp)
-            )
-        }
-    }
     alertToDelete?.let { a ->
         LayerSheet(
             title = "این هشدار حذف شود؟", onDismiss = { alertToDelete = null }, topGap = 360.dp,
@@ -395,49 +383,62 @@ fun TradeSheet(
     livePrice: Double?,
     cards: List<BankCard>,
     onDismiss: () -> Unit,
-    onSave: (isBuy: Boolean, quantity: Double, total: Long, date: Long, bankName: String?) -> Unit
+    onSave: (isBuy: Boolean, quantity: Double, total: Long, date: Long, bankName: String?) -> Unit,
+    /** معامله‌ای که ویرایش می‌شود (فیلدها از آن پر می‌شوند)؛ null یعنی ثبت تازه */
+    editing: AssetTrade? = null,
+    onDelete: (() -> Unit)? = null
 ) {
-    var isBuy by remember { mutableStateOf(startBuy || holding == null) }
-    var qtyText by remember { mutableStateOf("") }
-    var totalText by remember { mutableStateOf("") }
-    var totalTouched by remember { mutableStateOf(false) }
-    var date by remember { mutableStateOf(System.currentTimeMillis()) }
+    var isBuy by remember { mutableStateOf(editing?.isBuy ?: (startBuy || holding == null)) }
+    var qtyText by remember { mutableStateOf(editing?.quantity?.let { faQuantity(it) }.orEmpty()) }
+    var totalText by remember { mutableStateOf(editing?.total?.let { groupedInput(Money.toInput(it)) }.orEmpty()) }
+    var totalTouched by remember { mutableStateOf(editing != null) }
+    var date by remember { mutableStateOf(editing?.date ?: System.currentTimeMillis()) }
     var pickDate by remember { mutableStateOf(false) }
-    var bank by remember { mutableStateOf<String?>(null) }
+    var bank by remember { mutableStateOf(editing?.bankName) }
+    var askDelete by remember { mutableStateOf(false) }
+    // موجودی پیش از این معامله: هنگام ویرایش، اثر خود آن کنار گذاشته می‌شود
+    val baseQty = (holding?.quantity ?: 0.0) - when { editing == null -> 0.0; editing.isBuy -> editing.quantity; else -> -editing.quantity }
+    val baseCost = (holding?.buyPrice ?: 0L) - when { editing == null -> 0L; editing.isBuy -> editing.total; else -> -editing.costBasis }
 
     val qty = parseQuantity(qtyText)
     val total = parseAmount(totalText)
     fun fillTotal(q: Double) {
         if (!totalTouched && livePrice != null && livePrice > 0 && q > 0) totalText = groupedInput(Money.toInput((q * livePrice).roundToLong()))
     }
-    val tooMuch = !isBuy && holding != null && qty > holding.quantity + 1e-9
+    val canSell = baseQty > 1e-9
+    val tooMuch = !isBuy && qty > baseQty + 1e-9
     val ok = qty > 0 && total > 0 && !tooMuch
 
     LayerSheet(
-        title = if (isBuy) "ثبت خرید $name" else "ثبت فروش $name",
+        title = when {
+            editing != null -> "ویرایش ${if (isBuy) "خرید" else "فروش"} $name"
+            isBuy -> "ثبت خرید $name"
+            else -> "ثبت فروش $name"
+        },
         onDismiss = onDismiss,
         topGap = 40.dp,
         bottomBar = {
-            BigButton(if (isBuy) "ثبت خرید" else "ثبت فروش", enabled = ok) {
+            BigButton(if (editing != null) "ذخیرهٔ تغییرات" else if (isBuy) "ثبت خرید" else "ثبت فروش", enabled = ok) {
                 onSave(isBuy, qty, total, date, bank)
                 onDismiss()
             }
+            if (editing != null && onDelete != null) SoftBigButton("حذف این معامله") { askDelete = true }
         }
     ) {
-        if (holding != null) {
+        if (canSell || (editing != null && !editing.isBuy)) {
             LSegmented(listOf("خرید", "فروش"), if (isBuy) 0 else 1, { isBuy = it == 0 })
         }
         LField(
             value = qtyText, onChange = { qtyText = it.take(20); fillTotal(parseQuantity(it)) },
             label = "مقدار ($unitName)", placeholder = "مثلاً ۲ یا ۰٫۰۰۵",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            hint = if (!isBuy && holding != null) "موجودی شما: ${faQuantityShown(holding.quantity)} $unitName" else null
+            hint = if (!isBuy) "موجودی شما: ${faQuantityShown(baseQty.coerceAtLeast(0.0))} $unitName" else null
         )
-        if (!isBuy && holding != null) {
+        if (!isBuy && canSell) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(0.25 to "یک‌چهارم", 0.5 to "نصف", 1.0 to "همه").forEach { (f, label) ->
                     LChip(label, false) {
-                        val q = holding.quantity * f
+                        val q = baseQty * f
                         qtyText = faQuantity(q); fillTotal(q)
                     }
                 }
@@ -494,16 +495,16 @@ fun TradeSheet(
         // خلاصه
         if (qty > 0 && total > 0 && !tooMuch) {
             val lines = if (isBuy) {
-                val after = (holding?.quantity ?: 0.0) + qty
-                val cost = (holding?.buyPrice ?: 0L) + total
+                val after = baseQty.coerceAtLeast(0.0) + qty
+                val cost = baseCost.coerceAtLeast(0) + total
                 listOfNotNull(
                     "بعد از خرید: ${faQuantityShown(after)} $unitName",
-                    if (holding == null || holding.buyPrice > 0) "میانگین قیمت خرید: ${unitPriceText(cost / after)} ${Money.label}" else null
+                    if (baseQty <= 1e-9 || baseCost > 0) "میانگین قیمت خرید: ${unitPriceText(cost.toDouble() / after)} ${Money.label}" else null
                 )
             } else {
-                val basis = if (holding!!.buyPrice > 0) Math.round(holding.buyPrice * qty / holding.quantity) else null
+                val basis = if (baseCost > 0 && baseQty > 0) Math.round(baseCost * qty / baseQty) else null
                 listOfNotNull(
-                    "باقی‌مانده: ${faQuantityShown((holding.quantity - qty).coerceAtLeast(0.0))} $unitName",
+                    "باقی‌مانده: ${faQuantityShown((baseQty - qty).coerceAtLeast(0.0))} $unitName",
                     basis?.let { b -> (if (total >= b) "سود این فروش: " else "زیان این فروش: ") + bookText(kotlin.math.abs(total - b)) }
                 )
             }
@@ -517,6 +518,19 @@ fun TradeSheet(
 
     if (pickDate) {
         JalaliDatePickerSheet(initial = date, onDismiss = { pickDate = false }, onPick = { date = it }, title = "تاریخ معامله", showTime = false)
+    }
+    if (askDelete && editing != null) {
+        LayerSheet(
+            title = "این ${if (editing.isBuy) "خرید" else "فروش"} حذف شود؟", onDismiss = { askDelete = false }, topGap = 320.dp,
+            bottomBar = { BigButton("بله، حذف شود", background = L.RedText) { onDelete?.invoke(); askDelete = false; onDismiss() } }
+        ) {
+            Text(
+                "${faQuantityShown(editing.quantity)} $unitName · ${bookText(editing.total)}\n" +
+                    (if (editing.isBuy) "این مقدار از دارایی کم می‌شود" else "این مقدار به دارایی برمی‌گردد") +
+                    (if (editing.transactionId != null) " و مبلغ آن به حساب ${editing.bankName} برگردانده می‌شود." else "."),
+                style = lt(13.sp, color = L.Muted, lineHeight = 23.sp)
+            )
+        }
     }
 }
 

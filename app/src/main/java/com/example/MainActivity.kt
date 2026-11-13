@@ -180,6 +180,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 var detailCode by remember { mutableStateOf<String?>(null) }
                 var tradeOpen by remember { mutableStateOf(false) }
                 var tradeBuy by remember { mutableStateOf(true) }
+                var tradeEditing by remember { mutableStateOf<com.example.data.AssetTrade?>(null) }
                 var alertOpen by remember { mutableStateOf(false) }
                 fun detailName(code: String): String =
                     assets.firstOrNull { it.code == code }?.name ?: com.example.data.PriceCatalog.find(code)?.name ?: code
@@ -704,8 +705,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                             hideAmounts = false,
                                             onBack = { closeSub() },
                                             onEdit = { assetSheetFor = it; assetPreset = null; isAssetSheetOpen = true },
-                                            onTrade = { buy -> tradeBuy = buy; tradeOpen = true },
+                                            onTrade = { buy -> tradeBuy = buy; tradeEditing = null; tradeOpen = true },
                                             onDeleteTrade = { viewModel.deleteTrade(it) },
+                                            onEditTrade = { t -> tradeEditing = t; tradeBuy = t.isBuy; tradeOpen = true },
                                             onAddAlert = { alertOpen = true },
                                             onToggleAlert = { viewModel.toggleAlert(it) },
                                             onDeleteAlert = { viewModel.deleteAlert(it) }
@@ -1211,7 +1213,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     onSearchFunds = { q, cb -> viewModel.searchFunds(q, cb) },
                                     onSave = { viewModel.saveAsset(it) },
                                     onDelete = { viewModel.deleteAsset(it.id) },
-                                    preset = assetPreset
+                                    preset = assetPreset,
+                                    trades = assetSheetFor?.let { a -> assetTrades.filter { it.assetId == a.id || it.code == a.code } }.orEmpty(),
+                                    onDeleteWithTrades = { a, undo -> viewModel.deleteAssetWithTrades(a, undo) }
                                 )
                             }
 
@@ -1227,8 +1231,14 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     startBuy = tradeBuy,
                                     livePrice = holding?.manualPrice?.takeIf { it > 0 }?.toDouble() ?: prices[code]?.exact,
                                     cards = cards,
-                                    onDismiss = { tradeOpen = false },
-                                    onSave = { isBuy, q, total, date, bank -> viewModel.recordTrade(holding, code, name, kind, isBuy, q, total, date, bank) }
+                                    onDismiss = { tradeOpen = false; tradeEditing = null },
+                                    onSave = { isBuy, q, total, date, bank ->
+                                        val old = tradeEditing
+                                        if (old != null) viewModel.updateTrade(old, isBuy, q, total, date, bank)
+                                        else viewModel.recordTrade(holding, code, name, kind, isBuy, q, total, date, bank)
+                                    },
+                                    editing = tradeEditing,
+                                    onDelete = tradeEditing?.let { t -> { viewModel.deleteTrade(t) } }
                                 )
                             }
 
