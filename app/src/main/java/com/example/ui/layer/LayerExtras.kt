@@ -343,8 +343,8 @@ fun LayerBackupScreen(
                 }
                 Spacer(Modifier.height(10.dp))
                 when {
-                    auto.lastError != null -> Callout(auto.lastError, null, L.RedSoft, L.RedText)
-                    auto.lastAt > 0 -> Callout(
+                    auto.lastError != null -> CardNote(auto.lastError, null, L.RedSoft, L.RedText)
+                    auto.lastAt > 0 -> CardNote(
                         "آخرین پشتیبان: ${weekdayName(auto.lastAt)} ${JalaliDate.fromTimestamp(auto.lastAt).formatShort()}، ${timeOfDay(auto.lastAt)} · ${fa(auto.lastSize / 1024)} کیلوبایت",
                         null, L.GreenSoft, L.GreenText
                     )
@@ -355,7 +355,7 @@ fun LayerBackupScreen(
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "رمز یک بار دریافت و به‌صورت رمزگذاری‌شده روی دستگاه نگهداری می‌شود. در پوشهٔ گوشی پنج نسخهٔ آخر حفظ و نسخه‌های قدیمی‌تر حذف می‌شوند؛ اگر گوگل درایو وصل باشد، همان فایل درایو هم هر بار به‌روز می‌شود.",
+                    "رمز یک بار دریافت و به‌صورت رمزگذاری‌شده روی دستگاه نگهداری می‌شود. در پوشهٔ گوشی پنج نسخهٔ آخر حفظ و نسخه‌های قدیمی‌تر حذف می‌شوند؛ اگر گوگل درایو وصل باشد، پشتیبان در درایو هم ذخیره می‌شود.",
                     style = lt(11.sp, color = L.Muted, lineHeight = 19.sp)
                 )
             }
@@ -531,10 +531,10 @@ private fun DriveCard(
         // ─── روش ۱: حساب گوگل
         if (apiOn) {
             when {
-                api?.error != null -> Callout(api.error, null, L.RedSoft, L.RedText)
-                (api?.lastAt ?: 0) > 0 -> Callout(
-                    "آخرین پشتیبان: ${weekdayName(api!!.lastAt)} ${JalaliDate.fromTimestamp(api.lastAt).formatShort()}، ${timeOfDay(api.lastAt)} · ${fa(api.lastSize / 1024)} کیلوبایت",
-                    null, L.GreenSoft, L.GreenText
+                api?.error != null -> CardNote(api.error, null, L.RedSoft, L.RedText)
+                (api?.lastAt ?: 0) > 0 -> CardNote(
+                    "آخرین پشتیبان: ${weekdayName(api!!.lastAt)} ${JalaliDate.fromTimestamp(api.lastAt).formatShort()}، ${timeOfDay(api.lastAt)}",
+                    "${fa(api.lastSize / 1024)} کیلوبایت · در پوشهٔ Taraz", L.GreenSoft, L.GreenText
                 )
             }
             Spacer(Modifier.height(10.dp))
@@ -555,7 +555,7 @@ private fun DriveCard(
             )
         } else {
             if (!play) {
-                Callout(
+                CardNote(
                     "سرویس‌های گوگل‌پلی روی این گوشی نیست",
                     "ورود با حساب گوگل بدون آن ممکن نیست؛ از «روش دوم» پایین استفاده کنید.",
                     L.AmberSoft, L.AmberInk
@@ -589,7 +589,7 @@ private fun DriveCard(
         if (showFile) {
             if (!fileOn) {
                 if (!installed) {
-                    Callout(
+                    CardNote(
                         "برنامهٔ گوگل درایو روی گوشی نصب نیست",
                         "برای ذخیره در درایو، برنامهٔ Google Drive را نصب و وارد شوید؛ یا فایل را در هر جای دیگری بسازید.",
                         L.AmberSoft, L.AmberInk
@@ -609,8 +609,8 @@ private fun DriveCard(
                 )
             } else {
                 when {
-                    auto.driveError != null -> Callout(auto.driveError, null, L.RedSoft, L.RedText)
-                    auto.driveLastAt > 0 -> Callout(
+                    auto.driveError != null -> CardNote(auto.driveError, null, L.RedSoft, L.RedText)
+                    auto.driveLastAt > 0 -> CardNote(
                         "آخرین ذخیره: ${weekdayName(auto.driveLastAt)} ${JalaliDate.fromTimestamp(auto.driveLastAt).formatShort()}، ${timeOfDay(auto.driveLastAt)}",
                         null, L.GreenSoft, L.GreenText
                     )
@@ -627,5 +627,17 @@ private fun DriveCard(
                 )
             }
         }
+    }
+}
+
+/** یادداشت رنگی داخل یک کارت (بی‌حاشیهٔ بیرونی، هم‌عرض محتوای کارت) */
+@Composable
+private fun CardNote(title: String, body: String? = null, bg: androidx.compose.ui.graphics.Color, fg: androidx.compose.ui.graphics.Color) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(bg).padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(title, style = lt(13.sp, FontWeight.Bold, fg))
+        if (body != null) Text(body, style = lt(12.sp, color = fg, lineHeight = 20.sp))
     }
 }
