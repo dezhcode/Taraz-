@@ -596,7 +596,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             com.example.data.AppCurrency.RIAL -> 10.0
             com.example.data.AppCurrency.USD -> usd?.takeIf { it > 0 }?.let { 100.0 / it } ?: return emptyMap()
         }
-        return raw.mapValues { (_, q) -> PriceQuote.of(q.exact * k, q.changePct, q.at, q.source) }
+        return raw.mapValues { (_, q) -> q.copy(price = Math.round(q.exact * k), exact = q.exact * k) }
     }
 
     private val _priceHistory = MutableStateFlow<Map<String, List<Pair<Int, Double>>>>(emptyMap())
@@ -763,7 +763,11 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             try {
                 onResult(PriceService.searchFunds(query), null)
             } catch (e: Exception) {
-                onResult(emptyList(), "جست‌وجو انجام نشد؛ اینترنت را بررسی کنید یا قیمت را دستی وارد کنید.")
+                onResult(
+                    emptyList(),
+                    "سایت بورس پاسخ نداد (${e.message ?: e.javaClass.simpleName}). اگر فیلترشکن روشن است خاموش کنید؛ " +
+                        "سایت بورس به نشانی‌های خارج از ایران پاسخ نمی‌دهد. صندوق را می‌توانید با نام و قیمت دستی هم ثبت کنید."
+                )
             }
         }
     }

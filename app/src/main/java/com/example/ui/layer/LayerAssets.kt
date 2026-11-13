@@ -127,6 +127,26 @@ private fun signedPct(c: Double): String =
     // جدا از متن راست‌به‌چپ، تا علامت پیش از عدد بماند و «۰٫۴٪+» نشود
     "\u2066" + (if (c >= 0) "+" else "−") + fa(String.format(Locale.ENGLISH, "%.1f", kotlin.math.abs(c)).replace('.', '٫')) + "٪\u2069"
 
+/**
+ * مبلغ دلاری: «$۱۰۸٬۷۳۵»، «$۲٫۴۵»، «$۰٫۰۰۰۰۱۲۳۴» (زیر یک دلار تا چهار رقم معنادار). جدا از متن
+ * راست‌به‌چپ تا «$» کنار عدد بماند.
+ */
+fun dollarText(v: Double): String {
+    val a = kotlin.math.abs(v)
+    val d = when {
+        a >= 1000 -> 0
+        a >= 1 || a == 0.0 -> 2
+        else -> (3 - kotlin.math.floor(kotlin.math.log10(a)).toInt()).coerceIn(2, 10)
+    }
+    var t = String.format(Locale.ENGLISH, "%,.${d}f", a)
+    if (a < 1 && t.contains('.')) t = t.trimEnd('0').trimEnd('.')
+    return "\u2066" + (if (v < 0) "−" else "") + "$" + fa(t.replace(',', '٬').replace('.', '٫')) + "\u2069"
+}
+
+/** رمزارزها (جز خود تتر) به دلار نشان داده می‌شوند، مگر دفتر خودش دلاری باشد */
+private fun inDollars(code: String): Boolean =
+    com.example.data.Money.current != com.example.data.AppCurrency.USD && code != "usdt" && PriceCatalog.find(code)?.kind == AssetKind.CRYPTO
+
 /** مقدار برای نمایش، با جداکنندهٔ هزارگان: «۵٬۰۰۰٬۰۰۰»، «۰٫۰۱۲» */
 private fun faQuantityShown(q: Double): String {
     val s = String.format(Locale.ENGLISH, "%.8f", q).trimEnd('0').trimEnd('.')
@@ -368,7 +388,12 @@ private fun MarketTab(
                 if (points.size >= 2) Sparkline(points, if (points.last() >= points.first()) L.Green else L.Red, Modifier.width(60.dp).height(26.dp))
                 Column(Modifier.width(108.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
-                        if (q == null) "—" else if (q.exact >= 1_000_000_000L) compact(q.price) else unitPriceText(q.exact),
+                        when {
+                            q == null -> "—"
+                            inDollars(item.code) && q.usd != null -> dollarText(q.usd)
+                            q.exact >= 1_000_000_000L -> compact(q.price)
+                            else -> unitPriceText(q.exact)
+                        },
                         style = lt(14.sp, FontWeight.Bold), maxLines = 1
                     )
                     if (c != null) Text(signedPct(c), style = lt(11.sp, FontWeight.Bold, tint))
@@ -383,7 +408,9 @@ private fun MarketTab(
         }
     }
     Text(
-        "قیمت هر واحد به ${com.example.data.Money.label}. نمودار کوچک: قیمت ۷ روز اخیر، از روزی که تراز قیمت‌ها را ذخیره می‌کند. " +
+        "قیمت هر واحد به ${com.example.data.Money.label}" +
+            (if (com.example.data.Money.current != com.example.data.AppCurrency.USD) "؛ رمزارزها به دلار (بازار تتر نوبیتکس)" else "") +
+            ". نمودار کوچک: قیمت ۷ روز اخیر، از روزی که تراز قیمت‌ها را ذخیره می‌کند. " +
             "ارز و طلا از tgju، رمزارز از نوبیتکس، صندوق از سایت بورس؛ با هر بار باز کردن صفحه و هر ۲ دقیقه به‌روز می‌شود.",
         style = lt(11.sp, color = L.Muted, lineHeight = 19.sp), modifier = Modifier.padding(horizontal = 24.dp)
     )
@@ -427,7 +454,10 @@ private fun MineTab(
             ) {
                 Box(Modifier.size(10.dp).clip(RoundedCornerShape(3.dp)).background(kindColor(kind)))
                 Text(label, style = lt(13.sp, FontWeight.ExtraBold), modifier = Modifier.weight(1f))
-                Text(amt(total), style = lt(13.sp, FontWeight.Bold))
+                // رمزارز: جمع به دلار، اگر همه قیمت دلاری دارند
+                val usdTotal = if (list.all { inDollars(it.code) && it.manualPrice <= 0 && prices[it.code]?.usd != null })
+                    list.sumOf { prices.getValue(it.code).usd!! * it.quantity } else null
+                Text(if (usdTotal != null && !hideAmounts) dollarText(usdTotal) else amt(total), style = lt(13.sp, FontWeight.Bold))
                 if (buy > 0) {
                     val p = (bought.sumOf { value(it) } - buy) * 100.0 / buy
                     Text(signedPct(p), style = lt(12.sp, FontWeight.Bold, if (p >= 0) L.GreenText else L.RedText))
@@ -439,6 +469,7 @@ private fun MineTab(
                 val v = value(a)
                 val profit = if (a.buyPrice > 0 && u > 0) v - a.buyPrice else null
                 val stale = q != null && a.manualPrice <= 0 && clock - q.at > 30 * 60_000L
+                val usd = q?.usd?.takeIf { inDollars(a.code) && a.manualPrice <= 0 }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(L.Line))
                 Row(
                     Modifier.fillMaxWidth().clickable { onOpen(a) }.padding(horizontal = 14.dp, vertical = 11.dp),
@@ -449,14 +480,17 @@ private fun MineTab(
                         Text(a.name, style = lt(14.sp, FontWeight.Bold), maxLines = 1)
                         Text(
                             "${faQuantityShown(a.quantity)} ${PriceCatalog.find(a.code)?.unit ?: "واحد"} · " +
-                                (if (u > 0) "هر واحد ${unitPriceText(u)}" else "قیمت نامعلوم") +
+                                (if (usd != null) "هر واحد ${dollarText(usd)}" else if (u > 0) "هر واحد ${unitPriceText(u)}" else "قیمت نامعلوم") +
                                 (if (a.manualPrice > 0) " (دستی)" else "") +
                                 (if (stale) " · ${agoText(q!!.at, clock)}" else ""),
                             style = lt(11.sp, color = if (stale) L.AmberInk else L.Muted), maxLines = 1
                         )
                     }
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(if (u > 0) amt(v) else "—", style = lt(14.sp, FontWeight.Bold))
+                        if (usd != null) {
+                            Text(if (hideAmounts) "••••••" else dollarText(usd * a.quantity), style = lt(14.sp, FontWeight.Bold))
+                            if (!hideAmounts) Text("${compact(v)} ${com.example.data.Money.label}", style = lt(11.sp, color = L.Muted))
+                        } else Text(if (u > 0) amt(v) else "—", style = lt(14.sp, FontWeight.Bold))
                         when {
                             profit != null && !hideAmounts -> Text(
                                 (if (profit >= 0) "سود " else "زیان ") + compact(kotlin.math.abs(profit)),
@@ -597,7 +631,9 @@ fun AssetSheet(
         )
         if (unit > 0 && qty > 0) {
             Text(
-                "ارزش امروز: ${money((unit * qty).roundToLong())} ${com.example.data.Money.label}" + if (manual <= 0 && livePrice != null) " (هر واحد ${unitPriceText(livePrice)})" else "",
+                "ارزش امروز: ${money((unit * qty).roundToLong())} ${com.example.data.Money.label}" +
+                    (code?.let { c -> prices[c]?.usd?.takeIf { manual <= 0 && inDollars(c) } }?.let { " · ${dollarText(it * qty)}" } ?: "") +
+                    if (manual <= 0 && livePrice != null) " (هر واحد ${unitPriceText(livePrice)})" else "",
                 style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText)
             )
         }

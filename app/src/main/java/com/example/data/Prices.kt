@@ -18,10 +18,14 @@ import java.util.concurrent.TimeUnit
  * display; [exact] keeps the fraction, which matters for cheap coins (one Shiba is about a toman, so
  * rounding it would be off by tens of percent on a large holding). Raw quotes are in toman.
  */
-data class PriceQuote(val price: Long, val changePct: Double?, val at: Long, val source: String, val exact: Double = price.toDouble()) {
+data class PriceQuote(
+    val price: Long, val changePct: Double?, val at: Long, val source: String, val exact: Double = price.toDouble(),
+    /** For crypto: the unit price in US dollars (tether), as the exchange quotes it; null for the rest. */
+    val usd: Double? = null
+) {
     companion object {
-        fun of(exact: Double, changePct: Double?, at: Long, source: String) =
-            PriceQuote(Math.round(exact), changePct, at, source, exact)
+        fun of(exact: Double, changePct: Double?, at: Long, source: String, usd: Double? = null) =
+            PriceQuote(Math.round(exact), changePct, at, source, exact, usd)
     }
 }
 
@@ -141,7 +145,10 @@ object PriceService {
             o.keys().asSequence().associateWith { k ->
                 val q = o.getJSONObject(k)
                 val p = q.getLong("p")
-                PriceQuote(p, if (q.isNull("c")) null else q.getDouble("c"), q.getLong("at"), q.optString("s"), q.optDouble("e", p.toDouble()))
+                PriceQuote(
+                    p, if (q.isNull("c")) null else q.getDouble("c"), q.getLong("at"), q.optString("s"), q.optDouble("e", p.toDouble()),
+                    if (q.has("u")) q.getDouble("u") else null
+                )
             }
         } catch (e: Exception) { emptyMap() }
     }
@@ -149,7 +156,7 @@ object PriceService {
     private fun save(context: Context, quotes: Map<String, PriceQuote>) {
         val o = JSONObject()
         quotes.forEach { (k, q) ->
-            o.put(k, JSONObject().put("p", q.price).put("c", q.changePct ?: JSONObject.NULL).put("at", q.at).put("s", q.source).put("e", q.exact))
+            o.put(k, JSONObject().put("p", q.price).put("c", q.changePct ?: JSONObject.NULL).put("at", q.at).put("s", q.source).put("e", q.exact).apply { q.usd?.let { put("u", it) } })
         }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("quotes", o.toString()).apply()
     }
@@ -174,6 +181,7 @@ object PriceService {
     suspend fun refresh(context: Context, codes: Set<String>, needed: Set<String> = codes): Pair<Map<String, PriceQuote>, List<String>> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val fresh: MutableMap<String, PriceQuote> = java.util.concurrent.ConcurrentHashMap()
+        val usdPrices: MutableMap<String, Double> = java.util.concurrent.ConcurrentHashMap()
         val errors = java.util.Collections.synchronizedMap(linkedMapOf<String, String>())
         val cryptoCodes = codes.filter { PriceCatalog.find(it)?.kind == AssetKind.CRYPTO }.toSet() + "usdt" // تتر برای تبدیل قیمت‌های خارجی هم لازم است
 
@@ -208,15 +216,37 @@ object PriceService {
                     }
                 } catch (e: Exception) { errors["نوبیتکس"] = reason(e) }
             }
-            for (code in codes.filter { PriceCatalog.isFund(it) }) async {
+            // قیمت دلاری (تتری) رمزارزها از بازار تتر نوبیتکس؛ اگر نرسید از قیمت تومانی ÷ نرخ تتر
+            val usdtCoins = cryptoCodes - "usdt"
+            if (usdtCoins.isNotEmpty()) async {
                 try {
-                    val info = JSONObject(get("https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceInfo/${PriceCatalog.fundInsCode(code)}"))
+                    val src = URLEncoder.encode(usdtCoins.joinToString(","), "UTF-8")
+                    val stats = JSONObject(get("https://api.nobitex.ir/market/stats?srcCurrency=$src&dstCurrency=usdt")).getJSONObject("stats")
+                    for (code in usdtCoins) {
+                        val st = stats.optJSONObject("$code-usdt") ?: continue
+                        num(st.opt("latest"))?.takeIf { it > 0 }?.let { usdPrices[code] = it }
+                    }
+                } catch (_: Exception) {}
+            }
+            for (code in codes.filter { PriceCatalog.isFund(it) }) async {
+                val ins = PriceCatalog.fundInsCode(code)
+                try {
+                    val info = JSONObject(get("https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceInfo/$ins", referer = TSE_REFERER))
                         .getJSONObject("closingPriceInfo")
                     // آخرین معامله؛ پیش از اولین معاملهٔ روز، قیمت پایانی
                     val last = num(info.opt("pDrCotVal"))?.takeIf { it > 0 } ?: num(info.opt("pClosing"))?.takeIf { it > 0 } ?: return@async
                     val yesterday = num(info.opt("priceYesterday"))?.takeIf { it > 0 }
                     fresh[code] = PriceQuote.of(last / 10, yesterday?.let { (last - it) * 100 / it }, now, "tsetmc")
-                } catch (e: Exception) { errors["بورس"] = reason(e) }
+                } catch (e: Exception) {
+                    // نشانی دوم سایت بورس: «زمان،وضعیت،آخرین،پایانی،اولین،دیروز،…»
+                    try {
+                        val f = get("https://old.tsetmc.com/tsev2/data/instinfofast.aspx?i=$ins&c=27", referer = "https://old.tsetmc.com/")
+                            .substringBefore(';').split(',')
+                        val last = num(f.getOrNull(2))?.takeIf { it > 0 } ?: num(f.getOrNull(3))?.takeIf { it > 0 } ?: throw java.io.IOException("پاسخ نامعتبر")
+                        val yesterday = num(f.getOrNull(5))?.takeIf { it > 0 }
+                        fresh[code] = PriceQuote.of(last / 10, yesterday?.let { (last - it) * 100 / it }, now, "tsetmc")
+                    } catch (e2: Exception) { errors["بورس"] = reason(e) + " / " + reason(e2) }
+                }
             }
         }
 
@@ -268,7 +298,7 @@ object PriceService {
                 return null
             }
             for (code in needCrypto) usdPriceOf(code)?.let { (usd, ch) ->
-                fresh[code] = PriceQuote.of(usd * usdToman, ch, now, "intl")
+                fresh[code] = PriceQuote.of(usd * usdToman, ch, now, "intl", usd = usd)
             }
             for (code in needFiat) rates?.let { r ->
                 num(r.opt(code.uppercase()))?.takeIf { it > 0 }?.let { perUsd -> fresh[code] = PriceQuote.of(usdToman / perUsd, null, now, "intl") }
@@ -286,6 +316,15 @@ object PriceService {
             }
         }
 
+        // قیمت دلاری هر رمزارز: بازار تتر، وگرنه قیمت تومانی ÷ نرخ تتر
+        val tetherToman = fresh["usdt"]?.exact
+        for (code in codes.filter { PriceCatalog.find(it)?.kind == AssetKind.CRYPTO && it != "usdt" }) {
+            val q = fresh[code] ?: continue
+            if (q.usd != null) continue
+            val usd = usdPrices[code] ?: tetherToman?.takeIf { it > 0 }?.let { q.exact / it }
+            if (usd != null) fresh[code] = q.copy(usd = usd)
+        }
+
         // فقط خطاهایی را نشان بده که قیمتی را که کاربر لازم دارد بی‌جواب گذاشته‌اند
         val missing = needed.filter { it !in fresh }
         val failed = if (missing.isEmpty()) emptyList() else errors.map { (src, why) -> "$src: $why" }
@@ -299,19 +338,38 @@ object PriceService {
     }
 
     /** Funds and other instruments on the stock exchange whose name or symbol matches [query]. */
+    private const val TSE_REFERER = "https://www.tsetmc.com/"
+
+    private fun faLetters(s: String) = s.replace('ي', 'ی').replace('ك', 'ک').trim()
+
+    /**
+     * Funds and other instruments on the stock exchange whose name or symbol matches [query]. Tries
+     * the exchange site's API, then its older address; if both fail, throws with both reasons so the
+     * screen can say what went wrong ("HTTP 403", "سایت پیدا نشد"…).
+     */
     suspend fun searchFunds(query: String): List<FundMatch> = withContext(Dispatchers.IO) {
         // TSETMC writes with Arabic ي and ك.
         val q = query.trim().replace('ی', 'ي').replace('ک', 'ك')
         if (q.length < 2) return@withContext emptyList()
-        val arr: JSONArray = JSONObject(get("https://cdn.tsetmc.com/api/Instrument/GetInstrumentSearch/" + URLEncoder.encode(q, "UTF-8").replace("+", "%20")))
-            .optJSONArray("instrumentSearch") ?: return@withContext emptyList()
-        (0 until arr.length()).map { arr.getJSONObject(it) }.map { o ->
-            FundMatch(
-                insCode = o.optString("insCode"),
-                symbol = o.optString("lVal18AFC").replace('ي', 'ی').replace('ك', 'ک'),
-                name = o.optString("lVal30").replace('ي', 'ی').replace('ك', 'ک')
-            )
-        }.filter { it.insCode.isNotBlank() }.take(20)
+        val enc = URLEncoder.encode(q, "UTF-8").replace("+", "%20")
+        val why = mutableListOf<String>()
+        try {
+            val arr: JSONArray = JSONObject(get("https://cdn.tsetmc.com/api/Instrument/GetInstrumentSearch/$enc", referer = TSE_REFERER))
+                .optJSONArray("instrumentSearch") ?: JSONArray()
+            return@withContext (0 until arr.length()).map { arr.getJSONObject(it) }.map { o ->
+                FundMatch(insCode = o.optString("insCode"), symbol = faLetters(o.optString("lVal18AFC")), name = faLetters(o.optString("lVal30")))
+            }.filter { it.insCode.isNotBlank() }.take(20)
+        } catch (e: Exception) { why += "tsetmc: " + reason(e) }
+        try {
+            // «نماد,نام,کد,…;نماد,نام,کد,…»
+            val text = get("https://old.tsetmc.com/tsev2/data/search.aspx?skey=$enc", referer = "https://old.tsetmc.com/")
+            return@withContext text.split(';').mapNotNull { rec ->
+                val f = rec.split(',')
+                val ins = f.firstOrNull { it.trim().length in 12..20 && it.trim().all(Char::isDigit) }?.trim() ?: return@mapNotNull null
+                FundMatch(insCode = ins, symbol = faLetters(f.getOrNull(0).orEmpty()), name = faLetters(f.getOrNull(1).orEmpty()))
+            }.distinctBy { it.insCode }.take(20)
+        } catch (e: Exception) { why += "old.tsetmc: " + reason(e) }
+        throw java.io.IOException(why.joinToString(" · "))
     }
 }
 

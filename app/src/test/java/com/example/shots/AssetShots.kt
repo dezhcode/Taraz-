@@ -30,12 +30,12 @@ class AssetShots {
     @get:Rule val compose = createComposeRule()
 
     private val now = System.currentTimeMillis()
-    private fun q(p: Double, c: Double?, src: String, ageMin: Long = 0) = PriceQuote.of(p, c, now - ageMin * 60_000, src)
+    private fun q(p: Double, c: Double?, src: String, ageMin: Long = 0, usd: Double? = null) = PriceQuote.of(p, c, now - ageMin * 60_000, src, usd)
     private val prices = mapOf(
         "usd" to q(95_400.0, 0.4, "tgju"), "eur" to q(109_800.0, 0.2, "tgju"), "aed" to q(25_970.0, 0.1, "tgju"),
         "gold18" to q(8_250_000.0, 0.8, "tgju"), "coin_emami" to q(89_500_000.0, 1.2, "tgju"), "coin_half" to q(47_200_000.0, 0.9, "tgju"),
-        "usdt" to q(96_100.0, 0.3, "nobitex"), "btc" to q(10_450_000_000.0, 2.9, "nobitex"), "eth" to q(395_000_000.0, -1.1, "nobitex"),
-        "shib" to q(1.72, -2.4, "nobitex", ageMin = 95), "fund:123" to q(21_300.0, 0.6, "tsetmc", ageMin = 5)
+        "usdt" to q(96_100.0, 0.3, "nobitex"), "btc" to q(10_450_000_000.0, 2.9, "nobitex", usd = 108_740.0), "eth" to q(395_000_000.0, -1.1, "nobitex", usd = 4_110.5),
+        "shib" to q(1.72, -2.4, "nobitex", ageMin = 95, usd = 0.00001789), "fund:123" to q(21_300.0, 0.6, "tsetmc", ageMin = 5)
     )
     private val history: Map<String, List<Pair<Int, Double>>> = run {
         val today = PriceHistory.dayOf(now)
@@ -56,7 +56,7 @@ class AssetShots {
         Asset(id = 6, code = "usd", name = "دلار آمریکا", kind = AssetKind.CURRENCY, quantity = 800.0, buyPrice = 62_400_000)
     )
 
-    private fun shot(name: String, dark: Boolean, held: List<Asset>, tapMarket: Boolean = false) {
+    private fun shot(name: String, dark: Boolean, held: List<Asset>, tapMarket: Boolean = false, chip: String? = null) {
         LayerTheme.dark = dark
         compose.mainClock.autoAdvance = false
         compose.setContent {
@@ -73,11 +73,16 @@ class AssetShots {
             compose.onNodeWithText("بازار").performClick()
             compose.mainClock.advanceTimeBy(800)
         }
+        if (chip != null) {
+            compose.onNodeWithText(chip).performClick()
+            compose.mainClock.advanceTimeBy(800)
+        }
         compose.onRoot().captureRoboImage("build/tourshots/7_assets_$name.png")
     }
 
     @Test fun mine() = shot("1_mine", dark = false, held = assets)
     @Test fun mineDark() = shot("1b_mine_dark", dark = true, held = assets)
     @Test fun market() = shot("2_market", dark = false, held = assets, tapMarket = true)
+    @Test fun marketCrypto() = shot("2c_market_crypto", dark = false, held = assets, tapMarket = true, chip = "رمزارز")
     @Test fun marketEmpty() = shot("2b_market_new_user_dark", dark = true, held = emptyList())
 }
