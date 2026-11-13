@@ -124,7 +124,17 @@ private fun sourceLabel(s: String): String = when (s) {
 
 /** درصد با یک رقم اعشار و علامت: «+۱٫۲٪»، «−۰٫۳٪» */
 private fun signedPct(c: Double): String =
-    (if (c >= 0) "+" else "−") + fa(String.format(Locale.ENGLISH, "%.1f", kotlin.math.abs(c)).replace('.', '٫')) + "٪"
+    // جدا از متن راست‌به‌چپ، تا علامت پیش از عدد بماند و «۰٫۴٪+» نشود
+    "\u2066" + (if (c >= 0) "+" else "−") + fa(String.format(Locale.ENGLISH, "%.1f", kotlin.math.abs(c)).replace('.', '٫')) + "٪\u2069"
+
+/** مقدار برای نمایش، با جداکنندهٔ هزارگان: «۵٬۰۰۰٬۰۰۰»، «۰٫۰۱۲» */
+private fun faQuantityShown(q: Double): String {
+    val s = String.format(Locale.ENGLISH, "%.8f", q).trimEnd('0').trimEnd('.')
+    val whole = s.substringBefore('.')
+    val frac = s.substringAfter('.', "")
+    val grouped = whole.reversed().chunked(3).joinToString(",").reversed()
+    return fa((grouped + if (frac.isNotEmpty()) ".$frac" else "").replace(',', '٬').replace('.', '٫'))
+}
 
 /** مبلغ کوتاه برای فهرست‌های فشرده: «۱۲۵٫۴ میلیون»، «۱۰٫۴۵ میلیارد» (در دفتر دلاری همان مبلغ کامل) */
 private fun compact(v: Long): String {
@@ -249,15 +259,15 @@ fun LayerAssetsScreen(
                 }
             }
             Column(Modifier.padding(horizontal = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("ارزش سبد شما", style = lt(13.sp, color = L.OnPrimarySoft))
-                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (assets.isNotEmpty()) Text("ارزش سبد شما", style = lt(13.sp, color = L.OnPrimarySoft))
+                if (assets.isNotEmpty()) Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(amt(assetsTotal), style = lt(34.sp, FontWeight.Light, Color.White, letterSpacing = (-1).sp))
                     Text(com.example.data.Money.label, style = lt(13.sp, color = L.OnPrimarySoft), modifier = Modifier.padding(bottom = 6.dp))
                 }
                 val parts = buildList {
                     if (todayChange != 0L && assetsTotal > 0) {
                         val pct = todayChange * 100.0 / (assetsTotal - todayChange).coerceAtLeast(1)
-                        add("امروز " + (if (hideAmounts) "" else (if (todayChange > 0) "+" else "−") + money(kotlin.math.abs(todayChange)) + " ") + "(${signedPct(pct)})")
+                        add("امروز " + (if (hideAmounts) "" else "\u2066" + (if (todayChange > 0) "+" else "−") + money(kotlin.math.abs(todayChange)) + "\u2069 ") + "(${signedPct(pct)})")
                     }
                     if (buyTotal > 0) add("سود کل " + signedPct(profitTotal * 100.0 / buyTotal))
                 }
@@ -327,7 +337,8 @@ private fun MarketTab(
     }
     // فهرست بازار و صندوق‌هایی که کاربر از بورس اضافه کرده
     val funds = assets.filter { PriceCatalog.isFund(it.code) }.distinctBy { it.code }.map { com.example.data.CatalogItem(it.code, it.name, AssetKind.FUND, "واحد") }
-    val items = (PriceCatalog.items + funds).filter { kind == "all" || it.kind == kind }
+    // آن‌هایی که هنوز قیمت ندارند، آخر فهرست
+    val items = (PriceCatalog.items + funds).filter { kind == "all" || it.kind == kind }.sortedBy { if (it.code in prices) 0 else 1 }
     val today = com.example.data.PriceHistory.dayOf(clock)
     if (items.isEmpty()) {
         Text(
@@ -437,7 +448,7 @@ private fun MineTab(
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(a.name, style = lt(14.sp, FontWeight.Bold), maxLines = 1)
                         Text(
-                            "${faQuantity(a.quantity)} ${PriceCatalog.find(a.code)?.unit ?: "واحد"} · " +
+                            "${faQuantityShown(a.quantity)} ${PriceCatalog.find(a.code)?.unit ?: "واحد"} · " +
                                 (if (u > 0) "هر واحد ${unitPriceText(u)}" else "قیمت نامعلوم") +
                                 (if (a.manualPrice > 0) " (دستی)" else "") +
                                 (if (stale) " · ${agoText(q!!.at, clock)}" else ""),
@@ -448,7 +459,7 @@ private fun MineTab(
                         Text(if (u > 0) amt(v) else "—", style = lt(14.sp, FontWeight.Bold))
                         when {
                             profit != null && !hideAmounts -> Text(
-                                (if (profit >= 0) "سود +" else "زیان −") + compact(kotlin.math.abs(profit)),
+                                (if (profit >= 0) "سود " else "زیان ") + compact(kotlin.math.abs(profit)),
                                 style = lt(11.sp, color = if (profit >= 0) L.GreenText else L.RedText)
                             )
                             q?.changePct != null && a.manualPrice <= 0 -> Text(
