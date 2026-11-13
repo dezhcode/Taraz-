@@ -364,6 +364,53 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                         }
                     }
                 }
+                // ─── گوگل درایو: یک فایل پشتیبان در درایو که تراز هر بار رویش می‌نویسد ───
+                var pendingDrivePassword by remember { mutableStateOf<String?>(null) }
+                fun restoreBytes(bytes: ByteArray, pass: String, onOk: () -> Unit = {}) {
+                    val unitBefore = com.example.data.Money.current
+                    viewModel.restoreBackup(bytes, pass) { ok, msg ->
+                        backupBusy = false
+                        backupMsg = ok to msg
+                        if (ok) onOk()
+                        if (ok && com.example.data.Money.current != unitBefore) {
+                            android.widget.Toast.makeText(this@MainActivity, msg, android.widget.Toast.LENGTH_LONG).show()
+                            this@MainActivity.recreate()
+                        }
+                    }
+                }
+                val driveCreateLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/octet-stream")
+                ) { uri ->
+                    val pass = pendingDrivePassword
+                    pendingDrivePassword = null
+                    if (uri == null) {
+                        backupBusy = false
+                    } else {
+                        viewModel.connectDrive(uri, pass) { err ->
+                            backupBusy = false
+                            backupMsg = if (err == null) true to "به گوگل درایو وصل شد و پشتیبان ذخیره شد." else false to err
+                        }
+                    }
+                }
+                val driveOpenLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+                ) { uri ->
+                    val pass = pendingRestorePassword
+                    pendingRestorePassword = null
+                    if (uri == null || pass == null) {
+                        backupBusy = false
+                    } else {
+                        val bytes = try { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } } catch (e: Exception) { null }
+                        if (bytes == null) {
+                            backupBusy = false
+                            backupMsg = false to "فایل خوانده نشد."
+                        } else {
+                            // بازگردانی موفق: همان فایل برای پشتیبان‌های بعدی وصل می‌ماند
+                            restoreBytes(bytes, pass) { viewModel.linkDriveFile(uri) }
+                        }
+                    }
+                }
+
                 val activity = context as? androidx.fragment.app.FragmentActivity
                 var lastBackPressTime by remember { mutableStateOf(0L) }
                 val exitToastMessage = "برای خروج، دکمهٔ بازگشت را دوباره بزنید"
@@ -782,6 +829,38 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                             readFileLauncher.launch(arrayOf("*/*"))
                                         },
                                         auto = autoBackupState,
+                                        driveInstalled = remember { viewModel.driveAppInstalled() },
+                                        onDriveConnect = { pass ->
+                                            backupBusy = true
+                                            backupMsg = null
+                                            pendingDrivePassword = pass
+                                            driveCreateLauncher.launch("taraz-backup.taraz")
+                                        },
+                                        onDriveSaveNow = {
+                                            backupBusy = true
+                                            backupMsg = null
+                                            viewModel.backupToDrive { err ->
+                                                backupBusy = false
+                                                backupMsg = if (err == null) true to "پشتیبان در گوگل درایو ذخیره شد." else false to err
+                                            }
+                                        },
+                                        onDriveRestore = { pass ->
+                                            backupBusy = true
+                                            backupMsg = null
+                                            viewModel.readDriveBackup { bytes, err ->
+                                                if (bytes == null) {
+                                                    backupBusy = false
+                                                    backupMsg = false to (err ?: "فایل درایو خوانده نشد.")
+                                                } else restoreBytes(bytes, pass)
+                                            }
+                                        },
+                                        onDriveOpenExisting = { pass ->
+                                            backupBusy = true
+                                            backupMsg = null
+                                            pendingRestorePassword = pass
+                                            driveOpenLauncher.launch(arrayOf("*/*"))
+                                        },
+                                        onDriveDisconnect = { viewModel.disconnectDrive(); backupMsg = true to "اتصال گوگل درایو قطع شد؛ فایل در درایو می‌ماند." },
                                         onAutoEnabled = { viewModel.setAutoBackupEnabled(it) },
                                         onAutoPeriod = { viewModel.setAutoBackupPeriod(it) },
                                         onPickFolder = { folderLauncher.launch(null) },

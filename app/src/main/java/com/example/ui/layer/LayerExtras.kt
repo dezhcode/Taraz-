@@ -19,6 +19,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -265,9 +267,17 @@ fun LayerBackupScreen(
     onAutoPeriod: (Int) -> Unit = {},
     onPickFolder: () -> Unit = {},
     onAutoPassword: (String) -> Unit = {},
-    onAutoNow: () -> Unit = {}
+    onAutoNow: () -> Unit = {},
+    driveInstalled: Boolean = true,
+    /** اتصال به درایو: ساختن فایل پشتیبان در درایو. رمز تازه وقتی پشتیبان خودکار هنوز رمز ندارد، وگرنه null */
+    onDriveConnect: (password: String?) -> Unit = {},
+    onDriveSaveNow: () -> Unit = {},
+    onDriveRestore: (password: String) -> Unit = {},
+    /** گوشی تازه: فایل پشتیبان قبلی را از درایو برمی‌گزیند، بازمی‌گرداند و وصلش می‌کند */
+    onDriveOpenExisting: (password: String) -> Unit = {},
+    onDriveDisconnect: () -> Unit = {}
 ) {
-    var mode by remember { mutableStateOf<String?>(null) } // "create" | "restore" | "auto"
+    var mode by remember { mutableStateOf<String?>(null) } // "create" | "restore" | "auto" | "drive" | "drive_restore" | "drive_existing"
     // رمز از کلید «پشتیبان خودکار» خواسته شد: بعد از ذخیرهٔ رمز روشن شود. تغییر رمز به‌تنهایی روشنش نمی‌کند.
     var enableAfterPassword by remember { mutableStateOf(false) }
     LayerScreen(title = "پشتیبان و خروجی", subtitle = "نگهداری نسخهٔ پشتیبان خارج از دستگاه", onBack = onBack) {
@@ -275,6 +285,14 @@ fun LayerBackupScreen(
             Callout(text, null, if (ok) L.GreenSoft else L.RedSoft, if (ok) L.GreenText else L.RedText, Modifier.padding(horizontal = 20.dp))
         }
         if (auto != null) {
+            DriveCard(
+                auto = auto, busy = busy, installed = driveInstalled,
+                onConnect = { if (auto.hasPassword) onDriveConnect(null) else mode = "drive" },
+                onSaveNow = onDriveSaveNow,
+                onRestore = { mode = "drive_restore" },
+                onOpenExisting = { mode = "drive_existing" },
+                onDisconnect = onDriveDisconnect
+            )
             LayerCard(radius = 20.dp, padding = 16.dp) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -284,7 +302,7 @@ fun LayerBackupScreen(
                     LSwitch(auto.enabled, "پشتیبان خودکار") { on ->
                         when {
                             !on -> onAutoEnabled(false)
-                            auto.folderLabel == null -> onPickFolder()
+                            auto.folderLabel == null && auto.driveName == null -> onPickFolder()
                             !auto.hasPassword -> { enableAfterPassword = true; mode = "auto" }
                             else -> onAutoEnabled(true)
                         }
@@ -316,13 +334,13 @@ fun LayerBackupScreen(
                         null, L.GreenSoft, L.GreenText
                     )
                 }
-                if (auto.folderLabel != null && auto.hasPassword) {
+                if ((auto.folderLabel != null || auto.driveName != null) && auto.hasPassword) {
                     Spacer(Modifier.height(8.dp))
                     SoftButton(if (busy) "در حال ساخت…" else "تهیهٔ پشتیبان اکنون", height = 36.dp) { if (!busy) onAutoNow() }
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "رمز یک بار دریافت و به‌صورت رمزگذاری‌شده روی دستگاه نگهداری می‌شود. پنج نسخهٔ آخر حفظ و نسخه‌های قدیمی‌تر حذف می‌شوند. امکان همگام‌سازی پوشه با گوگل‌درایو وجود دارد.",
+                    "رمز یک بار دریافت و به‌صورت رمزگذاری‌شده روی دستگاه نگهداری می‌شود. در پوشهٔ گوشی پنج نسخهٔ آخر حفظ و نسخه‌های قدیمی‌تر حذف می‌شوند؛ اگر گوگل درایو وصل باشد، همان فایل درایو هم هر بار به‌روز می‌شود.",
                     style = lt(11.sp, color = L.Muted, lineHeight = 19.sp)
                 )
             }
@@ -350,7 +368,7 @@ fun LayerBackupScreen(
     mode?.let { m ->
         var pass by remember(m) { mutableStateOf("") }
         var pass2 by remember(m) { mutableStateOf("") }
-        val creating = m == "create" || m == "auto"
+        val creating = m == "create" || m == "auto" || m == "drive"
         val ok = if (creating) pass.length >= 6 && pass == pass2 else pass.isNotEmpty()
         LayerSheet(
             title = if (creating) "رمز فایل پشتیبان" else "رمز فایل پشتیبان را وارد کنید",
@@ -358,7 +376,14 @@ fun LayerBackupScreen(
             topGap = 200.dp,
             bottomBar = {
                 BigButton(
-                    when (m) { "auto" -> "ذخیرهٔ رمز"; "create" -> "ساخت و ذخیرهٔ فایل"; else -> "انتخاب فایل و بازگردانی" },
+                    when (m) {
+                        "auto" -> "ذخیرهٔ رمز"
+                        "create" -> "ساخت و ذخیرهٔ فایل"
+                        "drive" -> "ادامه و انتخاب جای فایل در درایو"
+                        "drive_restore" -> "بازگردانی از درایو"
+                        "drive_existing" -> "انتخاب فایل از درایو"
+                        else -> "انتخاب فایل و بازگردانی"
+                    },
                     enabled = ok
                 ) {
                     when (m) {
@@ -368,6 +393,9 @@ fun LayerBackupScreen(
                             enableAfterPassword = false
                         }
                         "create" -> onCreate(pass)
+                        "drive" -> onDriveConnect(pass)
+                        "drive_restore" -> onDriveRestore(pass)
+                        "drive_existing" -> onDriveOpenExisting(pass)
                         else -> onRestore(pass)
                     }
                     mode = null
@@ -390,7 +418,103 @@ fun LayerBackupScreen(
             } else {
                 Text("بعد از انتخاب فایل، همهٔ داده‌های فعلی تراز با محتوای فایل جایگزین می‌شود.", style = lt(12.sp, color = L.RedInk, lineHeight = 21.sp))
             }
+            if (m == "drive") {
+                Text(
+                    "این رمز برای ذخیره‌های بعدی در درایو هم روی گوشی (رمزگذاری‌شده) نگه داشته می‌شود. برای بازگردانی در گوشی دیگر لازم است؛ یادداشتش کنید.",
+                    style = lt(12.sp, color = L.Muted, lineHeight = 21.sp)
+                )
+            }
             Spacer(Modifier.height(4.dp))
+        }
+    }
+}
+
+
+/**
+ * گوگل درایو: یک فایل پشتیبان رمزگذاری‌شده در درایو خود کاربر که تراز هر بار روی آن می‌نویسد و
+ * از آن بازمی‌گرداند. بدون ورود جدا یا کلید: از پنجرهٔ انتخاب فایل خود اندروید (برنامهٔ درایو).
+ */
+@Composable
+private fun DriveCard(
+    auto: com.example.data.AutoBackup.State,
+    busy: Boolean,
+    installed: Boolean,
+    onConnect: () -> Unit,
+    onSaveNow: () -> Unit,
+    onRestore: () -> Unit,
+    onOpenExisting: () -> Unit,
+    onDisconnect: () -> Unit
+) {
+    val connected = auto.driveName != null
+    LayerCard(radius = 20.dp, padding = 16.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(
+                Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(if (connected) L.GreenSoft else L.PrimarySoft),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    if (connected) Icons.Default.CloudDone else Icons.Default.CloudUpload, null,
+                    tint = if (connected) L.GreenText else L.PrimaryText, modifier = Modifier.size(24.dp)
+                )
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("گوگل درایو", style = lt(15.sp, FontWeight.Bold))
+                Text(
+                    when {
+                        !connected -> "پشتیبان در درایو خودتان؛ در گوشی دیگر هم برمی‌گردد"
+                        auto.driveIsGoogle -> "وصل است · ${auto.driveName}"
+                        else -> "وصل است (جای انتخابی) · ${auto.driveName}"
+                    },
+                    style = lt(12.sp, color = L.Muted), maxLines = 1
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        if (!connected) {
+            if (!installed) {
+                Callout(
+                    "برنامهٔ گوگل درایو روی گوشی نصب نیست",
+                    "برای ذخیره در درایو، برنامهٔ Google Drive را نصب و با حساب گوگل خود وارد شوید؛ بعد این‌جا «اتصال» را بزنید.",
+                    L.AmberSoft, L.AmberInk
+                )
+                Spacer(Modifier.height(10.dp))
+            }
+            BigButton(if (busy) "در حال انجام…" else "اتصال به گوگل درایو", enabled = !busy, onClick = onConnect)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "در پنجره‌ای که باز می‌شود، از منوی کنار «Drive» را بزنید، پوشه را انتخاب کنید و «ذخیره» را بزنید. تراز از آن به بعد همان فایل را به‌روز می‌کند.",
+                style = lt(12.sp, color = L.Muted, lineHeight = 21.sp)
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "پشتیبان قبلی در درایو دارید؟ بازگردانی از درایو",
+                style = lt(13.sp, FontWeight.SemiBold, L.PrimaryText),
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(enabled = !busy, onClick = onOpenExisting).padding(vertical = 8.dp)
+            )
+        } else {
+            when {
+                auto.driveError != null -> Callout(auto.driveError, null, L.RedSoft, L.RedText)
+                auto.driveLastAt > 0 -> Callout(
+                    "آخرین ذخیره در درایو: ${weekdayName(auto.driveLastAt)} ${JalaliDate.fromTimestamp(auto.driveLastAt).formatShort()}، ${timeOfDay(auto.driveLastAt)}",
+                    null, L.GreenSoft, L.GreenText
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                BigButton(if (busy) "در حال ذخیره…" else "ذخیره در درایو", Modifier.weight(1f), enabled = !busy, height = 48.dp, onClick = onSaveNow)
+                SoftBigButton("بازگردانی", Modifier.weight(1f), height = 48.dp) { if (!busy) onRestore() }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                if (auto.enabled) "پشتیبان خودکار روشن است؛ این فایل هم ${if (auto.periodDays >= 28) "ماهی" else "هفته‌ای"} یک بار به‌روز می‌شود."
+                else "با روشن کردن «پشتیبان خودکار» در پایین، این فایل خودکار به‌روز می‌شود.",
+                style = lt(12.sp, color = L.Muted, lineHeight = 21.sp)
+            )
+            Text(
+                "قطع اتصال",
+                style = lt(13.sp, FontWeight.SemiBold, L.RedText),
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onDisconnect).padding(vertical = 8.dp)
+            )
         }
     }
 }

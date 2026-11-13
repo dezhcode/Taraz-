@@ -997,6 +997,41 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     fun setAutoBackupFolder(uri: android.net.Uri) { AutoBackup.setFolder(getApplication(), uri); refreshAutoBackup() }
     fun setAutoBackupPassword(password: String) { AutoBackup.setPassword(getApplication(), password); refreshAutoBackup() }
 
+    // ─── گوگل درایو ───
+
+    fun driveAppInstalled(): Boolean = AutoBackup.driveAppInstalled(getApplication())
+
+    /**
+     * فایل درایو انتخاب شد: وصلش می‌کند و نسخهٔ تازه را همان‌جا می‌نویسد. [password] اگر کاربر همین
+     * حالا رمز داده، رمز پشتیبان خودکار هم می‌شود تا ذخیره‌های بعدی بی‌پرسش انجام شوند.
+     */
+    fun connectDrive(uri: android.net.Uri, password: String?, onDone: (String?) -> Unit) {
+        viewModelScope.launch {
+            if (!password.isNullOrEmpty()) AutoBackup.setPassword(getApplication(), password)
+            AutoBackup.setDriveFile(getApplication(), uri)
+            val err = AutoBackup.writeDrive(getApplication())
+            refreshAutoBackup()
+            onDone(err)
+        }
+    }
+
+    /** فایل پشتیبانی که از درایو انتخاب شد (گوشی تازه): وصلش می‌کند تا بعداً هم همان‌جا ذخیره شود. */
+    fun linkDriveFile(uri: android.net.Uri) { AutoBackup.setDriveFile(getApplication(), uri); refreshAutoBackup() }
+
+    fun backupToDrive(onDone: (String?) -> Unit) {
+        viewModelScope.launch {
+            val err = AutoBackup.writeDrive(getApplication())
+            refreshAutoBackup()
+            onDone(err)
+        }
+    }
+
+    fun readDriveBackup(onDone: (ByteArray?, String?) -> Unit) {
+        viewModelScope.launch { val (b, e) = AutoBackup.readDrive(getApplication()); onDone(b, e) }
+    }
+
+    fun disconnectDrive() { AutoBackup.disconnectDrive(getApplication()); refreshAutoBackup() }
+
     /** پشتیبان خودکار را همین حالا اجرا می‌کند؛ [onDone] پیام خطا یا null می‌گیرد */
     fun runAutoBackupNow(onDone: (String?) -> Unit) {
         viewModelScope.launch {
