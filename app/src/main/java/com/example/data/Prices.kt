@@ -173,7 +173,7 @@ object PriceService {
      */
     suspend fun refresh(context: Context, codes: Set<String>): Pair<Map<String, PriceQuote>, List<String>> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
-        val fresh = java.util.concurrent.ConcurrentHashMap<String, PriceQuote>()
+        val fresh: MutableMap<String, PriceQuote> = java.util.concurrent.ConcurrentHashMap()
         val errors = java.util.Collections.synchronizedMap(linkedMapOf<String, String>())
         val cryptoCodes = codes.filter { PriceCatalog.find(it)?.kind == AssetKind.CRYPTO }.toSet() + "usdt" // تتر برای تبدیل قیمت‌های خارجی هم لازم است
 
