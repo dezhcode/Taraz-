@@ -151,6 +151,20 @@ class AssetShots {
         )
     }
 
+    private fun backupShot(name: String, connected: Boolean) = raw(name, false) {
+        com.example.ui.layer.LayerBackupScreen(
+            message = null, busy = false, onBack = {}, onCreate = {}, onRestore = {}, onExportCsv = {},
+            auto = com.example.data.AutoBackup.State(
+                enabled = connected, periodDays = 7, folderLabel = null, hasPassword = connected, lastAt = 0, lastSize = 0, lastError = null,
+                driveName = if (connected) "taraz-backup.taraz" else null, driveIsGoogle = connected, driveLastAt = if (connected) now - 3_600_000 else 0
+            ),
+            driveInstalled = true
+        )
+    }
+
+    @Test fun backupDrive() = backupShot("9_backup_drive", connected = false)
+    @Test fun backupDriveConnected() = backupShot("9b_backup_drive_connected", connected = true)
+
     @Test fun accountsLight() = accountsShot("8_accounts", dark = false)
     @Test fun accountsDark() = accountsShot("8b_accounts_dark", dark = true)
 
