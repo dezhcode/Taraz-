@@ -109,6 +109,9 @@ fun LayerAddSheet(
     var note by remember { mutableStateOf("") }
     var editingNote by remember { mutableStateOf(false) }
     var account by remember { mutableStateOf(cards.firstOrNull()?.bankName) }
+    val buzz = rememberBuzz()
+    // با هر تلاش برای ثبت بی‌مبلغ یک بار بیشتر می‌شود و کادر مبلغ را می‌لرزاند
+    var amountShake by remember { mutableStateOf(0) }
     var transferTo by remember { mutableStateOf(cards.getOrNull(1)?.bankName) }
     var suggestionUsed by remember { mutableStateOf(false) }
 
@@ -215,7 +218,7 @@ fun LayerAddSheet(
                 }
 
                 // مبلغ
-                Column(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 6.dp).tourTarget("add.amount"), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 6.dp).tourTarget("add.amount").shake(amountShake), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         // دلار: ممیز و رقم اعشاری در حال تایپ هم دیده شود («۱۲٫»)
                         if (decimals > 0 && amount.isNotEmpty()) com.example.data.Money.inputText(amount) else money(n),
@@ -407,6 +410,8 @@ fun LayerAddSheet(
                             row.forEach { k ->
                                 Box(
                                     Modifier.weight(1f).height(54.dp).clip(RoundedCornerShape(16.dp)).clickable {
+                                        // پاک کردن مبلغ خالی: لرزش خطا؛ بقیهٔ کلیدها تیک سبک
+                                        buzz(if (k == "back" && amount.isEmpty()) Buzz.REJECT else Buzz.KEY)
                                         amount = when {
                                             k == "back" -> amount.dropLast(1)
                                             // ممیز فقط یک بار، و بعدش حداکثر دو رقم (سنت)
@@ -433,7 +438,14 @@ fun LayerAddSheet(
             Box(
                 Modifier.padding(top = 10.dp).fillMaxWidth().height(56.dp).tourTarget("add.save").clip(PillShape)
                     .background(if (enabled) L.Primary else L.PrimaryDisabled)
-                    .clickable(enabled = enabled) {
+                    .clickable {
+                        // بی‌مبلغ (یا انتقال ناقص): کادر مبلغ می‌لرزد، چیزی ثبت نمی‌شود
+                        if (!enabled) {
+                            buzz(Buzz.REJECT)
+                            if (n <= 0) amountShake++ else helperMsg = "حساب مبدأ و مقصد انتقال را انتخاب کنید."
+                            return@clickable
+                        }
+                        buzz(Buzz.CONFIRM)
                         val pid = personId
                         if (type == EntryType.TRANSFER) {
                             onTransfer(account!!, transferTo!!, n)

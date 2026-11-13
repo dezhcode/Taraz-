@@ -230,6 +230,8 @@ class FinanceRepository(private val db: AppDatabase) {
         assetDao.delete(asset.id)
     }
 
+    suspend fun loanById(id: Int): Loan? = loanDao.getById(id)
+
     suspend fun saveAlert(alert: PriceAlert) = db.priceAlertDao().insert(alert)
 
     suspend fun deleteAlert(id: Int) = db.priceAlertDao().delete(id)

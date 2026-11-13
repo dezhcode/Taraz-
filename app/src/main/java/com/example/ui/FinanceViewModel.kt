@@ -2675,8 +2675,19 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
      * فقط همان باقی‌مانده پرداخت می‌شود؛ پرداخت در سابقهٔ اقساط هم ثبت می‌شود.
      */
     fun payInstallmentFrom(loan: Loan, fromBank: String) {
-        viewModelScope.launch { repository.payInstallment(loan.id, fromBank) }
+        viewModelScope.launch {
+            val wasOpen = !loan.isSettled
+            repository.payInstallment(loan.id, fromBank)
+            // قسط آخر: یک جشن کوچک (فقط همین یک بار)
+            if (wasOpen && repository.loanById(loan.id)?.isSettled == true) _celebration.value = "${loan.loanName} تمام شد!"
+        }
     }
+
+    private val _celebration = MutableStateFlow<String?>(null)
+    /** پیام جشن برای لحظه‌های بزرگ (فعلاً: پرداخت قسط آخر وام)؛ پس از نمایش، [celebrated] را صدا بزنید */
+    val celebration: StateFlow<String?> = _celebration.asStateFlow()
+
+    fun celebrated() { _celebration.value = null }
 
     // ─── صوت: دیکته، پخش صوتی و گفت‌وگوی زنده ───
 

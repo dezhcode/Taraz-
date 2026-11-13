@@ -14,6 +14,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -110,6 +111,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 
         // واحد پولی دفتر (تومان/ریال/دلار) پیش از هر نمایش مبلغ
         com.example.data.Money.load(this)
+        com.example.ui.layer.Haptics.load(this)
         // انتخاب روشن/تیرهٔ کاربر قبل از اولین رسم اعمال می‌شود تا صفحه چشمک نزند
         com.example.ui.layer.ThemePrefs.load(this)?.let { com.example.ui.layer.LayerTheme.dark = it }
 
@@ -1260,6 +1262,20 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     onDismiss = { alertOpen = false },
                                     onSave = { above, below -> viewModel.addAlert(code, detailName(code), inUsd, above, below) }
                                 )
+                            }
+
+                            // جشن پرداخت قسط آخر: کاغذرنگی، لرزش جشن و پیام کوتاه
+                            val celebration by viewModel.celebration.collectAsStateWithLifecycle()
+                            celebration?.let { msg ->
+                                val buzz = com.example.ui.layer.rememberBuzz()
+                                LaunchedEffect(msg) { buzz(com.example.ui.layer.Buzz.PARTY) }
+                                Box(Modifier.fillMaxSize()) {
+                                    com.example.ui.layer.Confetti(onDone = { viewModel.celebrated() })
+                                    Box(
+                                        Modifier.align(Alignment.Center).clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
+                                            .background(Color(0xE6161A22)).padding(horizontal = 22.dp, vertical = 14.dp)
+                                    ) { Text(msg, style = com.example.ui.layer.lt(17.sp, FontWeight.ExtraBold, Color.White)) }
+                                }
                             }
 
                             if (currencyOpen) {

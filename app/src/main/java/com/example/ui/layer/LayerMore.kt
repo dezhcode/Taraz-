@@ -420,6 +420,14 @@ fun LayerSettingsScreen(
         SettingsGroup("اعلان‌ها") {
             SwitchRow("اعلان‌ها و یادآوری اقساط", if (com.example.Features.SMS) "سه روز و یک روز قبل از سررسید، و پیامک‌های تازهٔ بانک" else "سه روز و یک روز قبل از سررسید اقساط، چک‌ها و قبض‌ها", alertsEnabled, onAlertsChange, divider = false)
         }
+        SettingsGroup("لمس") {
+            val hctx = androidx.compose.ui.platform.LocalContext.current
+            var haptics by remember { mutableStateOf(Haptics.enabled) }
+            SwitchRow("لرزش هنگام لمس", "تیک کوتاه برای دکمه‌ها و کلیدها، تأیید برای ثبت، و هشدار برای مبلغ نادرست", haptics, { on ->
+                haptics = on
+                Haptics.set(hctx, on)
+            }, divider = false)
+        }
         SettingsGroup("داده‌ها") {
             NavRow("واحد پول", com.example.data.Money.label, onClick = onOpenCurrency)
             if (com.example.Features.SMS) NavRow("پیامک‌های بانکی", if (smsBankCount > 0) "${fa(smsBankCount)} بانک روشن" else "راه‌اندازی", onClick = onOpenSms)
