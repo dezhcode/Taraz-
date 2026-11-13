@@ -44,6 +44,8 @@ class FinanceRepository(private val db: AppDatabase) {
     val allCheques: Flow<List<Cheque>> = chequeDao.getAll()
     val allBills: Flow<List<Bill>> = billDao.getAll()
     val allSnapshots: Flow<List<NetWorthSnapshot>> = snapshotDao.getAll()
+    val allTrades: Flow<List<AssetTrade>> = db.assetTradeDao().getAll()
+    val allAlerts: Flow<List<PriceAlert>> = db.priceAlertDao().getAll()
 
     // ─── Cheques ───
 
@@ -126,6 +128,77 @@ class FinanceRepository(private val db: AppDatabase) {
     suspend fun saveAsset(asset: Asset) = assetDao.insert(asset)
 
     suspend fun deleteAsset(id: Int) = assetDao.delete(id)
+
+    /**
+     * Records a purchase or sale of [quantity] units for [total] (book currency) and updates the
+     * holding: a purchase adds units and cost; a sale takes units off at their average cost, and
+     * when nothing is left the holding goes from the list (its trades stay as history). With
+     * [bankName], the money leaves or reaches that account as a transfer, so buying gold is not
+     * counted as spending. [asset] is null for a first purchase.
+     */
+    suspend fun recordTrade(
+        asset: Asset?, code: String, name: String, kind: String, isBuy: Boolean, quantity: Double, total: Long,
+        date: Long, bankName: String?, note: String = ""
+    ) = db.withTransaction {
+        require(quantity > 0 && total >= 0)
+        val current = asset?.id?.let { assetDao.getById(it) }
+        var assetId = current?.id ?: 0
+        var costBasis = 0L
+        if (isBuy) {
+            if (current == null) {
+                assetId = assetDao.insert(Asset(code = code, name = name, kind = kind, quantity = quantity, buyPrice = total, createdAt = date)).toInt()
+            } else {
+                // بهای خرید قبلی نامعلوم بوده: نیمه‌کاره جمع نشود، سود اشتباه نشان می‌داد
+                val cost = if (current.buyPrice > 0 || current.quantity <= 0) current.buyPrice + total else 0L
+                assetDao.insert(current.copy(quantity = current.quantity + quantity, buyPrice = cost))
+            }
+        } else {
+            requireNotNull(current) { "nothing to sell" }
+            val sold = quantity.coerceAtMost(current.quantity)
+            costBasis = if (current.buyPrice > 0 && current.quantity > 0) Math.round(current.buyPrice * sold / current.quantity) else 0L
+            val left = current.quantity - sold
+            if (left <= 1e-9) assetDao.delete(current.id)
+            else assetDao.insert(current.copy(quantity = left, buyPrice = (current.buyPrice - costBasis).coerceAtLeast(0)))
+        }
+        var txId: Int? = null
+        if (!bankName.isNullOrBlank() && total > 0) {
+            txId = insertTransaction(
+                Transaction(
+                    title = (if (isBuy) "خرید " else "فروش ") + name, amount = total, category = "سرمایه‌گذاری", date = date,
+                    isExpense = isBuy, bankName = bankName, type = TransactionType.TRANSFER
+                )
+            ).toInt()
+        }
+        db.assetTradeDao().insert(
+            AssetTrade(
+                assetId = assetId, code = code, name = name, kind = kind, isBuy = isBuy, quantity = quantity, total = total,
+                costBasis = costBasis, date = date, bankName = bankName?.takeIf { it.isNotBlank() }, transactionId = txId, note = note
+            )
+        )
+    }
+
+    /** Takes a trade back: the units and their cost return to (or leave) the holding, and the account's money moves back. */
+    suspend fun deleteTrade(trade: AssetTrade) = db.withTransaction {
+        val current = assetDao.getById(trade.assetId) ?: db.assetDao().getAllNow().firstOrNull { it.code == trade.code }
+        if (trade.isBuy) {
+            if (current != null) {
+                val left = current.quantity - trade.quantity
+                if (left <= 1e-9) assetDao.delete(current.id)
+                else assetDao.insert(current.copy(quantity = left, buyPrice = (current.buyPrice - trade.total).coerceAtLeast(0)))
+            }
+        } else {
+            if (current != null) assetDao.insert(current.copy(quantity = current.quantity + trade.quantity, buyPrice = current.buyPrice + trade.costBasis))
+            else assetDao.insert(
+                Asset(id = trade.assetId, code = trade.code, name = trade.name, kind = trade.kind, quantity = trade.quantity, buyPrice = trade.costBasis)
+            )
+        }
+        trade.transactionId?.let { id -> transactionDao.getById(id)?.let { deleteTransaction(it) } }
+        db.assetTradeDao().delete(trade.id)
+    }
+
+    suspend fun saveAlert(alert: PriceAlert) = db.priceAlertDao().insert(alert)
+
+    suspend fun deleteAlert(id: Int) = db.priceAlertDao().delete(id)
 
     private fun signed(tx: Transaction): Long = if (tx.isExpense) -tx.amount else tx.amount
 
@@ -509,6 +582,7 @@ class FinanceRepository(private val db: AppDatabase) {
             "recurring_transactions" to listOf("amount"),
             "debts" to listOf("amount"),
             "assets" to listOf("buyPrice", "manualPrice"),
+            "asset_trades" to listOf("total", "costBasis"),
             "cheques" to listOf("amount"),
             "bills" to listOf("amount"),
             "pending_transactions" to listOf("amount", "balance")

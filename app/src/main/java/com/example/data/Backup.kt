@@ -129,6 +129,15 @@ object Backup {
             JSONObject().put("id", a.id).put("code", a.code).put("name", a.name).put("kind", a.kind).put("quantity", a.quantity)
                 .put("buyPrice", a.buyPrice).put("manualPrice", a.manualPrice).put("note", a.note).put("createdAt", a.createdAt)
         }))
+        root.put("assetTrades", JSONArray(db.assetTradeDao().getAllNow().map { t ->
+            JSONObject().put("id", t.id).put("assetId", t.assetId).put("code", t.code).put("name", t.name).put("kind", t.kind)
+                .put("isBuy", t.isBuy).put("quantity", t.quantity).put("total", t.total).put("costBasis", t.costBasis).put("date", t.date)
+                .put("bankName", t.bankName ?: JSONObject.NULL).put("transactionId", t.transactionId ?: JSONObject.NULL).put("note", t.note)
+        }))
+        root.put("priceAlerts", JSONArray(db.priceAlertDao().getAllNow().map { a ->
+            JSONObject().put("id", a.id).put("code", a.code).put("name", a.name).put("above", a.above).put("below", a.below)
+                .put("inUsd", a.inUsd).put("enabled", a.enabled).put("lastFiredAt", a.lastFiredAt).put("createdAt", a.createdAt)
+        }))
         root.put("persons", JSONArray(db.personDao().getAll().first().map { p ->
             JSONObject().put("id", p.id).put("name", p.name).put("relation", p.relation).put("phone", p.phone)
                 .put("note", p.note).put("createdAt", p.createdAt).put("photo", p.photo)
@@ -238,6 +247,19 @@ object Backup {
             Asset(o.getInt("id"), o.getString("code"), o.getString("name"), o.getString("kind"), o.getDouble("quantity"),
                 o.optLong("buyPrice"), o.optLong("manualPrice"), o.optString("note"), o.optLong("createdAt", System.currentTimeMillis()))
         }
+        val assetTrades = root.optJSONArray("assetTrades").items { o ->
+            AssetTrade(
+                o.getInt("id"), o.getInt("assetId"), o.getString("code"), o.getString("name"), o.getString("kind"), o.getBoolean("isBuy"),
+                o.getDouble("quantity"), o.getLong("total"), o.optLong("costBasis"), o.getLong("date"), o.optStringOrNull("bankName"),
+                o.optIntOrNull("transactionId"), o.optString("note")
+            )
+        }
+        val priceAlerts = root.optJSONArray("priceAlerts").items { o ->
+            PriceAlert(
+                o.getInt("id"), o.getString("code"), o.getString("name"), o.optDouble("above", 0.0), o.optDouble("below", 0.0),
+                o.optBoolean("inUsd"), o.optBoolean("enabled", true), o.optLong("lastFiredAt"), o.optLong("createdAt", System.currentTimeMillis())
+            )
+        }
         // (person, base64 of the profile picture or null)
         val persons = root.optJSONArray("persons").items { o ->
             Person(o.getInt("id"), o.getString("name"), o.optString("relation", PersonRelation.OTHER), o.optString("phone"),
@@ -289,6 +311,8 @@ object Backup {
             bills.forEach { db.billDao().insert(it) }
             snapshots.forEach { db.snapshotDao().insert(it) }
             assets.forEach { db.assetDao().insert(it) }
+            assetTrades.forEach { db.assetTradeDao().insert(it) }
+            priceAlerts.forEach { db.priceAlertDao().insert(it) }
             personRows.forEach { db.personDao().insert(it) }
             senders.forEach { db.bankSenderDao().insertSender(it) }
         }

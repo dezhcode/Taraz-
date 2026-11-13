@@ -175,6 +175,14 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 var isAssetSheetOpen by remember { mutableStateOf(false) }
                 var assetPreset by remember { mutableStateOf<Pair<String, String>?>(null) }
                 val priceHistory by viewModel.priceHistory.collectAsStateWithLifecycle()
+                val assetTrades by viewModel.assetTrades.collectAsStateWithLifecycle()
+                val priceAlerts by viewModel.priceAlerts.collectAsStateWithLifecycle()
+                var detailCode by remember { mutableStateOf<String?>(null) }
+                var tradeOpen by remember { mutableStateOf(false) }
+                var tradeBuy by remember { mutableStateOf(true) }
+                var alertOpen by remember { mutableStateOf(false) }
+                fun detailName(code: String): String =
+                    assets.firstOrNull { it.code == code }?.name ?: com.example.data.PriceCatalog.find(code)?.name ?: code
 
                 // Overlays states
                 var isAddTransactionOpen by remember { mutableStateOf(false) }
@@ -673,8 +681,36 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         onAddCode = { code ->
                                             val name = com.example.data.PriceCatalog.find(code)?.name ?: assets.firstOrNull { it.code == code }?.name.orEmpty()
                                             assetSheetFor = null; assetPreset = code to name; isAssetSheetOpen = true
-                                        }
+                                        },
+                                        onOpenDetail = { code -> detailCode = code; openSub("asset_detail") }
                                     )
+                                }
+
+                                "asset_detail" -> {
+                                    val code = detailCode
+                                    if (code == null) {
+                                        LaunchedEffect(Unit) { closeSub() }
+                                    } else {
+                                        com.example.ui.layer.LayerAssetDetailScreen(
+                                            code = code,
+                                            name = detailName(code),
+                                            holding = assets.firstOrNull { it.code == code },
+                                            quote = prices[code],
+                                            tomanNow = viewModel.tomanPrice(code),
+                                            history = priceHistory[code].orEmpty(),
+                                            trades = assetTrades.filter { it.code == code },
+                                            alerts = priceAlerts.filter { it.code == code },
+                                            usdToman = viewModel.usdTomanRate(),
+                                            hideAmounts = false,
+                                            onBack = { closeSub() },
+                                            onEdit = { assetSheetFor = it; assetPreset = null; isAssetSheetOpen = true },
+                                            onTrade = { buy -> tradeBuy = buy; tradeOpen = true },
+                                            onDeleteTrade = { viewModel.deleteTrade(it) },
+                                            onAddAlert = { alertOpen = true },
+                                            onToggleAlert = { viewModel.toggleAlert(it) },
+                                            onDeleteAlert = { viewModel.deleteAlert(it) }
+                                        )
+                                    }
                                 }
 
                                 "person_detail" -> {
@@ -1176,6 +1212,34 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     onSave = { viewModel.saveAsset(it) },
                                     onDelete = { viewModel.deleteAsset(it.id) },
                                     preset = assetPreset
+                                )
+                            }
+
+                            if (tradeOpen) detailCode?.let { code ->
+                                val holding = assets.firstOrNull { it.code == code }
+                                val name = detailName(code)
+                                val kind = holding?.kind ?: com.example.data.PriceCatalog.find(code)?.kind
+                                    ?: if (com.example.data.PriceCatalog.isFund(code)) com.example.data.AssetKind.FUND else com.example.data.AssetKind.CURRENCY
+                                com.example.ui.layer.TradeSheet(
+                                    name = name,
+                                    unitName = com.example.data.PriceCatalog.find(code)?.unit ?: "واحد",
+                                    holding = holding,
+                                    startBuy = tradeBuy,
+                                    livePrice = holding?.manualPrice?.takeIf { it > 0 }?.toDouble() ?: prices[code]?.exact,
+                                    cards = cards,
+                                    onDismiss = { tradeOpen = false },
+                                    onSave = { isBuy, q, total, date, bank -> viewModel.recordTrade(holding, code, name, kind, isBuy, q, total, date, bank) }
+                                )
+                            }
+
+                            if (alertOpen) detailCode?.let { code ->
+                                val inUsd = com.example.ui.layer.inDollars(code) && prices[code]?.usd != null
+                                com.example.ui.layer.AlertSheet(
+                                    name = detailName(code),
+                                    inUsd = inUsd,
+                                    current = if (inUsd) prices[code]?.usd else prices[code]?.exact,
+                                    onDismiss = { alertOpen = false },
+                                    onSave = { above, below -> viewModel.addAlert(code, detailName(code), inUsd, above, below) }
                                 )
                             }
 

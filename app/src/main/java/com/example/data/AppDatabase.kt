@@ -147,9 +147,11 @@ interface GoalDao {
         Asset::class,
         Cheque::class,
         Bill::class,
-        NetWorthSnapshot::class
+        NetWorthSnapshot::class,
+        AssetTrade::class,
+        PriceAlert::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -170,6 +172,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun chequeDao(): ChequeDao
     abstract fun billDao(): BillDao
     abstract fun snapshotDao(): SnapshotDao
+    abstract fun assetTradeDao(): AssetTradeDao
+    abstract fun priceAlertDao(): PriceAlertDao
 
     companion object {
         @Volatile
@@ -298,6 +302,23 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_13_14 = object : androidx.room.migration.Migration(13, 14) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE persons ADD COLUMN photo TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        /** v15: خرید و فروش دارایی‌ها و هشدار قیمت */
+        val MIGRATION_14_15 = object : androidx.room.migration.Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `asset_trades` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `assetId` INTEGER NOT NULL, " +
+                        "`code` TEXT NOT NULL, `name` TEXT NOT NULL, `kind` TEXT NOT NULL, `isBuy` INTEGER NOT NULL, `quantity` REAL NOT NULL, " +
+                        "`total` INTEGER NOT NULL, `costBasis` INTEGER NOT NULL, `date` INTEGER NOT NULL, `bankName` TEXT, `transactionId` INTEGER, " +
+                        "`note` TEXT NOT NULL)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `price_alerts` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `code` TEXT NOT NULL, " +
+                        "`name` TEXT NOT NULL, `above` REAL NOT NULL, `below` REAL NOT NULL, `inUsd` INTEGER NOT NULL, `enabled` INTEGER NOT NULL, " +
+                        "`lastFiredAt` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL)"
+                )
             }
         }
 
@@ -442,7 +463,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "fidar_finance_database"
                 )
                 .addCallback(AppDatabaseCallback(scope))
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
                 // Only the first test builds (v1-3) have no migration. Every later
                 // version must have one: a destructive fallback wiped users' money
                 // records silently whenever a migration was forgotten.

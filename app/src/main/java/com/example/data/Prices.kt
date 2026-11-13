@@ -424,3 +424,26 @@ object PriceHistory {
     fun lastDays(history: List<Pair<Int, Double>>?, today: Int, days: Int): List<Double> =
         history.orEmpty().filter { it.first > today - days }.map { it.second }
 }
+
+/** «$۱۰۸٬۷۳۵»، «$۲٫۴۵»، «$۰٫۰۰۰۰۱۷۸۹»: زیر یک دلار تا چهار رقم معنادار. جدا از متن راست‌به‌چپ. */
+fun usdText(v: Double): String {
+    val a = kotlin.math.abs(v)
+    val d = when {
+        a >= 1000 -> 0
+        a >= 1 || a == 0.0 -> 2
+        else -> (3 - kotlin.math.floor(kotlin.math.log10(a)).toInt()).coerceIn(2, 10)
+    }
+    var t = String.format(java.util.Locale.ENGLISH, "%,.${d}f", a)
+    if (a < 1 && t.contains('.')) t = t.trimEnd('0').trimEnd('.')
+    val fa = t.map { c -> if (c in '0'..'9') '۰' + (c - '0') else when (c) { ',' -> '٬'; '.' -> '٫'; else -> c } }.joinToString("")
+    return "⁦" + (if (v < 0) "−" else "") + "$" + fa + "⁩"
+}
+
+/**
+ * An alert threshold or price for display: dollars for an alert kept in dollars, else the toman
+ * value in the book's currency (with its label).
+ */
+fun alertPriceText(v: Double, inUsd: Boolean, usdToman: Long?): String =
+    if (inUsd) usdText(v)
+    else Money.fromToman(Math.round(v), usdToman)?.let { Money.withLabel(it) }
+        ?: (Money.format(Math.round(v), AppCurrency.TOMAN) + " تومان")

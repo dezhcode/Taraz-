@@ -56,14 +56,14 @@ import com.example.utils.JalaliDate
 import java.util.Locale
 import kotlin.math.roundToLong
 
-private val KIND_LABEL = linkedMapOf(
+internal val KIND_LABEL = linkedMapOf(
     AssetKind.CURRENCY to "ارز",
     AssetKind.GOLD to "طلا و سکه",
     AssetKind.CRYPTO to "رمزارز",
     AssetKind.FUND to "صندوق"
 )
 
-private fun kindColor(kind: String): Color = when (kind) {
+internal fun kindColor(kind: String): Color = when (kind) {
     AssetKind.CURRENCY -> Color(0xFF0E9490)
     AssetKind.GOLD -> Color(0xFFD9A21B)
     AssetKind.CRYPTO -> Color(0xFF7A5AA8)
@@ -98,7 +98,7 @@ fun unitPriceText(exact: Double): String {
     return fa(s.replace('.', '٫'))
 }
 
-private fun agoText(at: Long, now: Long = System.currentTimeMillis()): String {
+internal fun agoText(at: Long, now: Long = System.currentTimeMillis()): String {
     val sec = ((now - at) / 1000).toInt()
     val min = sec / 60
     return when {
@@ -111,7 +111,7 @@ private fun agoText(at: Long, now: Long = System.currentTimeMillis()): String {
 }
 
 /** نام منبع هر قیمت برای نمایش */
-private fun sourceLabel(s: String): String = when (s) {
+internal fun sourceLabel(s: String): String = when (s) {
     "tgju" -> "tgju"
     "nobitex" -> "نوبیتکس"
     "wallex" -> "والکس"
@@ -123,7 +123,7 @@ private fun sourceLabel(s: String): String = when (s) {
 }
 
 /** درصد با یک رقم اعشار و علامت: «+۱٫۲٪»، «−۰٫۳٪» */
-private fun signedPct(c: Double): String =
+internal fun signedPct(c: Double): String =
     // جدا از متن راست‌به‌چپ، تا علامت پیش از عدد بماند و «۰٫۴٪+» نشود
     "\u2066" + (if (c >= 0) "+" else "−") + fa(String.format(Locale.ENGLISH, "%.1f", kotlin.math.abs(c)).replace('.', '٫')) + "٪\u2069"
 
@@ -131,24 +131,14 @@ private fun signedPct(c: Double): String =
  * مبلغ دلاری: «$۱۰۸٬۷۳۵»، «$۲٫۴۵»، «$۰٫۰۰۰۰۱۲۳۴» (زیر یک دلار تا چهار رقم معنادار). جدا از متن
  * راست‌به‌چپ تا «$» کنار عدد بماند.
  */
-fun dollarText(v: Double): String {
-    val a = kotlin.math.abs(v)
-    val d = when {
-        a >= 1000 -> 0
-        a >= 1 || a == 0.0 -> 2
-        else -> (3 - kotlin.math.floor(kotlin.math.log10(a)).toInt()).coerceIn(2, 10)
-    }
-    var t = String.format(Locale.ENGLISH, "%,.${d}f", a)
-    if (a < 1 && t.contains('.')) t = t.trimEnd('0').trimEnd('.')
-    return "\u2066" + (if (v < 0) "−" else "") + "$" + fa(t.replace(',', '٬').replace('.', '٫')) + "\u2069"
-}
+fun dollarText(v: Double): String = com.example.data.usdText(v)
 
 /** رمزارزها (جز خود تتر) به دلار نشان داده می‌شوند، مگر دفتر خودش دلاری باشد */
-private fun inDollars(code: String): Boolean =
+internal fun inDollars(code: String): Boolean =
     com.example.data.Money.current != com.example.data.AppCurrency.USD && code != "usdt" && PriceCatalog.find(code)?.kind == AssetKind.CRYPTO
 
 /** مقدار برای نمایش، با جداکنندهٔ هزارگان: «۵٬۰۰۰٬۰۰۰»، «۰٫۰۱۲» */
-private fun faQuantityShown(q: Double): String {
+internal fun faQuantityShown(q: Double): String {
     val s = String.format(Locale.ENGLISH, "%.8f", q).trimEnd('0').trimEnd('.')
     val whole = s.substringBefore('.')
     val frac = s.substringAfter('.', "")
@@ -157,7 +147,7 @@ private fun faQuantityShown(q: Double): String {
 }
 
 /** مبلغ کوتاه برای فهرست‌های فشرده: «۱۲۵٫۴ میلیون»، «۱۰٫۴۵ میلیارد» (در دفتر دلاری همان مبلغ کامل) */
-private fun compact(v: Long): String {
+internal fun compact(v: Long): String {
     if (com.example.data.Money.current == com.example.data.AppCurrency.USD) return money(v)
     val a = kotlin.math.abs(v)
     fun one(x: Double, d: Int) = fa(java.math.BigDecimal(x).setScale(d, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString().replace('.', '٫'))
@@ -207,7 +197,9 @@ fun LayerAssetsScreen(
     onOpen: (Asset) -> Unit,
     snapshots: List<com.example.data.NetWorthSnapshot> = emptyList(),
     history: Map<String, List<Pair<Int, Double>>> = emptyMap(),
-    onAddCode: (String) -> Unit = { onAdd() }
+    onAddCode: (String) -> Unit = { onAdd() },
+    /** صفحهٔ جزئیات یک دارایی یا یک قیمت بازار */
+    onOpenDetail: (String) -> Unit = {}
 ) {
     androidx.activity.compose.BackHandler(onBack = onBack)
     // هر بار که صفحه دیده می‌شود (باز شدن، برگشتن از برنامهٔ دیگر) قیمت تازه، و تا وقتی باز است هر دو دقیقه
@@ -327,8 +319,8 @@ fun LayerAssetsScreen(
                     L.AmberSoft, L.AmberInk, Modifier.padding(horizontal = 20.dp)
                 )
             }
-            if (tab == "market") MarketTab(assets, prices, history, kind, { kind = it }, clock, onAddCode)
-            else MineTab(assets, prices, hideAmounts, clock, accountsTotal, debtsTotal, net, assetsTotal, snapshots, onOpen)
+            if (tab == "market") MarketTab(assets, prices, history, kind, { kind = it }, clock, onAddCode, onOpenDetail)
+            else MineTab(assets, prices, hideAmounts, clock, accountsTotal, debtsTotal, net, assetsTotal, snapshots) { onOpenDetail(it.code) }
         }
 
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 20.dp, end = 20.dp, bottom = 16.dp, top = 4.dp)) {
@@ -347,7 +339,8 @@ private fun MarketTab(
     kind: String,
     onKind: (String) -> Unit,
     clock: Long,
-    onAddCode: (String) -> Unit
+    onAddCode: (String) -> Unit,
+    onOpenDetail: (String) -> Unit
 ) {
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp),
@@ -373,7 +366,7 @@ private fun MarketTab(
             val c = q?.changePct
             val tint = if (c != null && c < 0) L.RedText else L.GreenText
             Row(
-                Modifier.fillMaxWidth().padding(start = 14.dp, end = 10.dp, top = 11.dp, bottom = 11.dp),
+                Modifier.fillMaxWidth().clickable { onOpenDetail(item.code) }.padding(start = 14.dp, end = 10.dp, top = 11.dp, bottom = 11.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {

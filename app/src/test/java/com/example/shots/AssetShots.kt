@@ -13,7 +13,12 @@ import com.example.data.Asset
 import com.example.data.AssetKind
 import com.example.data.PriceHistory
 import com.example.data.PriceQuote
+import com.example.data.AssetTrade
+import com.example.data.BankCard
+import com.example.data.PriceAlert
+import com.example.ui.layer.LayerAssetDetailScreen
 import com.example.ui.layer.LayerAssetsScreen
+import com.example.ui.layer.TradeSheet
 import com.example.ui.layer.LayerTheme
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Rule
@@ -78,6 +83,54 @@ class AssetShots {
             compose.mainClock.advanceTimeBy(800)
         }
         compose.onRoot().captureRoboImage("build/tourshots/7_assets_$name.png")
+    }
+
+    private fun raw(name: String, dark: Boolean, content: @Composable () -> Unit) {
+        LayerTheme.dark = dark
+        compose.mainClock.autoAdvance = false
+        compose.setContent { CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) { content() } }
+        compose.mainClock.advanceTimeBy(800)
+        compose.onRoot().captureRoboImage("build/tourshots/7_assets_$name.png")
+    }
+
+    private val day = 86_400_000L
+    private val coinHistory = run {
+        val today = PriceHistory.dayOf(now)
+        (0 until 30).map { i -> (today - 29 + i) to (84.0e6 + i * 0.18e6 + kotlin.math.sin(i * 0.9) * 0.9e6) }
+    }
+
+    @Test fun detail() = raw("3_detail", dark = false) {
+        LayerAssetDetailScreen(
+            code = "coin_emami", name = "سکهٔ امامی", holding = assets[0], quote = prices["coin_emami"], tomanNow = 89_500_000.0,
+            history = coinHistory,
+            trades = listOf(
+                AssetTrade(id = 3, assetId = 1, code = "coin_emami", name = "سکهٔ امامی", kind = AssetKind.GOLD, isBuy = false, quantity = 1.0,
+                    total = 87_500_000, costBasis = 79_000_000, date = now - 10 * day, bankName = "ملت", transactionId = 9),
+                AssetTrade(id = 2, assetId = 1, code = "coin_emami", name = "سکهٔ امامی", kind = AssetKind.GOLD, isBuy = true, quantity = 2.0,
+                    total = 166_000_000, date = now - 60 * day, bankName = "سامان", transactionId = 8),
+                AssetTrade(id = 1, assetId = 1, code = "coin_emami", name = "سکهٔ امامی", kind = AssetKind.GOLD, isBuy = true, quantity = 1.0,
+                    total = 72_000_000, date = now - 190 * day)
+            ),
+            alerts = listOf(PriceAlert(id = 1, code = "coin_emami", name = "سکهٔ امامی", above = 92_000_000.0, below = 85_000_000.0)),
+            usdToman = 95_400, hideAmounts = false,
+            onBack = {}, onEdit = {}, onTrade = {}, onDeleteTrade = {}, onAddAlert = {}, onToggleAlert = {}, onDeleteAlert = {}
+        )
+    }
+
+    @Test fun detailCryptoDark() = raw("3b_detail_btc_dark", dark = true) {
+        LayerAssetDetailScreen(
+            code = "btc", name = "بیت‌کوین", holding = assets[2], quote = prices["btc"], tomanNow = 10_450_000_000.0,
+            history = history["btc"].orEmpty(), trades = emptyList(), alerts = emptyList(), usdToman = 95_400, hideAmounts = false,
+            onBack = {}, onEdit = {}, onTrade = {}, onDeleteTrade = {}, onAddAlert = {}, onToggleAlert = {}, onDeleteAlert = {}
+        )
+    }
+
+    @Test fun sell() = raw("4_sell", dark = false) {
+        TradeSheet(
+            name = "سکهٔ امامی", unitName = "عدد", holding = assets[0], startBuy = false, livePrice = 89_500_000.0,
+            cards = listOf(BankCard(bankName = "ملت", balance = 210_400_000), BankCard(bankName = "سامان", balance = 48_750_000)),
+            onDismiss = {}, onSave = { _, _, _, _, _ -> }
+        )
     }
 
     @Test fun mine() = shot("1_mine", dark = false, held = assets)

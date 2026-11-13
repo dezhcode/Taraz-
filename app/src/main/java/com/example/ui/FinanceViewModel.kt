@@ -644,6 +644,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 _priceHistory.value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { PriceHistory.load(getApplication()) }
                 _priceErrors.value = failed
                 recordSnapshot()
+                checkAlerts(quotes)
             } catch (e: Exception) {
                 _priceErrors.value = listOf("خطا: ${e.message ?: e.javaClass.simpleName}")
             } finally {
@@ -751,6 +752,74 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             repository.saveAsset(asset)
             refreshPrices(force = asset.manualPrice <= 0 && _prices.value[asset.code] == null)
+        }
+    }
+
+    // ─── خرید و فروش دارایی، هشدار قیمت ───
+
+    val assetTrades: StateFlow<List<AssetTrade>> = repository.allTrades
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val priceAlerts: StateFlow<List<PriceAlert>> = repository.allAlerts
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** قیمت روز [code] به تومان، همان‌طور که از سایت آمده (برای نمودار و هشدار) */
+    fun tomanPrice(code: String): Double? = _prices.value[code]?.exact
+
+    /** چند واحد دفتر در هر تومان: تومان ۱، ریال ۱۰، دلار (سنت) ۱۰۰ ÷ نرخ دلار */
+    fun bookPerToman(): Double? = when (com.example.data.Money.current) {
+        com.example.data.AppCurrency.TOMAN -> 1.0
+        com.example.data.AppCurrency.RIAL -> 10.0
+        com.example.data.AppCurrency.USD -> usdTomanRate()?.let { 100.0 / it }
+    }
+
+    fun recordTrade(asset: Asset?, code: String, name: String, kind: String, isBuy: Boolean, quantity: Double, total: Long, date: Long, bankName: String?) {
+        viewModelScope.launch {
+            try {
+                repository.recordTrade(asset, code, name, kind, isBuy, quantity, total, date, bankName)
+                refreshPrices(force = _prices.value[code] == null)
+            } catch (e: Exception) {
+                _priceErrors.value = listOf("ثبت نشد: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
+    fun deleteTrade(trade: AssetTrade) {
+        viewModelScope.launch { repository.deleteTrade(trade) }
+    }
+
+    /**
+     * هشدار تازه. حدها همان‌طور که کاربر دیده وارد شده‌اند: برای رمزارز به دلار، برای بقیه به واحد
+     * دفتر (که این‌جا به تومان برده می‌شود تا با عوض شدن واحد پول جابه‌جا نشود).
+     */
+    fun addAlert(code: String, name: String, inUsd: Boolean, above: Double, below: Double) {
+        val k = if (inUsd) 1.0 else bookPerToman() ?: return
+        viewModelScope.launch {
+            repository.saveAlert(PriceAlert(code = code, name = name, above = above / k, below = below / k, inUsd = inUsd))
+            syncAlertWork()
+            checkAlerts(_prices.value)
+        }
+    }
+
+    fun toggleAlert(alert: PriceAlert) {
+        viewModelScope.launch { repository.saveAlert(alert.copy(enabled = !alert.enabled)); syncAlertWork() }
+    }
+
+    fun deleteAlert(alert: PriceAlert) {
+        viewModelScope.launch { repository.deleteAlert(alert.id); syncAlertWork() }
+    }
+
+    private suspend fun syncAlertWork() {
+        val on = repository.allAlerts.first().any { it.enabled }
+        com.example.reminders.ReminderScheduler.schedulePriceAlerts(getApplication(), on)
+    }
+
+    private fun checkAlerts(quotes: Map<String, PriceQuote>) {
+        val hits = PriceAlerts.hits(priceAlerts.value, quotes)
+        if (hits.isEmpty()) return
+        viewModelScope.launch {
+            com.example.reminders.PriceAlertWorker.fire(getApplication(), hits, quotes["usd"]?.price) { repository.saveAlert(it) }
+            syncAlertWork()
         }
     }
 

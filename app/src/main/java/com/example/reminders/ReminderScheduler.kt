@@ -53,6 +53,16 @@ object ReminderScheduler {
      * بررسی پیامک‌های بانکی صندوق ورودی هر ۱۵ دقیقه (کمترین فاصلهٔ WorkManager). KEEP: هر بار باز شدن
      * برنامه زمان‌بندی را از نو شروع نمی‌کند. خود کار وقتی پیامک‌خوان خاموش است هیچ نمی‌خواند.
      */
+    /** Price alerts: checked every 30 minutes (with internet) while at least one is on; [on] = false stops it. */
+    fun schedulePriceAlerts(context: Context, on: Boolean) {
+        val wm = WorkManager.getInstance(context)
+        if (!on) { wm.cancelUniqueWork("taraz_price_alerts"); return }
+        val request = PeriodicWorkRequestBuilder<PriceAlertWorker>(30, TimeUnit.MINUTES)
+            .setConstraints(androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build())
+            .build()
+        wm.enqueueUniquePeriodicWork("taraz_price_alerts", ExistingPeriodicWorkPolicy.KEEP, request)
+    }
+
     fun scheduleSmsCatchUp(context: Context) {
         val request = PeriodicWorkRequestBuilder<SmsCatchUpWorker>(15, TimeUnit.MINUTES).build()
         WorkManager.getInstance(context).enqueueUniquePeriodicWork("taraz_sms_catch_up", ExistingPeriodicWorkPolicy.KEEP, request)
