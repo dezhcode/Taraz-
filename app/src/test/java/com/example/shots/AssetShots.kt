@@ -16,6 +16,7 @@ import com.example.data.PriceQuote
 import com.example.data.AssetTrade
 import com.example.data.BankCard
 import com.example.data.PriceAlert
+import com.example.ui.layer.LayerAccountsScreen
 import com.example.ui.layer.LayerAssetDetailScreen
 import com.example.ui.layer.LayerAssetsScreen
 import com.example.ui.layer.TradeSheet
@@ -132,6 +133,26 @@ class AssetShots {
             onDismiss = {}, onSave = { _, _, _, _, _ -> }
         )
     }
+
+    private val accountCards = listOf(
+        BankCard(id = 1, bankName = "ملت", cardNumber = "6104337412345678", balance = 3_200_000),
+        BankCard(id = 2, bankName = "سامان", cardNumber = "6219861012345678", balance = 1_477_412),
+        BankCard(id = 3, bankName = "وجه نقد", balance = 500_000, accountType = "CASH"),
+        BankCard(id = 4, bankName = "کارت اعتباری", cardNumber = "5022291012349012", balance = -800_000, accountType = "CREDIT", creditLimit = 10_000_000, dueDay = 5)
+    )
+
+    private fun accountsShot(name: String, dark: Boolean) = raw(name, dark) {
+        LayerAccountsScreen(
+            cards = accountCards, senders = emptyList(), totalBalance = 5_177_412,
+            onBack = {}, onOpenAccount = {}, onAdd = {}, onTransfer = {},
+            assetsTotal = 619_570_000,
+            assets = com.example.ui.layer.assetsSummaryOf(assets, prices),
+            defaultAccount = "ملت"
+        )
+    }
+
+    @Test fun accountsLight() = accountsShot("8_accounts", dark = false)
+    @Test fun accountsDark() = accountsShot("8b_accounts_dark", dark = true)
 
     @Test fun mine() = shot("1_mine", dark = false, held = assets)
     @Test fun mineDark() = shot("1b_mine_dark", dark = true, held = assets)
