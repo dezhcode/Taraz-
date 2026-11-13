@@ -176,6 +176,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 var assetPreset by remember { mutableStateOf<Pair<String, String>?>(null) }
                 val priceHistory by viewModel.priceHistory.collectAsStateWithLifecycle()
                 val assetTrades by viewModel.assetTrades.collectAsStateWithLifecycle()
+                val defaultAccount by viewModel.defaultAccount.collectAsStateWithLifecycle()
                 val priceAlerts by viewModel.priceAlerts.collectAsStateWithLifecycle()
                 var detailCode by remember { mutableStateOf<String?>(null) }
                 var tradeOpen by remember { mutableStateOf(false) }
@@ -478,7 +479,14 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         onTransfer = { isTransferOpen = true },
                                         holderName = userProfile?.name.orEmpty(),
                                         assetsTotal = assetsTotal,
-                                        onOpenAssets = { openSub("assets") }
+                                        onOpenAssets = { openSub("assets") },
+                                        assets = remember(assets, prices) { com.example.ui.layer.assetsSummaryOf(assets, prices) },
+                                        onEditAccount = { accountToEdit = it },
+                                        onToggleSms = { viewModel.toggleBankSender(it) },
+                                        onOpenSmsSetup = { openSub("sms_setup") },
+                                        onDeleteAccount = { viewModel.deleteCard(it.id) },
+                                        defaultAccount = defaultAccount,
+                                        onSetDefault = { viewModel.setDefaultAccount(it) }
                                     )
                                 }
 
@@ -1110,7 +1118,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             if (isAddTransactionOpen) {
                                 com.example.ui.layer.LayerAddSheet(
                                     categories = categories,
-                                    cards = cards,
+                                    // حساب پیش‌فرض اول، تا از پیش انتخاب شود
+                                    cards = remember(cards, defaultAccount) { cards.sortedByDescending { it.bankName == defaultAccount } },
                                     transactions = transactions,
                                     startAsExpense = initialIsExpenseForDialog,
                                     onDismiss = { isAddTransactionOpen = false; addWithVoice = false },

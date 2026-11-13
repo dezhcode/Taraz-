@@ -653,6 +653,16 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    // ─── حساب پیش‌فرض: در فرم ثبت تراکنش از پیش انتخاب می‌شود ───
+
+    private val _defaultAccount = MutableStateFlow(sharedPrefs.getString("default_account", null))
+    val defaultAccount: StateFlow<String?> = _defaultAccount.asStateFlow()
+
+    fun setDefaultAccount(name: String?) {
+        _defaultAccount.value = name
+        sharedPrefs.edit().apply { if (name == null) remove("default_account") else putString("default_account", name) }.apply()
+    }
+
     // ─── چیدمان صفحهٔ خانه ───
 
     private val _homeLayout = MutableStateFlow(com.example.ui.layer.HomeTools.decodeLayout(sharedPrefs.getString("home_layout", null)))

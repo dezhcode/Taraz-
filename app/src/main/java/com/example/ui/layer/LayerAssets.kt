@@ -110,6 +110,23 @@ internal fun agoText(at: Long, now: Long = System.currentTimeMillis()): String {
     }
 }
 
+/** خلاصهٔ دارایی‌ها برای بنر صفحهٔ حساب‌ها: تغییر امروز و سهم هر نوع؛ null اگر دارایی‌ای نیست */
+fun assetsSummaryOf(assets: List<Asset>, prices: Map<String, PriceQuote>): AssetsSummary? {
+    val values = assets.map { it to com.example.data.valueOf(it, prices) }
+    val total = values.sumOf { it.second }
+    if (total <= 0) return null
+    val today = values.filter { it.first.manualPrice <= 0 }.sumOf { (a, v) ->
+        val c = prices[a.code]?.changePct ?: return@sumOf 0.0
+        v - v / (1 + c / 100)
+    }
+    val base = total - today
+    val shares = KIND_LABEL.mapNotNull { (k, label) ->
+        val v = values.filter { it.first.kind == k }.sumOf { it.second }
+        if (v <= 0) null else label to Math.round(v * 100.0 / total).toInt()
+    }.filter { it.second > 0 }.sortedByDescending { it.second }
+    return AssetsSummary(if (today != 0.0 && base > 0) today * 100 / base else null, shares)
+}
+
 /** نام منبع هر قیمت برای نمایش */
 internal fun sourceLabel(s: String): String = when (s) {
     "tgju" -> "tgju"

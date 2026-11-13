@@ -26,6 +26,8 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Savings
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -106,7 +108,8 @@ private fun DetectedBankPill(bank: String, logo: String?) {
 }
 
 /**
- * فهرست حساب‌ها — طرح نهایی: موجودی کل درشت، کارت هر حساب با وضعیت پیامک خودکار.
+ * حساب‌ها (طرح «بنر دارایی‌ها و کارت‌ها»): بالای صفحه بنر طلایی دارایی‌ها تا راه دارایی‌ها همیشه در دید
+ * باشد؛ زیرش هر حساب یک کارت دوتکه (رنگ بانک بالا، موجودی پایین) با چرخ‌دندهٔ تنظیمات همان حساب.
  */
 @Composable
 fun LayerAccountsScreen(
@@ -119,10 +122,20 @@ fun LayerAccountsScreen(
     onTransfer: () -> Unit,
     holderName: String = "",
     assetsTotal: Long = 0,
-    onOpenAssets: () -> Unit = {}
+    onOpenAssets: () -> Unit = {},
+    /** تغییر امروز ارزش دارایی‌ها (درصد) و سهم هر نوع، برای بنر */
+    assets: AssetsSummary? = null,
+    onEditAccount: (BankCard) -> Unit = onOpenAccount,
+    onToggleSms: (BankSender) -> Unit = {},
+    onOpenSmsSetup: () -> Unit = {},
+    onDeleteAccount: (BankCard) -> Unit = {},
+    defaultAccount: String? = null,
+    onSetDefault: (String?) -> Unit = {}
 ) {
     // چشم سراسری: همهٔ مبلغ‌های این صفحه را با هم پنهان می‌کند
     var hideAmounts by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var settingsFor by remember { mutableStateOf<BankCard?>(null) }
+    fun amt(v: Long) = if (hideAmounts) "••••••" else money(v)
     ScreenTour("accounts", Tours.accounts)
     LayerScreen(
         title = "حساب‌ها",
@@ -138,63 +151,268 @@ fun LayerAccountsScreen(
                 )
             }
         },
-        subtitle = if (cards.isEmpty()) "هنوز حسابی ندارید" else "${fa(cards.size)} حساب · برای مشاهدهٔ جزئیات، روی حساب ضربه بزنید",
+        subtitle = if (cards.isEmpty()) "هنوز حسابی ندارید" else null,
         onBack = onBack,
         bottomBar = {
-            BigButton("افزودن حساب", Modifier.tourTarget("acc.actions"), onClick = onAdd)
-            if (cards.size >= 2) SoftBigButton("انتقال بین حساب‌ها", onClick = onTransfer)
-        }
-    ) {
-        Column(Modifier.padding(horizontal = 24.dp).tourTarget("acc.total"), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("موجودی کل", style = lt(13.sp, color = L.Muted))
-            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(if (hideAmounts) "••••••" else money(totalBalance), style = lt(38.sp, FontWeight.Light, letterSpacing = (-1.5).sp))
-                Text("${com.example.data.Money.label}", style = lt(14.sp), modifier = Modifier.padding(bottom = 6.dp))
+            Row(Modifier.tourTarget("acc.actions"), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                BigButton("افزودن حساب", Modifier.weight(1f), onClick = onAdd)
+                if (cards.size >= 2) SoftBigButton("انتقال بین حساب‌ها", Modifier.weight(1f), height = 54.dp, onClick = onTransfer)
             }
         }
-        // دارایی‌ها (ارز، طلا، رمزارز، صندوق) با قیمت روز
+    ) {
+        AssetsBanner(assetsTotal, assets, hideAmounts, onOpenAssets, Modifier.padding(horizontal = 20.dp).tourTarget("acc.assets"))
+
         Row(
-            Modifier.padding(horizontal = 20.dp).fillMaxWidth().tourTarget("acc.assets").cardSurface(18.dp).clickable(onClick = onOpenAssets)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+            Modifier.padding(horizontal = 24.dp).fillMaxWidth().tourTarget("acc.total"),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("کارت‌ها و حساب‌ها", style = lt(15.sp, FontWeight.ExtraBold), modifier = Modifier.weight(1f))
+            Text("موجودی کل ", style = lt(12.sp, color = L.Muted))
+            Text(amt(totalBalance), style = lt(13.sp, FontWeight.Bold))
+        }
+
+        if (cards.isEmpty()) {
+            Text(
+                "کارت بانکی، حساب، کیف پول نقد یا کارت اعتباری خود را اضافه کنید تا موجودی و تراکنش‌های هر کدام جدا دیده شود.",
+                style = lt(13.sp, color = L.Muted, lineHeight = 23.sp), modifier = Modifier.padding(horizontal = 24.dp)
+            )
+        }
+        cards.forEachIndexed { i, card ->
+            AccountTile(
+                card = card, index = i, hide = hideAmounts,
+                badge = when {
+                    card.isCash -> "نقد"
+                    card.isCredit -> "اعتباری"
+                    com.example.Features.SMS && hasAutoSms(card, senders) -> "پیامک خودکار"
+                    else -> "ثبت دستی"
+                } + if (card.bankName == defaultAccount) " · پیش‌فرض" else "",
+                onOpen = { onOpenAccount(card) },
+                onSettings = { settingsFor = card },
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+        }
+    }
+
+    settingsFor?.let { c ->
+        // اگر حساب در این میان حذف یا ویرایش شد، نسخهٔ تازه‌اش
+        val card = cards.firstOrNull { it.id == c.id }
+        if (card == null) { settingsFor = null; return@let }
+        AccountSettingsSheet(
+            card = card,
+            sender = senderFor(card, senders),
+            isDefault = card.bankName == defaultAccount,
+            onDismiss = { settingsFor = null },
+            onEdit = { settingsFor = null; onEditAccount(card) },
+            onOpen = { settingsFor = null; onOpenAccount(card) },
+            onToggleSms = onToggleSms,
+            onOpenSmsSetup = { settingsFor = null; onOpenSmsSetup() },
+            onSetDefault = { on -> onSetDefault(if (on) card.bankName else null) },
+            onDelete = { settingsFor = null; onDeleteAccount(card) }
+        )
+    }
+}
+
+/** ارزش کل دارایی‌ها، تغییر امروز و سهم هر نوع (برای بنر صفحهٔ حساب‌ها) */
+data class AssetsSummary(val todayPct: Double?, val shares: List<Pair<String, Int>>)
+
+/** بنر طلایی دارایی‌ها: همیشه بالای صفحهٔ حساب‌ها، تا راه دارایی‌ها پیدا باشد */
+@Composable
+private fun AssetsBanner(total: Long, summary: AssetsSummary?, hide: Boolean, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    val gold = Color(0xFF6E4A00)
+    val soft = Color(0xFFFFE7A8)
+    Column(
+        modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(gold).clickable(onClick = onOpen)
+            .semantics { contentDescription = "دارایی‌ها" }
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Savings, null, tint = soft, modifier = Modifier.size(24.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text("دارایی‌ها", style = lt(17.sp, FontWeight.ExtraBold, Color.White))
+                Text("دلار، طلا، سکه، رمزارز و صندوق", style = lt(12.sp, color = soft))
+            }
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = Color.White, modifier = Modifier.size(22.dp))
+        }
+        if (total > 0) {
+            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(if (hide) "••••••" else money(total), style = lt(30.sp, FontWeight.Light, Color.White, letterSpacing = (-1).sp))
+                Text(com.example.data.Money.label, style = lt(12.sp, color = soft), modifier = Modifier.padding(bottom = 5.dp))
+                Spacer(Modifier.weight(1f))
+                summary?.todayPct?.let { p ->
+                    Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.18f)).padding(horizontal = 9.dp, vertical = 4.dp)) {
+                        Text("امروز ${signedPct(p)}", style = lt(12.sp, FontWeight.Bold, Color.White))
+                    }
+                }
+            }
+            val shares = summary?.shares.orEmpty()
+            if (shares.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    shares.forEach { (label, pct) ->
+                        Box(Modifier.clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.12f)).padding(horizontal = 8.dp, vertical = 3.dp)) {
+                            Text("$label ${fa(pct)}٪", style = lt(11.sp, color = soft), maxLines = 1)
+                        }
+                    }
+                }
+            }
+        } else {
+            Text("ارزش روز دلار، طلا، رمزارز یا صندوقی که دارید را این‌جا ببینید؛ با زدن روی این کادر اضافه کنید.", style = lt(12.sp, color = soft, lineHeight = 20.sp))
+        }
+    }
+}
+
+/** کارت دوتکهٔ هر حساب: بالا رنگ و لوگوی بانک، پایین موجودی و دکمهٔ تنظیمات */
+@Composable
+private fun AccountTile(card: BankCard, index: Int, hide: Boolean, badge: String, onOpen: () -> Unit, onSettings: () -> Unit, modifier: Modifier = Modifier) {
+    val asset = remember(card.bankName, card.cardNumber, card.accountType) {
+        if (card.isCash) null else BankLogos.assetFor(card.bankName, card.cardNumber)
+    }
+    val base = if (card.isCash) L.Green else cardColor(index)
+    val c1 = remember(card.bankName, card.cardNumber, card.accountType, base) { cardBrandColor(card, base) }
+    val c2 = androidx.compose.ui.graphics.lerp(c1, Color.Black, 0.35f)
+    val digits = card.cardNumber.filter { it.isDigit() }
+    val bottom = if (LayerTheme.dark) Color(0xFF0F1218) else Color(0xFF161A22)
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))) {
+        Row(
+            Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(c1, c2)))
+                .clickable(onClick = onOpen).padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("دارایی‌ها", style = lt(14.sp, FontWeight.SemiBold))
-                Text(
-                    if (assetsTotal > 0) "دلار، طلا، رمزارز و صندوق · با قیمت روز" else "دلار، طلا، رمزارز یا صندوق اضافه کنید",
-                    style = lt(12.sp, color = L.Muted)
-                )
-            }
-            if (assetsTotal > 0) Text(if (hideAmounts) "••••" else money(assetsTotal), style = lt(15.sp, FontWeight.Bold))
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.Chevron, modifier = Modifier.size(18.dp))
-        }
-
-        // کارت‌ها با طرح دوتکه، ورق‌خوردنی
-        BankCardPager(cards = cards, holderName = holderName, hideBalance = hideAmounts, onOpen = onOpenAccount)
-
-        Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            cards.forEachIndexed { i, card ->
-                Row(
-                    Modifier.fillMaxWidth().cardSurface(20.dp).clickable { onOpenAccount(card) }.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    BankChip(card, cardColor(i))
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(card.bankName, style = lt(15.sp, FontWeight.SemiBold), maxLines = 1)
-                            if (card.cardNumber.length >= 4) Text("•••• ${fa(card.cardNumber.takeLast(4))}", style = lt(12.sp, color = L.Muted))
-                        }
-                        if (card.isCredit) Text(creditUsage(card), style = lt(11.sp, color = L.Muted), maxLines = 1)
-                        else if (com.example.Features.SMS && hasAutoSms(card, senders)) StatusPill("پیامک خودکار روشن", L.GreenSoft, L.GreenText)
-                        else StatusPill("ثبت دستی", L.Chip, L.Muted)
-                    }
-                    Text(if (hideAmounts) "••••" else money(card.balance), style = lt(15.sp, FontWeight.SemiBold))
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = L.Chevron, modifier = Modifier.size(18.dp))
+            Box(
+                Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(if (asset != null) Color.White else Color.White.copy(alpha = 0.22f))
+                    .padding(if (asset != null) 4.dp else 0.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                when {
+                    asset != null -> BankLogo(asset, Modifier.fillMaxSize(), card.bankName)
+                    card.isCash -> Icon(Icons.Default.Payments, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    else -> Text(card.bankName.removePrefix("بانک ").take(1), style = lt(15.sp, FontWeight.ExtraBold, Color.White))
                 }
             }
+            Column(Modifier.weight(1f)) {
+                Text(card.bankName, style = lt(16.sp, FontWeight.ExtraBold, Color.White), maxLines = 1)
+                if (digits.length >= 4) Text("•••• ${fa(digits.takeLast(4))}", style = lt(12.sp, color = Color.White.copy(alpha = 0.85f)))
+            }
+            Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.2f)).padding(horizontal = 9.dp, vertical = 4.dp)) {
+                Text(badge, style = lt(11.sp, FontWeight.Bold, Color.White), maxLines = 1)
+            }
         }
+        Row(
+            Modifier.fillMaxWidth().background(bottom).clickable(onClick = onOpen).padding(start = 16.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (card.isCredit) "بدهی" + (if (card.dueDay > 0) " · بازپرداخت روز ${fa(card.dueDay)}" else "") else "موجودی",
+                    style = lt(11.sp, color = Color(0xFF9AA3B2)), maxLines = 1
+                )
+                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        if (hide) "••••••" else if (card.isCredit) money((-card.balance).coerceAtLeast(0)) else money(card.balance),
+                        style = lt(18.sp, FontWeight.Bold, Color.White)
+                    )
+                    Text(com.example.data.Money.label, style = lt(11.sp, color = Color(0xFF9AA3B2)), modifier = Modifier.padding(bottom = 3.dp))
+                }
+            }
+            Box(
+                Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.08f)).clickable(onClick = onSettings)
+                    .semantics { contentDescription = "تنظیمات ${card.bankName}" },
+                contentAlignment = Alignment.Center
+            ) { Icon(Icons.Default.Settings, null, tint = Color(0xFFECEFF4), modifier = Modifier.size(20.dp)) }
+        }
+    }
+}
+
+/** تنظیمات یک حساب: مشخصات (ویرایش)، پیامک خودکار، حساب پیش‌فرض، جزئیات و حذف */
+@Composable
+private fun AccountSettingsSheet(
+    card: BankCard,
+    sender: BankSender?,
+    isDefault: Boolean,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit,
+    onOpen: () -> Unit,
+    onToggleSms: (BankSender) -> Unit,
+    onOpenSmsSetup: () -> Unit,
+    onSetDefault: (Boolean) -> Unit,
+    onDelete: () -> Unit
+) {
+    var askDelete by remember { mutableStateOf(false) }
+    val digits = card.cardNumber.filter { it.isDigit() }
+    LayerSheet(title = "تنظیمات ${card.bankName}", onDismiss = onDismiss, topGap = 140.dp, closeLabel = "بستن") {
+        @Composable
+        fun NavLine(label: String, value: String, onClick: () -> Unit) {
+            Row(
+                Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(label, style = lt(14.sp, FontWeight.SemiBold), modifier = Modifier.weight(1f))
+                Text(value, style = lt(13.sp, color = L.Muted), maxLines = 1)
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = L.Chevron, modifier = Modifier.size(18.dp))
+            }
+        }
+        @Composable
+        fun SwitchLine(label: String, hint: String, on: Boolean, onChange: (Boolean) -> Unit) {
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(label, style = lt(14.sp, FontWeight.SemiBold))
+                    Text(hint, style = lt(11.sp, color = L.Muted, lineHeight = 18.sp))
+                }
+                LSwitch(on, label, onChange = onChange)
+            }
+        }
+        @Composable
+        fun Divider() = Box(Modifier.fillMaxWidth().height(1.dp).background(L.Line))
+
+        NavLine("نام حساب", card.bankName, onEdit)
+        Divider()
+        NavLine("شمارهٔ کارت", if (digits.length >= 4) "•••• ${fa(digits.takeLast(4))}" else "ثبت نشده", onEdit)
+        Divider()
+        NavLine(
+            "نوع حساب",
+            when { card.isCash -> "نقد"; card.isCredit -> "کارت اعتباری"; card.accountType == AccountType.OTHER -> "سایر"; else -> "بانکی" },
+            onEdit
+        )
+        Divider()
+        if (!card.isCash && com.example.Features.SMS) {
+            SwitchLine(
+                "ثبت خودکار از پیامک بانک",
+                if (sender == null) "هنوز برای این بانک تنظیم نشده؛ با روشن کردن، راهنمای تنظیم باز می‌شود."
+                else "برداشت و واریزهای این حساب از پیامک بانک برای تأیید شما ثبت می‌شوند.",
+                sender?.isEnabled == true
+            ) { if (sender != null) onToggleSms(sender) else onOpenSmsSetup() }
+            Divider()
+        }
+        SwitchLine("حساب پیش‌فرض", "هنگام ثبت تراکنش، این حساب از پیش انتخاب می‌شود.", isDefault, onSetDefault)
+        Divider()
+        NavLine("جزئیات و تراکنش‌ها", "", onOpen)
+        Spacer(Modifier.height(4.dp))
+        if (askDelete) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(L.RedSoft).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("این حساب از تراز حذف می‌شود، اما تراکنش‌های ثبت‌شده با آن باقی می‌مانند.", style = lt(13.sp, color = L.RedInk, lineHeight = 22.sp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(
+                        Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(12.dp)).background(L.RedText).clickable(onClick = onDelete),
+                        contentAlignment = Alignment.Center
+                    ) { Text("بله، حذف شود", style = lt(14.sp, FontWeight.Bold, Color.White)) }
+                    Box(
+                        Modifier.height(44.dp).clip(RoundedCornerShape(12.dp)).background(L.Surface).clickable { askDelete = false }.padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) { Text("انصراف", style = lt(14.sp, FontWeight.SemiBold)) }
+                }
+            }
+        } else {
+            Box(
+                Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(14.dp)).background(L.RedSoft).clickable { askDelete = true },
+                contentAlignment = Alignment.Center
+            ) { Text("حذف این حساب", style = lt(15.sp, FontWeight.Bold, L.RedText)) }
+        }
+        Spacer(Modifier.height(4.dp))
     }
 }
 
