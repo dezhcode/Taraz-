@@ -273,7 +273,8 @@ private fun AccountTile(card: BankCard, index: Int, hide: Boolean, badge: String
     val c1 = remember(card.bankName, card.cardNumber, card.accountType, base) { cardBrandColor(card, base) }
     val c2 = androidx.compose.ui.graphics.lerp(c1, Color.Black, 0.35f)
     val digits = card.cardNumber.filter { it.isDigit() }
-    val bottom = if (LayerTheme.dark) Color(0xFF0F1218) else Color(0xFF161A22)
+    // در حالت تیره کمی روشن‌تر از زمینهٔ صفحه، تا نیمهٔ پایین کارت در زمینه گم نشود
+    val bottom = if (LayerTheme.dark) Color(0xFF1C212B) else Color(0xFF161A22)
     Column(modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))) {
         Row(
             Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(c1, c2)))
