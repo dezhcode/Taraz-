@@ -246,7 +246,7 @@ fun LayerAssetDetailScreen(
                         when {
                             profit == null -> "—"
                             hideAmounts -> "••••••"
-                            else -> (if (profit >= 0) "+" else "−") + compact(kotlin.math.abs(profit)) + " (" + signedPct(profit * 100.0 / holding.buyPrice) + ")"
+                            else -> ltrNum((if (profit >= 0) "+" else "−") + compact(kotlin.math.abs(profit))) + " (" + signedPct(profit * 100.0 / holding.buyPrice) + ")"
                         },
                         Modifier.weight(1f),
                         color = when { profit == null -> L.Ink; profit >= 0 -> L.GreenText; else -> L.RedText }
@@ -255,7 +255,7 @@ fun LayerAssetDetailScreen(
                 val realised = trades.filter { !it.isBuy && it.costBasis > 0 }.sumOf { it.total - it.costBasis }
                 if (trades.any { !it.isBuy && it.costBasis > 0 } && !hideAmounts) {
                     Text(
-                        "سود فروش‌های گذشته: " + (if (realised >= 0) "+" else "−") + bookText(kotlin.math.abs(realised)),
+                        "سود فروش‌های گذشته: " + ltrNum((if (realised >= 0) "+" else "−") + money(kotlin.math.abs(realised))) + " " + Money.label,
                         style = lt(12.sp, color = if (realised >= 0) L.GreenText else L.RedText), modifier = Modifier.padding(top = 10.dp)
                     )
                 }
@@ -493,7 +493,7 @@ fun TradeSheet(
                 val basis = if (holding!!.buyPrice > 0) Math.round(holding.buyPrice * qty / holding.quantity) else null
                 listOfNotNull(
                     "باقی‌مانده: ${faQuantityShown((holding.quantity - qty).coerceAtLeast(0.0))} $unitName",
-                    basis?.let { b -> (if (total >= b) "سود این فروش: +" else "زیان این فروش: −") + bookText(kotlin.math.abs(total - b)) }
+                    basis?.let { b -> (if (total >= b) "سود این فروش: " else "زیان این فروش: ") + bookText(kotlin.math.abs(total - b)) }
                 )
             }
             Column(

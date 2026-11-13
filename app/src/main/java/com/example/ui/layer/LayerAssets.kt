@@ -124,8 +124,13 @@ internal fun sourceLabel(s: String): String = when (s) {
 
 /** درصد با یک رقم اعشار و علامت: «+۱٫۲٪»، «−۰٫۳٪» */
 internal fun signedPct(c: Double): String =
-    // جدا از متن راست‌به‌چپ، تا علامت پیش از عدد بماند و «۰٫۴٪+» نشود
-    "\u2066" + (if (c >= 0) "+" else "−") + fa(String.format(Locale.ENGLISH, "%.1f", kotlin.math.abs(c)).replace('.', '٫')) + "٪\u2069"
+    ltrNum((if (c >= 0) "+" else "−") + fa(String.format(Locale.ENGLISH, "%.1f", kotlin.math.abs(c)).replace('.', '٫')) + "٪")
+
+/**
+ * عدد علامت‌دار یا اعشاری میان دو نشانهٔ LRM، تا در متن فارسی علامت پیش از عدد و ممیز سر جایش بماند
+ * («+۱۳٫۳٪» نه «۱۳+٫۳٪»). نویسه‌های isolate (U+2066) در همهٔ نسخه‌ها رعایت نمی‌شوند؛ LRM می‌شود.
+ */
+internal fun ltrNum(s: String): String = "\u200E" + s + "\u200E"
 
 /**
  * مبلغ دلاری: «$۱۰۸٬۷۳۵»، «$۲٫۴۵»، «$۰٫۰۰۰۰۱۲۳۴» (زیر یک دلار تا چهار رقم معنادار). جدا از متن
@@ -279,7 +284,7 @@ fun LayerAssetsScreen(
                 val parts = buildList {
                     if (todayChange != 0L && assetsTotal > 0) {
                         val pct = todayChange * 100.0 / (assetsTotal - todayChange).coerceAtLeast(1)
-                        add("امروز " + (if (hideAmounts) "" else "\u2066" + (if (todayChange > 0) "+" else "−") + money(kotlin.math.abs(todayChange)) + "\u2069 ") + "(${signedPct(pct)})")
+                        add("امروز " + (if (hideAmounts) "" else ltrNum((if (todayChange > 0) "+" else "−") + money(kotlin.math.abs(todayChange))) + " ") + "(${signedPct(pct)})")
                     }
                     if (buyTotal > 0) add("سود کل " + signedPct(profitTotal * 100.0 / buyTotal))
                 }

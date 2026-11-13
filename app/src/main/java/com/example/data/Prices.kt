@@ -425,7 +425,10 @@ object PriceHistory {
         history.orEmpty().filter { it.first > today - days }.map { it.second }
 }
 
-/** «$۱۰۸٬۷۳۵»، «$۲٫۴۵»، «$۰٫۰۰۰۰۱۷۸۹»: زیر یک دلار تا چهار رقم معنادار. جدا از متن راست‌به‌چپ. */
+/**
+ * «$۱۰۸٬۷۳۵»، «$۲٫۴۵»، «$۰٫۰۰۰۰۱۷۸۹»: زیر یک دلار تا چهار رقم معنادار. میان دو نشانهٔ LRM، تا در
+ * متن فارسی «$» و ممیز سر جایشان بمانند (نویسه‌های isolate همه‌جا رعایت نمی‌شوند).
+ */
 fun usdText(v: Double): String {
     val a = kotlin.math.abs(v)
     val d = when {
@@ -436,7 +439,7 @@ fun usdText(v: Double): String {
     var t = String.format(java.util.Locale.ENGLISH, "%,.${d}f", a)
     if (a < 1 && t.contains('.')) t = t.trimEnd('0').trimEnd('.')
     val fa = t.map { c -> if (c in '0'..'9') '۰' + (c - '0') else when (c) { ',' -> '٬'; '.' -> '٫'; else -> c } }.joinToString("")
-    return "⁦" + (if (v < 0) "−" else "") + "$" + fa + "⁩"
+    return "\u200E" + (if (v < 0) "−" else "") + "$" + fa + "\u200E"
 }
 
 /**
