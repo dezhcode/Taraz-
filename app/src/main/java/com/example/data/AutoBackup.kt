@@ -162,11 +162,17 @@ object AutoBackup {
         if (!force && !st.enabled) return@withContext null
         if (!force && System.currentTimeMillis() - st.lastAt < st.periodDays * 86_400_000L - 3_600_000L) return@withContext null
         val hasDrive = prefs(c).getString("drive_backup_uri", null) != null
+        val hasApi = DriveApi.status(c).connected
         val treeStr = prefs(c).getString("auto_backup_tree", null)
-        if (treeStr == null && !hasDrive) return@withContext "پوشه یا گوگل درایو انتخاب نشده."
+        if (treeStr == null && !hasDrive && !hasApi) return@withContext "پوشه یا گوگل درایو انتخاب نشده."
         val password = secure(c).getString("auto_backup_password", null) ?: return@withContext "رمز پشتیبان گذاشته نشده."
-        // گوگل درایو: همان فایل با نسخهٔ تازه
-        val driveErr = if (hasDrive) writeDrive(c, password) else null
+        // گوگل درایو با حساب گوگل (API): یک نسخهٔ تاریخ‌دار تازه در پوشهٔ Taraz
+        val apiErr = if (hasApi) runCatching {
+            val db = AppDatabase.getDatabase(c, CoroutineScope(Dispatchers.IO))
+            DriveApi.backupInBackground(c, Backup.encrypt(Backup.snapshot(db, Attachments.dir(c)), password))
+        }.getOrElse { it.message ?: "پشتیبان درایو ساخته نشد." } else null
+        // گوگل درایو با فایل انتخابی: همان فایل با نسخهٔ تازه
+        val driveErr = (if (hasDrive) writeDrive(c, password) else null) ?: apiErr
         if (treeStr == null) {
             if (driveErr == null) prefs(c).edit().putLong("auto_backup_last", System.currentTimeMillis()).remove("auto_backup_error").apply()
             return@withContext driveErr

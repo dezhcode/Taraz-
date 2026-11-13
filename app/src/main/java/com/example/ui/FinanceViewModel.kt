@@ -1032,6 +1032,67 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
     fun disconnectDrive() { AutoBackup.disconnectDrive(getApplication()); refreshAutoBackup() }
 
+    // ─── گوگل درایو با حساب گوگل (API) ───
+
+    private val _driveApi = MutableStateFlow(DriveApi.status(application))
+    val driveApi: StateFlow<DriveApi.Status> = _driveApi.asStateFlow()
+    private fun refreshDriveApi() { _driveApi.value = DriveApi.status(getApplication()) }
+
+    fun drivePlayServices(): Boolean = DriveApi.playServicesAvailable(getApplication())
+
+    /** پیام کاربرپسند برای خطای درایو */
+    private fun driveMsg(e: Throwable): String = when (e) {
+        is DriveApi.AuthNeeded -> e.message!!
+        is java.net.UnknownHostException, is java.net.ConnectException, is java.net.SocketTimeoutException ->
+            "به گوگل درایو وصل نشد؛ اینترنت (و در صورت نیاز فیلترشکن) را بررسی کنید."
+        else -> e.message ?: e.javaClass.simpleName
+    }
+
+    /**
+     * ورود انجام شد: حساب ثبت و یک پشتیبان تازه بارگذاری می‌شود. [password] رمز تازه وقتی پشتیبان
+     * خودکار هنوز رمز ندارد؛ از آن به بعد ذخیره‌های خودکار با همین رمز انجام می‌شوند.
+     */
+    fun driveApiConnect(token: String, password: String?, onDone: (String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                if (!password.isNullOrEmpty()) AutoBackup.setPassword(getApplication(), password)
+                DriveApi.connect(getApplication(), token)
+                val err = uploadToDriveApi(token)
+                refreshDriveApi(); refreshAutoBackup()
+                onDone(err)
+            } catch (e: Exception) { refreshDriveApi(); onDone(driveMsg(e)) }
+        }
+    }
+
+    private suspend fun uploadToDriveApi(token: String): String? {
+        val pass = com.example.utils.SecurePrefs.get(getApplication()).getString("auto_backup_password", null)
+            ?: return "رمز پشتیبان گذاشته نشده."
+        return try {
+            val bytes = Backup.encrypt(Backup.snapshot(db, Attachments.dir(getApplication())), pass)
+            DriveApi.upload(getApplication(), token, bytes); null
+        } catch (e: Exception) { driveMsg(e) }
+    }
+
+    fun driveApiBackup(token: String, onDone: (String?) -> Unit) {
+        viewModelScope.launch { val err = uploadToDriveApi(token); refreshDriveApi(); onDone(err) }
+    }
+
+    fun driveApiList(token: String, onDone: (List<DriveApi.RemoteFile>?, String?) -> Unit) {
+        viewModelScope.launch {
+            try { onDone(DriveApi.list(getApplication(), token), null) } catch (e: Exception) { onDone(null, driveMsg(e)) }
+        }
+    }
+
+    fun driveApiDownload(token: String, id: String, onDone: (ByteArray?, String?) -> Unit) {
+        viewModelScope.launch {
+            try { onDone(DriveApi.download(token, id), null) } catch (e: Exception) { onDone(null, driveMsg(e)) }
+        }
+    }
+
+    fun driveApiDisconnect(token: String?) {
+        viewModelScope.launch { DriveApi.disconnect(getApplication(), token); refreshDriveApi() }
+    }
+
     /** پشتیبان خودکار را همین حالا اجرا می‌کند؛ [onDone] پیام خطا یا null می‌گیرد */
     fun runAutoBackupNow(onDone: (String?) -> Unit) {
         viewModelScope.launch {

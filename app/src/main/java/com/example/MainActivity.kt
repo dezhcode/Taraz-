@@ -378,6 +378,56 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                         }
                     }
                 }
+                // ─── گوگل درایو با حساب گوگل (API): هر کار درایو اول یک توکن دسترسی می‌گیرد ───
+                val driveApiState by viewModel.driveApi.collectAsStateWithLifecycle()
+                val drivePlay = remember { viewModel.drivePlayServices() }
+                var driveFiles by remember { mutableStateOf<List<com.example.data.DriveApi.RemoteFile>?>(null) }
+                var pendingDriveAction by remember { mutableStateOf<((String) -> Unit)?>(null) }
+                fun driveAuthError(e: Throwable) {
+                    backupBusy = false
+                    pendingDriveAction = null
+                    val code = (e as? com.google.android.gms.common.api.ApiException)?.statusCode
+                    backupMsg = false to when (code) {
+                        10 -> "ورود با گوگل هنوز برای این نسخهٔ تراز ثبت نشده (تنظیمات Google Cloud). فعلاً از «روش دوم» استفاده کنید."
+                        7 -> "به گوگل وصل نشد؛ اینترنت (و در صورت نیاز فیلترشکن) را بررسی کنید."
+                        16, 12501 -> "ورود با حساب گوگل لغو شد."
+                        else -> "ورود با حساب گوگل انجام نشد" + (code?.let { " (کد ${com.example.utils.toPersianDigits(it.toString())})" } ?: "") + "."
+                    }
+                }
+                val driveAuthLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()
+                ) { res ->
+                    val action = pendingDriveAction
+                    pendingDriveAction = null
+                    val token = try {
+                        com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(this@MainActivity)
+                            .getAuthorizationResultFromIntent(res.data).accessToken
+                    } catch (e: Exception) {
+                        driveAuthError(e); return@rememberLauncherForActivityResult
+                    }
+                    if (token == null || action == null) { backupBusy = false; backupMsg = false to "ورود با حساب گوگل لغو شد." }
+                    else action(token)
+                }
+                /** یک توکن درایو می‌گیرد (اگر لازم باشد پنجرهٔ انتخاب حساب گوگل باز می‌شود) و [action] را با آن اجرا می‌کند */
+                fun withDriveToken(action: (String) -> Unit) {
+                    backupBusy = true
+                    backupMsg = null
+                    com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(this@MainActivity)
+                        .authorize(com.example.data.DriveApi.request())
+                        .addOnSuccessListener { r ->
+                            val pi = r.pendingIntent
+                            if (r.hasResolution() && pi != null) {
+                                pendingDriveAction = action
+                                try {
+                                    driveAuthLauncher.launch(androidx.activity.result.IntentSenderRequest.Builder(pi.intentSender).build())
+                                } catch (e: Exception) { driveAuthError(e) }
+                            } else {
+                                val t = r.accessToken
+                                if (t == null) { backupBusy = false; backupMsg = false to "ورود با حساب گوگل انجام نشد." } else action(t)
+                            }
+                        }
+                        .addOnFailureListener { driveAuthError(it) }
+                }
                 val driveCreateLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
                     androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/octet-stream")
                 ) { uri ->
@@ -861,6 +911,54 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                             driveOpenLauncher.launch(arrayOf("*/*"))
                                         },
                                         onDriveDisconnect = { viewModel.disconnectDrive(); backupMsg = true to "اتصال گوگل درایو قطع شد؛ فایل در درایو می‌ماند." },
+                                        driveApi = driveApiState,
+                                        drivePlay = drivePlay,
+                                        onDriveApiConnect = { pass ->
+                                            withDriveToken { token ->
+                                                viewModel.driveApiConnect(token, pass) { err ->
+                                                    backupBusy = false
+                                                    backupMsg = if (err == null) true to "به گوگل درایو وصل شد و پشتیبان بارگذاری شد." else false to err
+                                                }
+                                            }
+                                        },
+                                        onDriveApiBackup = {
+                                            withDriveToken { token ->
+                                                viewModel.driveApiBackup(token) { err ->
+                                                    backupBusy = false
+                                                    backupMsg = if (err == null) true to "پشتیبان در گوگل درایو بارگذاری شد." else false to err
+                                                }
+                                            }
+                                        },
+                                        onDriveApiRestore = {
+                                            withDriveToken { token ->
+                                                viewModel.driveApiList(token) { files, err ->
+                                                    backupBusy = false
+                                                    if (files == null) backupMsg = false to (err ?: "فهرست درایو خوانده نشد.") else driveFiles = files
+                                                }
+                                            }
+                                        },
+                                        onDriveApiSignOut = {
+                                            // توکن فعلی (اگر بی‌پنجره در دسترس باشد) باطل می‌شود؛ پشتیبان‌ها در درایو می‌مانند
+                                            com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(this@MainActivity)
+                                                .authorize(com.example.data.DriveApi.request())
+                                                .addOnCompleteListener { t ->
+                                                    val tok = if (t.isSuccessful && !t.result.hasResolution()) t.result.accessToken else null
+                                                    viewModel.driveApiDisconnect(tok)
+                                                }
+                                            backupMsg = true to "از حساب گوگل خارج شدید؛ پشتیبان‌ها در درایو می‌مانند."
+                                        },
+                                        driveFiles = driveFiles,
+                                        onDriveFilesDismiss = { driveFiles = null },
+                                        onDriveFilePick = { f, pass ->
+                                            withDriveToken { token ->
+                                                viewModel.driveApiDownload(token, f.id) { bytes, err ->
+                                                    if (bytes == null) {
+                                                        backupBusy = false
+                                                        backupMsg = false to (err ?: "فایل درایو خوانده نشد.")
+                                                    } else restoreBytes(bytes, pass)
+                                                }
+                                            }
+                                        },
                                         onAutoEnabled = { viewModel.setAutoBackupEnabled(it) },
                                         onAutoPeriod = { viewModel.setAutoBackupPeriod(it) },
                                         onPickFolder = { folderLauncher.launch(null) },

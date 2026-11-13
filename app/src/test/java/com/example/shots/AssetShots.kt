@@ -151,19 +151,28 @@ class AssetShots {
         )
     }
 
-    private fun backupShot(name: String, connected: Boolean) = raw(name, false) {
+    private fun backupShot(name: String, connected: Boolean, files: Boolean = false) = raw(name, false) {
         com.example.ui.layer.LayerBackupScreen(
             message = null, busy = false, onBack = {}, onCreate = {}, onRestore = {}, onExportCsv = {},
             auto = com.example.data.AutoBackup.State(
-                enabled = connected, periodDays = 7, folderLabel = null, hasPassword = connected, lastAt = 0, lastSize = 0, lastError = null,
-                driveName = if (connected) "taraz-backup.taraz" else null, driveIsGoogle = connected, driveLastAt = if (connected) now - 3_600_000 else 0
+                enabled = connected, periodDays = 7, folderLabel = null, hasPassword = connected, lastAt = 0, lastSize = 0, lastError = null
             ),
-            driveInstalled = true
+            driveInstalled = true,
+            driveApi = com.example.data.DriveApi.Status(
+                connected = connected, email = if (connected) "name@gmail.com" else null,
+                lastAt = if (connected) now - 3_600_000 else 0, lastSize = if (connected) 184_000 else 0, error = null
+            ),
+            driveFiles = if (files) listOf(
+                com.example.data.DriveApi.RemoteFile("a", "taraz-backup-a.taraz", now - 3_600_000, 184_000),
+                com.example.data.DriveApi.RemoteFile("b", "taraz-backup-b.taraz", now - 8 * 86_400_000L, 176_000),
+                com.example.data.DriveApi.RemoteFile("c", "taraz-backup-c.taraz", now - 15 * 86_400_000L, 171_000)
+            ) else null
         )
     }
 
     @Test fun backupDrive() = backupShot("9_backup_drive", connected = false)
     @Test fun backupDriveConnected() = backupShot("9b_backup_drive_connected", connected = true)
+    @Test fun backupDriveFiles() = backupShot("9c_backup_drive_files", connected = true, files = true)
 
     @Test fun accountsLight() = accountsShot("8_accounts", dark = false)
     @Test fun accountsDark() = accountsShot("8b_accounts_dark", dark = true)
