@@ -171,7 +171,7 @@ object PriceService {
      * the reverse. Crypto and fiat from abroad are converted with the tether
      * rate; gold from abroad is worked out from the world ounce price.
      */
-    suspend fun refresh(context: Context, codes: Set<String>): Pair<Map<String, PriceQuote>, List<String>> = withContext(Dispatchers.IO) {
+    suspend fun refresh(context: Context, codes: Set<String>, needed: Set<String> = codes): Pair<Map<String, PriceQuote>, List<String>> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val fresh: MutableMap<String, PriceQuote> = java.util.concurrent.ConcurrentHashMap()
         val errors = java.util.Collections.synchronizedMap(linkedMapOf<String, String>())
@@ -286,12 +286,15 @@ object PriceService {
             }
         }
 
-        // فقط خطاهایی را نشان بده که واقعاً قیمتی را بی‌جواب گذاشته‌اند
-        val missing = codes.filter { it !in fresh }
+        // فقط خطاهایی را نشان بده که قیمتی را که کاربر لازم دارد بی‌جواب گذاشته‌اند
+        val missing = needed.filter { it !in fresh }
         val failed = if (missing.isEmpty()) emptyList() else errors.map { (src, why) -> "$src: $why" }
 
         val merged = cached(context) + fresh
-        if (fresh.isNotEmpty()) save(context, merged)
+        if (fresh.isNotEmpty()) {
+            save(context, merged)
+            PriceHistory.record(context, fresh)
+        }
         merged to failed
     }
 
@@ -310,4 +313,56 @@ object PriceService {
             )
         }.filter { it.insCode.isNotBlank() }.take(20)
     }
+}
+
+/**
+ * One price per day for each code (the last one read that day, in toman), kept on the phone so the
+ * market list can draw the last days and a holding can show its chart. Nothing is downloaded for it:
+ * the history starts the day the app first reads a price and grows with each day it is opened.
+ */
+object PriceHistory {
+    private const val FILE = "price_history.json"
+    private const val KEEP_DAYS = 400
+    private const val TEHRAN_OFFSET_MS = 12_600_000L // +3:30
+
+    fun dayOf(ms: Long): Int = ((ms + TEHRAN_OFFSET_MS) / 86_400_000L).toInt()
+
+    @Synchronized
+    fun load(context: Context): Map<String, List<Pair<Int, Double>>> = try {
+        val f = java.io.File(context.filesDir, FILE)
+        if (!f.exists()) emptyMap() else {
+            val o = JSONObject(f.readText())
+            o.keys().asSequence().associateWith { k ->
+                val arr = o.getJSONArray(k)
+                (0 until arr.length()).map { i -> arr.getJSONArray(i).let { it.getInt(0) to it.getDouble(1) } }
+            }
+        }
+    } catch (e: Exception) { emptyMap() }
+
+    /** Today's entry for each quote, replacing an earlier one from the same day. */
+    @Synchronized
+    fun record(context: Context, quotes: Map<String, PriceQuote>) {
+        val all = load(context).mapValues { it.value.toMutableList() }.toMutableMap()
+        for ((code, q) in quotes) {
+            if (q.exact <= 0) continue
+            val list = all.getOrPut(code) { mutableListOf() }
+            val day = dayOf(q.at)
+            list.removeAll { it.first == day }
+            list += day to q.exact
+            list.sortBy { it.first }
+            while (list.size > KEEP_DAYS) list.removeAt(0)
+        }
+        val o = JSONObject()
+        all.forEach { (k, list) -> o.put(k, JSONArray().apply { list.forEach { (d, v) -> put(JSONArray().put(d).put(v)) } }) }
+        try {
+            val f = java.io.File(context.filesDir, FILE)
+            val tmp = java.io.File(context.filesDir, "$FILE.tmp")
+            tmp.writeText(o.toString())
+            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+        } catch (_: Exception) {}
+    }
+
+    /** The prices of the last [days] days that have one, oldest first. */
+    fun lastDays(history: List<Pair<Int, Double>>?, today: Int, days: Int): List<Double> =
+        history.orEmpty().filter { it.first > today - days }.map { it.second }
 }

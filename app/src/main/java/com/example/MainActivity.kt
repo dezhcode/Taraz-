@@ -173,6 +173,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 val assetsTotal = assets.sumOf { com.example.data.valueOf(it, prices) }
                 var assetSheetFor by remember { mutableStateOf<com.example.data.Asset?>(null) }
                 var isAssetSheetOpen by remember { mutableStateOf(false) }
+                var assetPreset by remember { mutableStateOf<Pair<String, String>?>(null) }
+                val priceHistory by viewModel.priceHistory.collectAsStateWithLifecycle()
 
                 // Overlays states
                 var isAddTransactionOpen by remember { mutableStateOf(false) }
@@ -664,9 +666,14 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         hideAmounts = false,
                                         onBack = { closeSub() },
                                         onRefresh = { force -> viewModel.refreshPrices(force) },
-                                        onAdd = { assetSheetFor = null; isAssetSheetOpen = true },
-                                        onOpen = { assetSheetFor = it; isAssetSheetOpen = true },
-                                        snapshots = netWorthSnapshots
+                                        onAdd = { assetSheetFor = null; assetPreset = null; isAssetSheetOpen = true },
+                                        onOpen = { assetSheetFor = it; assetPreset = null; isAssetSheetOpen = true },
+                                        snapshots = netWorthSnapshots,
+                                        history = priceHistory,
+                                        onAddCode = { code ->
+                                            val name = com.example.data.PriceCatalog.find(code)?.name ?: assets.firstOrNull { it.code == code }?.name.orEmpty()
+                                            assetSheetFor = null; assetPreset = code to name; isAssetSheetOpen = true
+                                        }
                                     )
                                 }
 
@@ -1167,7 +1174,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     onDismiss = { isAssetSheetOpen = false },
                                     onSearchFunds = { q, cb -> viewModel.searchFunds(q, cb) },
                                     onSave = { viewModel.saveAsset(it) },
-                                    onDelete = { viewModel.deleteAsset(it.id) }
+                                    onDelete = { viewModel.deleteAsset(it.id) },
+                                    preset = assetPreset
                                 )
                             }
 

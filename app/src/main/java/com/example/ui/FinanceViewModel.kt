@@ -599,6 +599,14 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         return raw.mapValues { (_, q) -> PriceQuote.of(q.exact * k, q.changePct, q.at, q.source) }
     }
 
+    private val _priceHistory = MutableStateFlow<Map<String, List<Pair<Int, Double>>>>(emptyMap())
+    /** قیمت روزانهٔ هر کد به تومان، از روزی که تراز قیمت‌ها را می‌خواند (برای نمودار کوچک بازار) */
+    val priceHistory: StateFlow<Map<String, List<Pair<Int, Double>>>> = _priceHistory.asStateFlow()
+
+    init {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { _priceHistory.value = PriceHistory.load(getApplication()) }
+    }
+
     private val _pricesRefreshing = MutableStateFlow(false)
     val pricesRefreshing: StateFlow<Boolean> = _pricesRefreshing.asStateFlow()
 
@@ -619,17 +627,21 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
      */
     fun refreshPrices(force: Boolean = false) {
         if (_pricesRefreshing.value) return
-        val codes = assets.value.filter { it.manualPrice <= 0 && !it.code.startsWith("manual:") }.map { it.code }.toSet() +
-            setOf("usd", "gold18", "coin_emami", "btc", "usdt")
+        // همهٔ فهرست بازار (از tgju و نوبیتکس هر کدام با یک درخواست می‌آید) و دارایی‌های کاربر؛
+        // خطا فقط برای قیمت‌هایی نشان داده می‌شود که کاربر دارد (و دلار، برای تبدیل‌ها)
+        val held = assets.value.filter { it.manualPrice <= 0 && !it.code.startsWith("manual:") }.map { it.code }.toSet()
+        val needed = held + setOf("usd", "gold18")
+        val codes = PriceCatalog.items.map { it.code }.toSet() + held
         val now = System.currentTimeMillis()
-        val haveAll = codes.all { it in _prices.value }
+        val haveAll = needed.all { it in _prices.value }
         if (!force && haveAll && now - lastPriceFetch < 30_000L) return
         lastPriceFetch = now
         viewModelScope.launch {
             _pricesRefreshing.value = true
             try {
-                val (quotes, failed) = PriceService.refresh(getApplication(), codes)
+                val (quotes, failed) = PriceService.refresh(getApplication(), codes, needed)
                 _prices.value = quotes
+                _priceHistory.value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { PriceHistory.load(getApplication()) }
                 _priceErrors.value = failed
                 recordSnapshot()
             } catch (e: Exception) {

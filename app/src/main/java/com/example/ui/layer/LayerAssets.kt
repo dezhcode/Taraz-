@@ -2,6 +2,15 @@ package com.example.ui.layer
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -90,18 +99,67 @@ fun unitPriceText(exact: Double): String {
 }
 
 private fun agoText(at: Long, now: Long = System.currentTimeMillis()): String {
-    val min = ((now - at) / 60_000).toInt()
+    val sec = ((now - at) / 1000).toInt()
+    val min = sec / 60
     return when {
-        min < 1 -> "هم‌اکنون"
+        sec < 15 -> "هم‌اکنون"
+        min < 1 -> "${fa(sec / 10 * 10)} ثانیه پیش"
         min < 60 -> "${fa(min)} دقیقه پیش"
         min < 24 * 60 -> "${fa(min / 60)} ساعت پیش"
         else -> JalaliDate.fromTimestamp(at).formatShort()
     }
 }
 
+/** نام منبع هر قیمت برای نمایش */
+private fun sourceLabel(s: String): String = when (s) {
+    "tgju" -> "tgju"
+    "nobitex" -> "نوبیتکس"
+    "wallex" -> "والکس"
+    "bitpin" -> "بیت‌پین"
+    "tsetmc" -> "بورس"
+    "intl" -> "نرخ جهانی"
+    "intl-gold" -> "نرخ جهانی طلا"
+    else -> if (s.endsWith("-usdt")) "نرخ تتر" else s
+}
+
+/** درصد با یک رقم اعشار و علامت: «+۱٫۲٪»، «−۰٫۳٪» */
+private fun signedPct(c: Double): String =
+    (if (c >= 0) "+" else "−") + fa(String.format(Locale.ENGLISH, "%.1f", kotlin.math.abs(c)).replace('.', '٫')) + "٪"
+
+/** مبلغ کوتاه برای فهرست‌های فشرده: «۱۲۵٫۴ میلیون»، «۱۰٫۴۵ میلیارد» (در دفتر دلاری همان مبلغ کامل) */
+private fun compact(v: Long): String {
+    if (com.example.data.Money.current == com.example.data.AppCurrency.USD) return money(v)
+    val a = kotlin.math.abs(v)
+    fun one(x: Double, d: Int) = fa(java.math.BigDecimal(x).setScale(d, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString().replace('.', '٫'))
+    val s = when {
+        a >= 1_000_000_000L -> one(a / 1e9, 2) + " میلیارد"
+        a >= 10_000_000L -> one(a / 1e6, 1) + " میلیون"
+        else -> money(a)
+    }
+    return (if (v < 0) "−" else "") + s
+}
+
+/** نمودار خطی کوچک قیمت روزهای اخیر */
+@Composable
+private fun Sparkline(values: List<Double>, color: Color, modifier: Modifier = Modifier) {
+    androidx.compose.foundation.Canvas(modifier) {
+        if (values.size < 2) return@Canvas
+        val lo = values.min(); val hi = values.max(); val span = (hi - lo).takeIf { it > 0 } ?: 1.0
+        val path = androidx.compose.ui.graphics.Path()
+        values.forEachIndexed { i, v ->
+            // زمان از چپ به راست، مثل نمودارهای بازار
+            val x = size.width * i / (values.size - 1)
+            val y = (size.height - 2f) - ((v - lo) / span).toFloat() * (size.height - 4f)
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        drawPath(path, color, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.8.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+    }
+}
+
 /**
- * دارایی‌ها: دلار و ارز، طلا و سکه، رمزارز و صندوق‌ها با قیمت روز به تومان،
- * و دارایی خالص (حساب‌ها + دارایی‌ها − قرض و قسط).
+ * دارایی‌ها (طرح «بازار و سبد»): سربرگ آبی با ارزش سبد، تغییر امروز و سود کل؛ تب «بازار» با نرخ
+ * لحظه‌ای ارز، طلا، سکه، رمزارز و صندوق‌ها و نمودار چند روز اخیر؛ تب «سبد من» با دارایی‌ها به
+ * تفکیک نوع، دارایی خالص و مقایسه با تورم.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -117,8 +175,11 @@ fun LayerAssetsScreen(
     onRefresh: (force: Boolean) -> Unit,
     onAdd: () -> Unit,
     onOpen: (Asset) -> Unit,
-    snapshots: List<com.example.data.NetWorthSnapshot> = emptyList()
+    snapshots: List<com.example.data.NetWorthSnapshot> = emptyList(),
+    history: Map<String, List<Pair<Int, Double>>> = emptyMap(),
+    onAddCode: (String) -> Unit = { onAdd() }
 ) {
+    androidx.activity.compose.BackHandler(onBack = onBack)
     // هر بار که صفحه دیده می‌شود (باز شدن، برگشتن از برنامهٔ دیگر) قیمت تازه، و تا وقتی باز است هر دو دقیقه
     val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(lifecycle) {
@@ -129,141 +190,292 @@ fun LayerAssetsScreen(
             }
         }
     }
-    // «۳ دقیقه پیش» با گذر زمان به‌روز بماند
+    // «۲۰ ثانیه پیش» با گذر زمان به‌روز بماند
     var clock by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(30_000); clock = System.currentTimeMillis() } }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(10_000); clock = System.currentTimeMillis() } }
+
     fun unit(a: Asset) = com.example.data.unitPriceOf(a, prices)
     fun value(a: Asset) = com.example.data.valueOf(a, prices)
+    fun amt(v: Long) = if (hideAmounts) "••••••" else money(v)
     val assetsTotal = assets.sumOf { value(it) }
     val net = accountsTotal + assetsTotal - debtsTotal
-    val lastAt = assets.filter { it.manualPrice <= 0 }.mapNotNull { prices[it.code]?.at }.minOrNull()
+    // تغییر امروز: از درصد تغییر روزانهٔ هر قیمت زنده
+    val todayChange = assets.filter { it.manualPrice <= 0 }.sumOf { a ->
+        val c = prices[a.code]?.changePct ?: return@sumOf 0L
+        val v = value(a).toDouble()
+        (v - v / (1 + c / 100)).roundToLong()
+    }
+    val bought = assets.filter { it.buyPrice > 0 && unit(it) > 0 }
+    val buyTotal = bought.sumOf { it.buyPrice }
+    val profitTotal = bought.sumOf { value(it) - it.buyPrice }
+    val held = assets.filter { it.manualPrice <= 0 }.map { it.code }
+    val lastAt = (if (held.isNotEmpty()) held.mapNotNull { prices[it]?.at }.minOrNull() else prices["usd"]?.at)
+
+    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(if (assets.isEmpty()) "market" else "mine") }
+    var kind by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("all") }
+
+    Column(Modifier.fillMaxSize().background(L.Bg)) {
+        // ─── سربرگ آبی
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp)).background(L.Primary)
+                .statusBarsPadding().padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(
+                    Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onBack).semantics { contentDescription = "بازگشت" },
+                    contentAlignment = Alignment.Center
+                ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp)) }
+                Text("دارایی‌ها", style = lt(20.sp, FontWeight.ExtraBold, Color.White), modifier = Modifier.weight(1f))
+                val fresh = lastAt != null && clock - lastAt < 5 * 60_000L
+                Row(
+                    Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.16f))
+                        .clickable(enabled = !refreshing) { onRefresh(true) }
+                        .semantics { contentDescription = "به‌روزرسانی قیمت‌ها" }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(if (refreshing) Color.White else if (fresh) Color(0xFF7FE0BB) else L.AmberRing))
+                    Text(
+                        when {
+                            refreshing -> "در حال دریافت…"
+                            lastAt == null -> "به‌روزرسانی"
+                            fresh -> "زنده · ${agoText(lastAt ?: clock, clock)}"
+                            else -> agoText(lastAt ?: clock, clock)
+                        },
+                        style = lt(12.sp, color = Color.White)
+                    )
+                }
+            }
+            Column(Modifier.padding(horizontal = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("ارزش سبد شما", style = lt(13.sp, color = L.OnPrimarySoft))
+                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(amt(assetsTotal), style = lt(34.sp, FontWeight.Light, Color.White, letterSpacing = (-1).sp))
+                    Text(com.example.data.Money.label, style = lt(13.sp, color = L.OnPrimarySoft), modifier = Modifier.padding(bottom = 6.dp))
+                }
+                val parts = buildList {
+                    if (todayChange != 0L && assetsTotal > 0) {
+                        val pct = todayChange * 100.0 / (assetsTotal - todayChange).coerceAtLeast(1)
+                        add("امروز " + (if (hideAmounts) "" else (if (todayChange > 0) "+" else "−") + money(kotlin.math.abs(todayChange)) + " ") + "(${signedPct(pct)})")
+                    }
+                    if (buyTotal > 0) add("سود کل " + signedPct(profitTotal * 100.0 / buyTotal))
+                }
+                Text(
+                    if (assets.isEmpty()) "دارایی‌ای ثبت نشده؛ از «بازار» یا دکمهٔ پایین اضافه کنید." else parts.joinToString(" · ").ifEmpty { "${fa(assets.size)} دارایی" },
+                    style = lt(13.sp, FontWeight.SemiBold, Color.White)
+                )
+            }
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.16f)).padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                listOf("market" to "بازار", "mine" to "سبد من").forEach { (id, label) ->
+                    val on = tab == id
+                    Box(
+                        Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(11.dp))
+                            .background(if (on) Color.White else Color.Transparent)
+                            .selectable(selected = on, role = androidx.compose.ui.semantics.Role.Tab) { tab = id },
+                        contentAlignment = Alignment.Center
+                    ) { Text(label, style = lt(14.sp, FontWeight.Bold, if (on) Color(0xFF1D44D8) else Color.White)) }
+                }
+            }
+        }
+
+        // ─── محتوا
+        Column(
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = 14.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (errors.isNotEmpty()) {
+                Callout(
+                    "بعضی قیمت‌ها به‌روز نشد",
+                    "آخرین قیمت ثبت‌شده نمایش داده می‌شود.\n" +
+                        "در صورت روشن بودن فیلترشکن، برای دریافت قیمت آن را خاموش کنید؛ سایت‌های قیمت داخلی به نشانی‌های خارجی پاسخ نمی‌دهند. " +
+                        "در صورت تداوم مشکل، از این کادر تصویر تهیه کرده و برای پشتیبانی ارسال کنید.\n" +
+                        errors.joinToString(" · "),
+                    L.AmberSoft, L.AmberInk, Modifier.padding(horizontal = 20.dp)
+                )
+            }
+            if (tab == "market") MarketTab(assets, prices, history, kind, { kind = it }, clock, onAddCode)
+            else MineTab(assets, prices, hideAmounts, clock, accountsTotal, debtsTotal, net, assetsTotal, snapshots, onOpen)
+        }
+
+        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 20.dp, end = 20.dp, bottom = 16.dp, top = 4.dp)) {
+            BigButton("افزودن دارایی", onClick = onAdd)
+        }
+    }
+}
+
+private val MARKET_KINDS = listOf("all" to "همه", AssetKind.CURRENCY to "ارز", AssetKind.GOLD to "طلا و سکه", AssetKind.CRYPTO to "رمزارز", AssetKind.FUND to "صندوق")
+
+@Composable
+private fun MarketTab(
+    assets: List<Asset>,
+    prices: Map<String, PriceQuote>,
+    history: Map<String, List<Pair<Int, Double>>>,
+    kind: String,
+    onKind: (String) -> Unit,
+    clock: Long,
+    onAddCode: (String) -> Unit
+) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        MARKET_KINDS.forEach { (id, label) -> LChip(label, kind == id) { onKind(id) } }
+    }
+    // فهرست بازار و صندوق‌هایی که کاربر از بورس اضافه کرده
+    val funds = assets.filter { PriceCatalog.isFund(it.code) }.distinctBy { it.code }.map { com.example.data.CatalogItem(it.code, it.name, AssetKind.FUND, "واحد") }
+    val items = (PriceCatalog.items + funds).filter { kind == "all" || it.kind == kind }
+    val today = com.example.data.PriceHistory.dayOf(clock)
+    if (items.isEmpty()) {
+        Text(
+            "صندوق‌های بورسی که به سبد اضافه کنید، این‌جا با قیمت روز دیده می‌شوند.",
+            style = lt(13.sp, color = L.Muted, lineHeight = 23.sp), modifier = Modifier.padding(horizontal = 24.dp)
+        )
+        return
+    }
+    LayerCard(radius = 22.dp, padding = 0.dp) {
+        items.forEachIndexed { i, item ->
+            val q = prices[item.code]
+            val c = q?.changePct
+            val tint = if (c != null && c < 0) L.RedText else L.GreenText
+            Row(
+                Modifier.fillMaxWidth().padding(start = 14.dp, end = 10.dp, top = 11.dp, bottom = 11.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(item.name, style = lt(14.sp, FontWeight.Bold), maxLines = 1)
+                    Text(
+                        if (q == null) "قیمت هنوز نرسیده" else "${sourceLabel(q.source)} · ${agoText(q.at, clock)}",
+                        style = lt(11.sp, color = if (q != null && clock - q.at > 30 * 60_000L) L.AmberInk else L.Muted), maxLines = 1
+                    )
+                }
+                val points = com.example.data.PriceHistory.lastDays(history[item.code], today, 7)
+                if (points.size >= 2) Sparkline(points, if (points.last() >= points.first()) L.Green else L.Red, Modifier.width(60.dp).height(26.dp))
+                Column(Modifier.width(108.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        if (q == null) "—" else if (q.exact >= 1_000_000_000L) compact(q.price) else unitPriceText(q.exact),
+                        style = lt(14.sp, FontWeight.Bold), maxLines = 1
+                    )
+                    if (c != null) Text(signedPct(c), style = lt(11.sp, FontWeight.Bold, tint))
+                }
+                Box(
+                    Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(L.PrimarySoft)
+                        .clickable { onAddCode(item.code) }.semantics { contentDescription = "افزودن ${item.name} به سبد" },
+                    contentAlignment = Alignment.Center
+                ) { Icon(Icons.Default.Add, null, tint = L.PrimaryText, modifier = Modifier.size(18.dp)) }
+            }
+            if (i < items.size - 1) Box(Modifier.padding(horizontal = 14.dp).fillMaxWidth().height(1.dp).background(L.Line))
+        }
+    }
+    Text(
+        "قیمت هر واحد به ${com.example.data.Money.label}. نمودار کوچک: قیمت ۷ روز اخیر، از روزی که تراز قیمت‌ها را ذخیره می‌کند. " +
+            "ارز و طلا از tgju، رمزارز از نوبیتکس، صندوق از سایت بورس؛ با هر بار باز کردن صفحه و هر ۲ دقیقه به‌روز می‌شود.",
+        style = lt(11.sp, color = L.Muted, lineHeight = 19.sp), modifier = Modifier.padding(horizontal = 24.dp)
+    )
+}
+
+@Composable
+private fun MineTab(
+    assets: List<Asset>,
+    prices: Map<String, PriceQuote>,
+    hideAmounts: Boolean,
+    clock: Long,
+    accountsTotal: Long,
+    debtsTotal: Long,
+    net: Long,
+    assetsTotal: Long,
+    snapshots: List<com.example.data.NetWorthSnapshot>,
+    onOpen: (Asset) -> Unit
+) {
+    fun unit(a: Asset) = com.example.data.unitPriceOf(a, prices)
+    fun value(a: Asset) = com.example.data.valueOf(a, prices)
     fun amt(v: Long) = if (hideAmounts) "••••••" else money(v)
 
-    LayerScreen(
-        title = "دارایی‌ها",
-        subtitle = if (refreshing) "در حال دریافت قیمت‌های روز…"
-        else lastAt?.let { "قیمت‌ها: ${agoText(it, clock)}" } ?: "ارز، طلا، رمزارز و صندوق با قیمت روز",
-        onBack = onBack,
-        trailing = {
-            Box(
-                Modifier.size(40.dp).clip(CircleShape).clickable(enabled = !refreshing) { onRefresh(true) }
-                    .semantics { contentDescription = "به‌روزرسانی قیمت‌ها" },
-                contentAlignment = Alignment.Center
-            ) { Icon(Icons.Default.Refresh, null, tint = if (refreshing) L.Faint else L.Ink, modifier = Modifier.size(20.dp)) }
-        },
-        bottomBar = { BigButton("افزودن دارایی", onClick = onAdd) }
-    ) {
-        Column(Modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("دارایی خالص", style = lt(13.sp, color = L.Muted))
-            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(amt(net), style = lt(36.sp, FontWeight.Light, if (net < 0) L.RedText else L.Ink, letterSpacing = (-1.5).sp))
-                Text("${com.example.data.Money.label}", style = lt(14.sp), modifier = Modifier.padding(bottom = 6.dp))
-            }
-            Text(
-                "حساب‌ها ${millions(accountsTotal)} + دارایی‌ها ${millions(assetsTotal)}" + if (debtsTotal > 0) " − بدهی‌ها ${millions(debtsTotal)}" else "",
-                style = lt(12.sp, color = L.Muted)
-            )
-        }
-
-        // سهم هر نوع
-        val byKind = KIND_LABEL.keys.associateWith { k -> assets.filter { it.kind == k }.sumOf { value(it) } }.filterValues { it > 0 }
-        val parts = (listOf("حساب‌ها" to (accountsTotal.coerceAtLeast(0) to L.Primary)) +
-            byKind.map { (k, v) -> KIND_LABEL.getValue(k) to (v to kindColor(k)) }).filter { it.second.first > 0 }
-        val sum = parts.sumOf { it.second.first }.coerceAtLeast(1)
-        if (parts.size > 1) {
-            Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(Modifier.fillMaxWidth().height(12.dp).clip(CircleShape), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    parts.forEach { (_, p) -> Box(Modifier.weight(p.first.toFloat()).height(12.dp).background(p.second)) }
-                }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    parts.forEach { (label, p) ->
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Box(Modifier.size(8.dp).clip(CircleShape).background(p.second))
-                            Text("$label ${fa((p.first * 100 / sum).toInt())}٪", style = lt(11.sp, color = L.Muted))
-                        }
-                    }
-                }
-            }
-        }
-
-        InflationCard(snapshots, hideAmounts)
-
-        if (errors.isNotEmpty()) {
-            Callout(
-                "بعضی قیمت‌ها به‌روز نشد",
-                "آخرین قیمت ثبت‌شده نمایش داده می‌شود.\n" +
-                    "در صورت روشن بودن فیلترشکن، برای دریافت قیمت آن را خاموش کنید؛ سایت‌های قیمت داخلی به نشانی‌های خارجی پاسخ نمی‌دهند. " +
-                    "در صورت تداوم مشکل، از این کادر تصویر تهیه کرده و برای پشتیبانی ارسال کنید.\n" +
-                    errors.joinToString(" · "),
-                L.AmberSoft, L.AmberInk, Modifier.padding(horizontal = 20.dp)
-            )
-        }
-
-        if (assets.isEmpty()) {
-            Text(
-                "دلار، طلا، سکه، رمزارز یا واحدهای صندوق خود را اضافه کنید؛ ارزش ${com.example.data.Money.label}ی آن با قیمت روز محاسبه می‌شود.",
-                style = lt(13.sp, color = L.Muted, lineHeight = 23.sp), modifier = Modifier.padding(horizontal = 24.dp)
-            )
-        }
-
-        KIND_LABEL.forEach { (kind, label) ->
-            val list = assets.filter { it.kind == kind }
-            if (list.isNotEmpty()) {
-                SectionTitle("$label · ${amt(list.sumOf { value(it) })}")
-                LayerCard(radius = 20.dp, padding = 0.dp) {
-                    list.forEachIndexed { i, a ->
-                        val q = prices[a.code]
-                        val u = unit(a)
-                        val v = value(a)
-                        val profit = if (a.buyPrice > 0 && u > 0) v - a.buyPrice else null
-                        // قیمتی که این بار نرسید و از قبل مانده
-                        val stale = q != null && a.manualPrice <= 0 && clock - q.at > 30 * 60_000L
-                        Row(
-                            Modifier.fillMaxWidth().clickable { onOpen(a) }.padding(horizontal = 14.dp, vertical = 11.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(kindColor(kind)), contentAlignment = Alignment.Center) {
-                                Text(a.name.take(1), style = lt(16.sp, FontWeight.Bold, Color.White))
-                            }
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(a.name, style = lt(14.sp, FontWeight.SemiBold), maxLines = 1)
-                                Text(
-                                    "${faQuantity(a.quantity)} ${PriceCatalog.find(a.code)?.unit ?: "واحد"} · " +
-                                        (if (u > 0) "هر واحد ${unitPriceText(u)}" else "قیمت نامعلوم") +
-                                        (if (a.manualPrice > 0) " (دستی)" else "") +
-                                        (if (stale) " · ${agoText(q!!.at, clock)}" else ""),
-                                    style = lt(11.sp, color = if (stale) L.AmberInk else L.Muted), maxLines = 1
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(if (u > 0) amt(v) else "—", style = lt(14.sp, FontWeight.Bold))
-                                when {
-                                    profit != null && !hideAmounts -> Text(
-                                        (if (profit >= 0) "+" else "−") + millions(kotlin.math.abs(profit)) + " سود",
-                                        style = lt(11.sp, color = if (profit >= 0) L.GreenText else L.RedText)
-                                    )
-                                    q?.changePct != null && a.manualPrice <= 0 -> {
-                                        val c = q.changePct
-                                        Text(
-                                            (if (c >= 0) "+" else "−") + fa(String.format(Locale.ENGLISH, "%.1f", kotlin.math.abs(c)).replace('.', '٫')) + "٪ امروز",
-                                            style = lt(11.sp, color = if (c >= 0) L.GreenText else L.RedText)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        if (i < list.size - 1) Box(Modifier.padding(horizontal = 14.dp).fillMaxWidth().height(1.dp).background(L.Line))
-                    }
-                }
-            }
-        }
-
+    if (assets.isEmpty()) {
         Text(
-            "قیمت‌ها از بازار آزاد خوانده می‌شوند (ارز و طلا از tgju، رمزارز از نوبیتکس، صندوق‌های بورسی از سایت بورس) و ممکن است با قیمت معاملهٔ شما اندکی تفاوت داشته باشند.",
-            style = lt(11.sp, color = L.Muted, lineHeight = 19.sp), modifier = Modifier.padding(horizontal = 24.dp)
+            "دلار، طلا، سکه، رمزارز یا واحدهای صندوق خود را اضافه کنید؛ ارزش ${com.example.data.Money.label}ی آن با قیمت روز محاسبه می‌شود.",
+            style = lt(13.sp, color = L.Muted, lineHeight = 23.sp), modifier = Modifier.padding(horizontal = 24.dp)
         )
     }
+
+    KIND_LABEL.forEach { (kind, label) ->
+        val list = assets.filter { it.kind == kind }.sortedByDescending { value(it) }
+        if (list.isEmpty()) return@forEach
+        val total = list.sumOf { value(it) }
+        val bought = list.filter { it.buyPrice > 0 && unit(it) > 0 }
+        val buy = bought.sumOf { it.buyPrice }
+        LayerCard(radius = 22.dp, padding = 0.dp) {
+            Row(
+                Modifier.fillMaxWidth().background(L.PrimaryTint).padding(horizontal = 14.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(Modifier.size(10.dp).clip(RoundedCornerShape(3.dp)).background(kindColor(kind)))
+                Text(label, style = lt(13.sp, FontWeight.ExtraBold), modifier = Modifier.weight(1f))
+                Text(amt(total), style = lt(13.sp, FontWeight.Bold))
+                if (buy > 0) {
+                    val p = (bought.sumOf { value(it) } - buy) * 100.0 / buy
+                    Text(signedPct(p), style = lt(12.sp, FontWeight.Bold, if (p >= 0) L.GreenText else L.RedText))
+                }
+            }
+            list.forEach { a ->
+                val q = prices[a.code]
+                val u = unit(a)
+                val v = value(a)
+                val profit = if (a.buyPrice > 0 && u > 0) v - a.buyPrice else null
+                val stale = q != null && a.manualPrice <= 0 && clock - q.at > 30 * 60_000L
+                Box(Modifier.fillMaxWidth().height(1.dp).background(L.Line))
+                Row(
+                    Modifier.fillMaxWidth().clickable { onOpen(a) }.padding(horizontal = 14.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(a.name, style = lt(14.sp, FontWeight.Bold), maxLines = 1)
+                        Text(
+                            "${faQuantity(a.quantity)} ${PriceCatalog.find(a.code)?.unit ?: "واحد"} · " +
+                                (if (u > 0) "هر واحد ${unitPriceText(u)}" else "قیمت نامعلوم") +
+                                (if (a.manualPrice > 0) " (دستی)" else "") +
+                                (if (stale) " · ${agoText(q!!.at, clock)}" else ""),
+                            style = lt(11.sp, color = if (stale) L.AmberInk else L.Muted), maxLines = 1
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(if (u > 0) amt(v) else "—", style = lt(14.sp, FontWeight.Bold))
+                        when {
+                            profit != null && !hideAmounts -> Text(
+                                (if (profit >= 0) "سود +" else "زیان −") + compact(kotlin.math.abs(profit)),
+                                style = lt(11.sp, color = if (profit >= 0) L.GreenText else L.RedText)
+                            )
+                            q?.changePct != null && a.manualPrice <= 0 -> Text(
+                                signedPct(q.changePct) + " امروز",
+                                style = lt(11.sp, color = if (q.changePct >= 0) L.GreenText else L.RedText)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // دارایی خالص: حساب‌ها + دارایی‌ها − بدهی‌ها
+    LayerCard(padding = 16.dp) {
+        Text("دارایی خالص", style = lt(13.sp, color = L.Muted))
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(amt(net), style = lt(26.sp, FontWeight.Light, if (net < 0) L.RedText else L.Ink, letterSpacing = (-1).sp))
+            Text(com.example.data.Money.label, style = lt(13.sp), modifier = Modifier.padding(bottom = 4.dp))
+        }
+        Text(
+            "حساب‌ها ${amt(accountsTotal)} + دارایی‌ها ${amt(assetsTotal)}" + if (debtsTotal > 0) " − بدهی‌ها ${amt(debtsTotal)}" else "",
+            style = lt(12.sp, color = L.Muted, lineHeight = 20.sp)
+        )
+    }
+
+    InflationCard(snapshots, hideAmounts)
 }
 
 /** افزودن یا ویرایش یک دارایی: نوع، مورد (یا جست‌وجوی صندوق)، مقدار، قیمت خرید و قیمت دستی */
@@ -275,11 +487,14 @@ fun AssetSheet(
     onDismiss: () -> Unit,
     onSearchFunds: (String, (List<FundMatch>, String?) -> Unit) -> Unit,
     onSave: (Asset) -> Unit,
-    onDelete: (Asset) -> Unit
+    onDelete: (Asset) -> Unit,
+    /** از دکمهٔ «+» بازار: (کد، نام) از پیش انتخاب‌شده */
+    preset: Pair<String, String>? = null
 ) {
-    var kind by remember { mutableStateOf(existing?.kind ?: AssetKind.CURRENCY) }
-    var code by remember { mutableStateOf(existing?.code) }
-    var name by remember { mutableStateOf(existing?.name.orEmpty()) }
+    val presetKind = preset?.first?.let { if (PriceCatalog.isFund(it)) AssetKind.FUND else PriceCatalog.find(it)?.kind }
+    var kind by remember { mutableStateOf(existing?.kind ?: presetKind ?: AssetKind.CURRENCY) }
+    var code by remember { mutableStateOf(existing?.code ?: preset?.first) }
+    var name by remember { mutableStateOf(existing?.name ?: preset?.second.orEmpty()) }
     var qtyText by remember { mutableStateOf(existing?.quantity?.let { faQuantity(it) }.orEmpty()) }
     var buyText by remember { mutableStateOf(existing?.buyPrice?.takeIf { it > 0 }?.let { money(it) }.orEmpty()) }
     var manualText by remember { mutableStateOf(existing?.manualPrice?.takeIf { it > 0 }?.let { money(it) }.orEmpty()) }
