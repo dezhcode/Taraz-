@@ -240,7 +240,18 @@ fun LayerAssetDetailScreen(
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Stat("میانگین قیمت خرید", if (holding.buyPrice > 0) amt(Math.round(holding.buyPrice / holding.quantity)) else "ثبت نشده", Modifier.weight(1f))
+                    // رمزارز: به دلار، مثل قیمت و ارزش بالای آن
+                    val avgUnit = holding.takeIf { it.buyPrice > 0 && it.quantity > 0 }?.let { it.buyPrice.toDouble() / it.quantity }
+                    Stat(
+                        "میانگین قیمت خرید",
+                        when {
+                            avgUnit == null -> "ثبت نشده"
+                            hideAmounts -> "••••••"
+                            dollars && manual == null && quote!!.exact > 0 -> dollarText(avgUnit * quote.usd!! / quote.exact)
+                            else -> "${unitPriceText(avgUnit)} ${Money.label}"
+                        },
+                        Modifier.weight(1f)
+                    )
                     Stat(
                         "سود و زیان",
                         when {
