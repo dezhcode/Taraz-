@@ -13,6 +13,9 @@ import com.example.MainActivity
 object NotificationHelper {
 
     private const val CHANNEL_ID = "taraz_notifications"
+
+    /** شناسهٔ همراه باز شدن برنامه از نوتیفیکیشن (مثلاً تراکنش پیامکی که باید نشان داده شود). */
+    const val EXTRA_TARGET_ID = "taraz_target_id"
     private const val CHANNEL_NAME = "اعلان‌های هوشمند تراز"
     private const val CHANNEL_DESC = "یادآوری اقساط و هشدارهای مالی تراز"
 
@@ -30,10 +33,7 @@ object NotificationHelper {
     }
 
     /** Persian-digit thousands separators, e.g. ۲٬۵۰۰٬۰۰۰ */
-    fun formatAmount(amount: Long): String {
-        val grouped = java.text.NumberFormat.getNumberInstance(java.util.Locale("fa", "IR")).format(amount)
-        return grouped
-    }
+    fun formatAmount(amount: Long): String = com.example.data.Money.format(amount)
 
     /**
      * [notificationId] lets each loan own a stable slot, so three loans produce
@@ -45,7 +45,12 @@ object NotificationHelper {
         message: String,
         notificationId: Int? = null,
         action: String? = null,
-        buttons: List<Pair<String, PendingIntent>> = emptyList()
+        buttons: List<Pair<String, PendingIntent>> = emptyList(),
+        /** شناسه‌ای که با باز شدن برنامه همراه [action] می‌رسد (مثلاً تراکنش پیامکی)؛ ۰ یعنی هیچ. */
+        targetId: Int = 0,
+        /** نوتیفیکیشن‌های هم‌گروه (مثل تراکنش‌های پیامکی) زیر یک خلاصه جمع می‌شوند. */
+        group: String? = null,
+        groupSummary: Boolean = false
     ) {
         // Ensure channel is created
         createNotificationChannel(context)
@@ -53,10 +58,12 @@ object NotificationHelper {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             if (action != null) this.action = action
+            if (targetId != 0) putExtra(EXTRA_TARGET_ID, targetId)
         }
+        // هر نوتیفیکیشن شناسه‌دار PendingIntent خودش را دارد؛ وگرنه همه یکی می‌شدند و آخرین شناسه برنده بود.
         val pendingIntent: PendingIntent = PendingIntent.getActivity(
             context,
-            0,
+            if (targetId != 0) targetId else 0,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -71,6 +78,7 @@ object NotificationHelper {
             .setContentIntent(pendingIntent)
             .setVibrate(longArrayOf(1000, 1000, 1000))
         buttons.forEach { (label, pi) -> builder.addAction(0, label, pi) }
+        if (group != null) builder.setGroup(group).setGroupSummary(groupSummary)
 
         try {
             with(NotificationManagerCompat.from(context)) {

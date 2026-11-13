@@ -289,7 +289,7 @@ private fun GlanceRow(label: String, note: String, amount: Long, color: Color, o
         Spacer(Modifier.width(8.dp))
         Row(verticalAlignment = Alignment.Bottom) {
             FitText(money(amount), lt(17.sp, FontWeight.Bold, color))
-            Text(" تومان", style = lt(11.sp, color = L.Muted), modifier = Modifier.padding(bottom = 2.dp))
+            Text(" ${com.example.data.Money.label}", style = lt(11.sp, color = L.Muted), modifier = Modifier.padding(bottom = 2.dp))
         }
     }
 }
@@ -333,7 +333,7 @@ internal fun UpcomingSection(items: List<UpcomingItem>, now: Long) {
                     )
                 }
                 Text(u.title, style = lt(14.sp, FontWeight.SemiBold), maxLines = 1)
-                Text(if (u.amount > 0) "${money(u.amount)} تومان" else "مبلغ نامشخص", style = lt(17.sp))
+                Text(if (u.amount > 0) "${money(u.amount)} ${com.example.data.Money.label}" else "مبلغ نامشخص", style = lt(17.sp))
                 Box(
                     Modifier.fillMaxWidth().height(40.dp).clip(ButtonShape)
                         .background(if (u.primary) L.Primary else L.PrimarySoft).clickable(onClick = u.onAction),
@@ -515,7 +515,7 @@ internal fun WalletStack(
                     modifier = Modifier.weight(1f, fill = false)
                 )
                 Spacer(Modifier.width(6.dp))
-                Text("تومان", style = lt(14.sp, color = Color.White), modifier = Modifier.padding(bottom = 7.dp))
+                Text("${com.example.data.Money.label}", style = lt(14.sp, color = Color.White), modifier = Modifier.padding(bottom = 7.dp))
             }
             // بستانکار و بدهکار جدا، و جمع کل؛ موجودی اصلی بالا دست‌نخورده می‌ماند
             Row(Modifier.padding(top = 12.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -530,7 +530,7 @@ internal fun WalletStack(
                 }
                 Spacer(Modifier.width(8.dp))
                 FitText(
-                    (if (net < 0) "\u200E−" else "") + money(kotlin.math.abs(net)) + " تومان",
+                    (if (net < 0) "\u200E−" else "") + money(kotlin.math.abs(net)) + " ${com.example.data.Money.label}",
                     lt(16.sp, FontWeight.Bold, if (net < 0) Color(0xFFFFC56B) else Color.White)
                 )
             }
@@ -618,7 +618,7 @@ internal fun TodayCard(
                         .clip(RoundedCornerShape(14.dp))
                         .background(if (isToday) L.Primary else Color.Transparent)
                         .clickable { onOpenDay(start) }
-                        .semantics { contentDescription = "${weekdayName(start)}، هزینه ${money(spend)} تومان" }
+                        .semantics { contentDescription = "${weekdayName(start)}، هزینه ${money(spend)} ${com.example.data.Money.label}" }
                         .padding(vertical = 7.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
@@ -642,7 +642,7 @@ internal fun TodayCard(
                     modifier = Modifier.weight(1f, fill = false)
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("تومان", style = lt(15.sp, FontWeight.SemiBold), modifier = Modifier.padding(bottom = 8.dp))
+                Text("${com.example.data.Money.label}", style = lt(15.sp, FontWeight.SemiBold), modifier = Modifier.padding(bottom = 8.dp))
             }
             Text(
                 if (dailyBudget > 0) "سقف هزینهٔ روزانه: ${toman(dailyBudget)}" else "سقف روزانه تعیین نشده است",

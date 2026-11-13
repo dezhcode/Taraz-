@@ -18,7 +18,7 @@ import java.util.regex.Pattern
  *    داشتن مبلغ و شماره حساب. این مسیر پشتیبان است و در زنجیره پس از موتورهای دیگر می‌آید.
  *
  * مبلغ و مانده همان‌طور که در پیامک آمده‌اند برمی‌گردند (ریال/تومان با
- * [com.example.data.SmsIngest.toToman] تبدیل می‌شود).
+ * [com.example.data.SmsIngest.toBookUnit] تبدیل می‌شود).
  */
 class PatternDbParser(
     private val mode: Mode = Mode.TEMPLATE,
@@ -62,24 +62,7 @@ class PatternDbParser(
 
     private fun byTemplate(text: String, banks: List<BankPatternDb.Bank>, bankName: String): ParsedTransactionModel? {
         val squeezed = text.filterNot { it.isWhitespace() }
-        val hits = ArrayList<Hit>()
-        for (c in banks.flatMap(::compiled)) {
-            val p = c.pattern ?: continue
-            if (c.literalLength < MIN_LITERAL) continue
-            if (!literalsInOrder(squeezed, c.literals)) continue
-            val m = p.matcher(text)
-            if (!m.find()) continue
-            val amountRaw = m.group("amount") ?: continue
-            val amount = SmsText.money(amountRaw) ?: continue
-            if (amount <= 0) continue
-            hits += Hit(
-                c, amount, m.start("amount"), m.end("amount"),
-                account = groupOrEmpty(m, "account"),
-                date = groupOrEmpty(m, "date"),
-                time = groupOrEmpty(m, "time"),
-                typeText = groupOrEmpty(m, "ttype")
-            )
-        }
+        val hits = banks.flatMap(::compiled).mapNotNull { hit(it, text, squeezed) }
         if (hits.isEmpty()) return null
         val best = hits.maxWith(compareBy<Hit> { it.c.literalLength }.thenBy { if (it.c.hasType) 1 else 0 })
         val bank = banks.first { it.name == best.c.template.bank }
@@ -104,6 +87,38 @@ class PatternDbParser(
         )
     }
 
+    /** این قالب کل پیامک را می‌پوشاند؟ (پیش‌آزمون سریع تکه‌های ثابت، بعد regex کامل) */
+    private fun hit(c: Compiled, text: String, squeezed: String): Hit? {
+        val p = c.pattern ?: return null
+        if (c.literalLength < MIN_LITERAL) return null
+        if (!literalsInOrder(squeezed, c.literals)) return null
+        val m = p.matcher(text)
+        if (!m.find()) return null
+        val amountRaw = m.group("amount") ?: return null
+        val amount = SmsText.money(amountRaw) ?: return null
+        if (amount <= 0) return null
+        return Hit(
+            c, amount, m.start("amount"), m.end("amount"),
+            account = groupOrEmpty(m, "account"),
+            date = groupOrEmpty(m, "date"),
+            time = groupOrEmpty(m, "time"),
+            typeText = groupOrEmpty(m, "ttype")
+        )
+    }
+
+    /**
+     * بانک‌هایی که دست‌کم یکی از قالب‌هایشان این پیامک را کامل می‌پوشاند، بدون دانستن فرستنده.
+     * قالب‌های خیلی کلی (کمتر از [minLiteral] نویسهٔ ثابت) حساب نمی‌شوند.
+     */
+    fun matchingBanks(body: String, minLiteral: Int = 8): List<BankPatternDb.Bank> {
+        val text = SmsText.normalize(body).trim()
+        if (text.isEmpty()) return emptyList()
+        val squeezed = text.filterNot { it.isWhitespace() }
+        return BankPatternDb.banks.filter { bank ->
+            compiled(bank).any { it.literalLength >= minLiteral && hit(it, text, squeezed) != null }
+        }
+    }
+
     private fun groupOrEmpty(m: java.util.regex.Matcher, name: String): String =
         try { m.group(name).orEmpty() } catch (e: IllegalArgumentException) { "" }
 
@@ -116,8 +131,6 @@ class PatternDbParser(
         }
         return true
     }
-
-    private val cache = ConcurrentHashMap<String, List<Compiled>>()
 
     private fun compiled(bank: BankPatternDb.Bank): List<Compiled> =
         cache.getOrPut(bank.name) { bank.templates.map(::compile) }
@@ -347,6 +360,9 @@ class PatternDbParser(
     }
 
     companion object {
+        /** قالب‌های کامپایل‌شده، مشترک میان همهٔ نمونه‌ها. */
+        private val cache = ConcurrentHashMap<String, List<Compiled>>()
+
         private val PLACEHOLDER = Regex("\\[\\[(\\w+)\\]\\]")
         private val MONEY = Regex("\\d{1,3}(?:,\\d{3})+")
         private val UNIT_AFTER = Regex("^\\s*(?:ریال|تومان)")

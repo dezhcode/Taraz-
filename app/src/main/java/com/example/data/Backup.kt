@@ -70,6 +70,8 @@ object Backup {
         val root = JSONObject()
         root.put("format", 1)
         root.put("exportedAt", System.currentTimeMillis())
+        // مبلغ‌ها به همین واحد ذخیره شده‌اند؛ بازگردانی واحد را هم برمی‌گرداند
+        root.put("currency", Money.current.code)
         root.put("transactions", JSONArray(db.transactionDao().getAllTransactions().first().map { t ->
             JSONObject().put("id", t.id).put("title", t.title).put("amount", t.amount).put("category", t.category)
                 .put("date", t.date).put("isExpense", t.isExpense).put("bankName", t.bankName).put("type", t.type)
@@ -127,6 +129,17 @@ object Backup {
             JSONObject().put("id", a.id).put("code", a.code).put("name", a.name).put("kind", a.kind).put("quantity", a.quantity)
                 .put("buyPrice", a.buyPrice).put("manualPrice", a.manualPrice).put("note", a.note).put("createdAt", a.createdAt)
         }))
+        // قیمت روزانه برای نمودارها (کنار پوشهٔ عکس‌ها، در پوشهٔ برنامه)
+        photos?.parentFile?.let { dir -> PriceHistory.load(dir).takeIf { it.isNotEmpty() }?.let { root.put("priceHistory", PriceHistory.toJson(it)) } }
+        root.put("assetTrades", JSONArray(db.assetTradeDao().getAllNow().map { t ->
+            JSONObject().put("id", t.id).put("assetId", t.assetId).put("code", t.code).put("name", t.name).put("kind", t.kind)
+                .put("isBuy", t.isBuy).put("quantity", t.quantity).put("total", t.total).put("costBasis", t.costBasis).put("date", t.date)
+                .put("bankName", t.bankName ?: JSONObject.NULL).put("transactionId", t.transactionId ?: JSONObject.NULL).put("note", t.note)
+        }))
+        root.put("priceAlerts", JSONArray(db.priceAlertDao().getAllNow().map { a ->
+            JSONObject().put("id", a.id).put("code", a.code).put("name", a.name).put("above", a.above).put("below", a.below)
+                .put("inUsd", a.inUsd).put("enabled", a.enabled).put("lastFiredAt", a.lastFiredAt).put("createdAt", a.createdAt)
+        }))
         root.put("persons", JSONArray(db.personDao().getAll().first().map { p ->
             JSONObject().put("id", p.id).put("name", p.name).put("relation", p.relation).put("phone", p.phone)
                 .put("note", p.note).put("createdAt", p.createdAt).put("photo", p.photo)
@@ -156,132 +169,162 @@ object Backup {
     private fun JSONObject.optLongOrNull(name: String): Long? = if (isNull(name) || !has(name)) null else getLong(name)
     private fun JSONObject.optStringOrNull(name: String): String? = if (isNull(name) || !has(name)) null else getString(name)
 
-    private inline fun JSONArray?.each(block: (JSONObject) -> Unit) {
-        if (this == null) return
-        for (i in 0 until length()) block(getJSONObject(i))
+    private inline fun <T> JSONArray?.items(block: (JSONObject) -> T): List<T> {
+        if (this == null) return emptyList()
+        val out = ArrayList<T>(length())
+        for (i in 0 until length()) out += block(getJSONObject(i))
+        return out
     }
 
-    /** Replaces everything in the database with the snapshot. Returns how many transactions came back. */
+    /**
+     * Replaces everything in the database with the snapshot. Returns how many transactions came back.
+     *
+     * The whole file is read into objects first and the database is emptied only after that
+     * succeeded. It used to be emptied first: a file that was damaged or from an incompatible
+     * version then failed half-way and left the user with nothing at all.
+     */
+    /** واحد پولی که مبلغ‌های این پشتیبان با آن ذخیره شده‌اند؛ پشتیبان‌های قدیمی تومانی‌اند. */
+    fun currencyOf(json: String): AppCurrency =
+        AppCurrency.of(runCatching { JSONObject(json).optString("currency") }.getOrNull()) ?: AppCurrency.TOMAN
+
     suspend fun restore(db: AppDatabase, json: String, photos: java.io.File? = null): Int {
         val root = JSONObject(json)
         if (!root.has("transactions") || !root.has("cards")) throw NotABackupException()
-        if (photos != null) withContext(Dispatchers.IO) {
-            root.optJSONObject("photos")?.let { obj ->
+
+        // ── 1. read everything (any malformed row throws here, before anything is deleted)
+        val cards = root.optJSONArray("cards").items { o ->
+            BankCard(o.getInt("id"), o.getString("bankName"), o.optString("cardNumber"), o.getLong("balance"),
+                o.optString("cardHolderName", "کاربر تراز"), o.optString("accountType", AccountType.BANK),
+                o.optLong("creditLimit"), o.optInt("dueDay"))
+        }
+        val transactions = root.optJSONArray("transactions").items { o ->
+            Transaction(
+                id = o.getInt("id"), title = o.getString("title"), amount = o.getLong("amount"), category = o.getString("category"),
+                date = o.getLong("date"), isExpense = o.getBoolean("isExpense"), bankName = o.getString("bankName"),
+                type = o.optString("type", TransactionType.EXPENSE), transferGroupId = o.optStringOrNull("transferGroupId"),
+                loanId = o.optIntOrNull("loanId"), tags = o.optString("tags"), attachments = o.optString("attachments")
+            )
+        }
+        val loans = root.optJSONArray("loans").items { o ->
+            Loan(o.getInt("id"), o.getString("bankName"), o.getString("loanName"), o.getLong("totalAmount"), o.getLong("paidAmount"),
+                o.getLong("installmentAmount"), o.optString("dueDate"), o.optInt("dueDay", 1), o.optBoolean("reminderEnabled", true),
+                o.optString("kind", LoanKind.LOAN))
+        }
+        val goals = root.optJSONArray("goals").items { o ->
+            FinancialGoal(o.getInt("id"), o.getString("title"), o.getLong("targetAmount"), o.getLong("currentAmount"),
+                o.optBoolean("isCompleted"), o.optLong("createdAt", System.currentTimeMillis()), o.optLongOrNull("deadline"))
+        }
+        val categories = root.optJSONArray("categories").items { o ->
+            Category(o.getInt("id"), o.getString("name"), o.optString("iconKey", "other"), o.optString("colorHex", "#0B7A57"),
+                o.optBoolean("isIncome"), o.optInt("sortOrder"), o.optLong("monthlyBudget"))
+        }
+        val loanPayments = root.optJSONArray("loanPayments").items { o ->
+            LoanPayment(o.getInt("id"), o.getInt("loanId"), o.getLong("amount"), o.getLong("date"),
+                o.getInt("jalaliYear"), o.getInt("jalaliMonth"), o.optIntOrNull("transactionId"))
+        }
+        val recurring = root.optJSONArray("recurring").items { o ->
+            RecurringTransaction(o.getInt("id"), o.getString("title"), o.getLong("amount"), o.getString("category"),
+                o.getBoolean("isExpense"), o.getString("bankName"), o.getInt("dayOfMonth"), o.optBoolean("enabled", true),
+                o.optInt("lastRunKey"), o.optLong("createdAt", System.currentTimeMillis()))
+        }
+        val debts = root.optJSONArray("debts").items { o ->
+            Debt(o.getInt("id"), o.getString("person"), o.getLong("amount"), o.getBoolean("owedToMe"), o.optString("note"),
+                o.optLong("createdAt", System.currentTimeMillis()), o.optBoolean("settled"), o.optLongOrNull("settledAt"),
+                o.optIntOrNull("personId"), o.optBoolean("isRepayment"), o.optIntOrNull("transactionId"), o.optLongOrNull("dueDate"))
+        }
+        val cheques = root.optJSONArray("cheques").items { o ->
+            Cheque(o.getInt("id"), o.getBoolean("issued"), o.getLong("amount"), o.getLong("dueDate"), o.optString("person"),
+                o.optString("bankName"), o.optString("sayadi"), o.optString("category", "سایر"), o.optString("note"),
+                o.optString("status", ChequeStatus.PENDING), o.optIntOrNull("transactionId"), o.optLong("createdAt", System.currentTimeMillis()))
+        }
+        val bills = root.optJSONArray("bills").items { o ->
+            Bill(o.getInt("id"), o.getString("kind"), o.getString("title"), o.optString("billId"), o.optString("payId"),
+                o.optLong("amount"), o.getLong("dueDate"), o.optInt("periodMonths", 2), o.optString("bankName"),
+                o.optLongOrNull("lastPaidAt"), o.optBoolean("enabled", true), o.optLong("createdAt", System.currentTimeMillis()))
+        }
+        val snapshots = root.optJSONArray("snapshots").items { o ->
+            NetWorthSnapshot(o.getInt("monthKey"), o.getLong("netWorth"), o.getLong("usdToman"), o.getLong("gold18Toman"), o.getLong("at"))
+        }
+        val assets = root.optJSONArray("assets").items { o ->
+            Asset(o.getInt("id"), o.getString("code"), o.getString("name"), o.getString("kind"), o.getDouble("quantity"),
+                o.optLong("buyPrice"), o.optLong("manualPrice"), o.optString("note"), o.optLong("createdAt", System.currentTimeMillis()))
+        }
+        val assetTrades = root.optJSONArray("assetTrades").items { o ->
+            AssetTrade(
+                o.getInt("id"), o.getInt("assetId"), o.getString("code"), o.getString("name"), o.getString("kind"), o.getBoolean("isBuy"),
+                o.getDouble("quantity"), o.getLong("total"), o.optLong("costBasis"), o.getLong("date"), o.optStringOrNull("bankName"),
+                o.optIntOrNull("transactionId"), o.optString("note")
+            )
+        }
+        val priceAlerts = root.optJSONArray("priceAlerts").items { o ->
+            PriceAlert(
+                o.getInt("id"), o.getString("code"), o.getString("name"), o.optDouble("above", 0.0), o.optDouble("below", 0.0),
+                o.optBoolean("inUsd"), o.optBoolean("enabled", true), o.optLong("lastFiredAt"), o.optLong("createdAt", System.currentTimeMillis())
+            )
+        }
+        // (person, base64 of the profile picture or null)
+        val persons = root.optJSONArray("persons").items { o ->
+            Person(o.getInt("id"), o.getString("name"), o.optString("relation", PersonRelation.OTHER), o.optString("phone"),
+                o.optString("note"), o.optLong("createdAt", System.currentTimeMillis()), photo = o.optString("photo")) to
+                o.optStringOrNull("photoData")
+        }
+        val senders = root.optJSONArray("senders").items { o ->
+            BankSender(bankName = o.getString("bankName"), senderNumber = o.getString("senderNumber"),
+                isEnabled = o.optBoolean("isEnabled", true), learningStatus = o.optString("learningStatus", "نیاز به آموزش"),
+                parserVersion = o.optInt("parserVersion"))
+        }
+
+        // ── 2. pictures
+        val safeName = Regex("[A-Za-z0-9_.-]+")
+        val personRows = withContext(Dispatchers.IO) {
+            if (photos != null) {
                 photos.mkdirs()
-                obj.keys().forEach { name ->
-                    if (name.matches(Regex("[A-Za-z0-9_.-]+"))) {
-                        runCatching { java.io.File(photos, name).writeBytes(android.util.Base64.decode(obj.getString(name), android.util.Base64.NO_WRAP)) }
+                root.optJSONObject("photos")?.let { obj ->
+                    obj.keys().forEach { name ->
+                        if (name.matches(safeName)) {
+                            runCatching { java.io.File(photos, name).writeBytes(android.util.Base64.decode(obj.getString(name), android.util.Base64.NO_WRAP)) }
+                        }
                     }
                 }
             }
+            persons.map { (p, data) ->
+                // A profile picture comes back only if its file does (already on the phone, or inside the backup).
+                val ok = p.photo.isNotBlank() && p.photo.matches(safeName) && photos != null && runCatching {
+                    val f = java.io.File(photos, p.photo)
+                    if (!f.exists()) f.writeBytes(android.util.Base64.decode(data ?: error("no picture"), android.util.Base64.NO_WRAP))
+                    true
+                }.getOrDefault(false)
+                if (ok) p else p.copy(photo = "")
+            }
         }
+
+        // ── 3. replace
         withContext(Dispatchers.IO) { db.clearAllTables() }
-        var count = 0
         db.withTransaction {
-            root.optJSONArray("cards").each { o ->
-                db.bankCardDao().insertCard(
-                    BankCard(o.getInt("id"), o.getString("bankName"), o.optString("cardNumber"), o.getLong("balance"),
-                        o.optString("cardHolderName", "کاربر تراز"), o.optString("accountType", AccountType.BANK),
-                        o.optLong("creditLimit"), o.optInt("dueDay"))
-                )
-            }
-            root.optJSONArray("transactions").each { o ->
-                db.transactionDao().insertTransaction(
-                    Transaction(
-                        id = o.getInt("id"), title = o.getString("title"), amount = o.getLong("amount"), category = o.getString("category"),
-                        date = o.getLong("date"), isExpense = o.getBoolean("isExpense"), bankName = o.getString("bankName"),
-                        type = o.optString("type", TransactionType.EXPENSE), transferGroupId = o.optStringOrNull("transferGroupId"),
-                        loanId = o.optIntOrNull("loanId"), tags = o.optString("tags"), attachments = o.optString("attachments")
-                    )
-                )
-                count++
-            }
-            root.optJSONArray("loans").each { o ->
-                db.loanDao().insertLoan(
-                    Loan(o.getInt("id"), o.getString("bankName"), o.getString("loanName"), o.getLong("totalAmount"), o.getLong("paidAmount"),
-                        o.getLong("installmentAmount"), o.optString("dueDate"), o.optInt("dueDay", 1), o.optBoolean("reminderEnabled", true),
-                        o.optString("kind", LoanKind.LOAN))
-                )
-            }
-            root.optJSONArray("goals").each { o ->
-                db.goalDao().insertGoal(
-                    FinancialGoal(o.getInt("id"), o.getString("title"), o.getLong("targetAmount"), o.getLong("currentAmount"),
-                        o.optBoolean("isCompleted"), o.optLong("createdAt", System.currentTimeMillis()), o.optLongOrNull("deadline"))
-                )
-            }
-            val cats = mutableListOf<Category>()
-            root.optJSONArray("categories").each { o ->
-                cats += Category(o.getInt("id"), o.getString("name"), o.optString("iconKey", "other"), o.optString("colorHex", "#0B7A57"),
-                    o.optBoolean("isIncome"), o.optInt("sortOrder"), o.optLong("monthlyBudget"))
-            }
-            db.categoryDao().insertAll(cats.ifEmpty { AppDatabase.DEFAULT_CATEGORIES })
-            root.optJSONArray("loanPayments").each { o ->
-                db.loanPaymentDao().insert(
-                    LoanPayment(o.getInt("id"), o.getInt("loanId"), o.getLong("amount"), o.getLong("date"),
-                        o.getInt("jalaliYear"), o.getInt("jalaliMonth"), o.optIntOrNull("transactionId"))
-                )
-            }
-            root.optJSONArray("recurring").each { o ->
-                db.recurringDao().insert(
-                    RecurringTransaction(o.getInt("id"), o.getString("title"), o.getLong("amount"), o.getString("category"),
-                        o.getBoolean("isExpense"), o.getString("bankName"), o.getInt("dayOfMonth"), o.optBoolean("enabled", true),
-                        o.optInt("lastRunKey"), o.optLong("createdAt", System.currentTimeMillis()))
-                )
-            }
-            root.optJSONArray("debts").each { o ->
-                db.debtDao().insert(
-                    Debt(o.getInt("id"), o.getString("person"), o.getLong("amount"), o.getBoolean("owedToMe"), o.optString("note"),
-                        o.optLong("createdAt", System.currentTimeMillis()), o.optBoolean("settled"), o.optLongOrNull("settledAt"),
-                        o.optIntOrNull("personId"), o.optBoolean("isRepayment"), o.optIntOrNull("transactionId"), o.optLongOrNull("dueDate"))
-                )
-            }
-            root.optJSONArray("cheques").each { o ->
-                db.chequeDao().insert(
-                    Cheque(o.getInt("id"), o.getBoolean("issued"), o.getLong("amount"), o.getLong("dueDate"), o.optString("person"),
-                        o.optString("bankName"), o.optString("sayadi"), o.optString("category", "سایر"), o.optString("note"),
-                        o.optString("status", ChequeStatus.PENDING), o.optIntOrNull("transactionId"), o.optLong("createdAt", System.currentTimeMillis()))
-                )
-            }
-            root.optJSONArray("bills").each { o ->
-                db.billDao().insert(
-                    Bill(o.getInt("id"), o.getString("kind"), o.getString("title"), o.optString("billId"), o.optString("payId"),
-                        o.optLong("amount"), o.getLong("dueDate"), o.optInt("periodMonths", 2), o.optString("bankName"),
-                        o.optLongOrNull("lastPaidAt"), o.optBoolean("enabled", true), o.optLong("createdAt", System.currentTimeMillis()))
-                )
-            }
-            root.optJSONArray("snapshots").each { o ->
-                db.snapshotDao().insert(
-                    NetWorthSnapshot(o.getInt("monthKey"), o.getLong("netWorth"), o.getLong("usdToman"), o.getLong("gold18Toman"), o.getLong("at"))
-                )
-            }
-            root.optJSONArray("assets").each { o ->
-                db.assetDao().insert(
-                    Asset(o.getInt("id"), o.getString("code"), o.getString("name"), o.getString("kind"), o.getDouble("quantity"),
-                        o.optLong("buyPrice"), o.optLong("manualPrice"), o.optString("note"), o.optLong("createdAt", System.currentTimeMillis()))
-                )
-            }
-            root.optJSONArray("persons").each { o ->
-                db.personDao().insert(
-                    Person(o.getInt("id"), o.getString("name"), o.optString("relation", PersonRelation.OTHER), o.optString("phone"),
-                        o.optString("note"), o.optLong("createdAt", System.currentTimeMillis()),
-                        photo = o.optString("photo").takeIf { name ->
-                            name.isNotBlank() && photos != null && runCatching {
-                                val f = java.io.File(photos, name)
-                                if (!f.exists()) f.writeBytes(android.util.Base64.decode(o.getString("photoData"), android.util.Base64.NO_WRAP))
-                                true
-                            }.getOrDefault(false)
-                        }.orEmpty())
-                )
-            }
-            root.optJSONArray("senders").each { o ->
-                db.bankSenderDao().insertSender(
-                    BankSender(bankName = o.getString("bankName"), senderNumber = o.getString("senderNumber"),
-                        isEnabled = o.optBoolean("isEnabled", true), learningStatus = o.optString("learningStatus", "نیاز به آموزش"),
-                        parserVersion = o.optInt("parserVersion"))
-                )
+            cards.forEach { db.bankCardDao().insertCard(it) }
+            transactions.forEach { db.transactionDao().insertTransaction(it) }
+            loans.forEach { db.loanDao().insertLoan(it) }
+            goals.forEach { db.goalDao().insertGoal(it) }
+            db.categoryDao().insertAll(categories.ifEmpty { AppDatabase.DEFAULT_CATEGORIES })
+            loanPayments.forEach { db.loanPaymentDao().insert(it) }
+            recurring.forEach { db.recurringDao().insert(it) }
+            debts.forEach { db.debtDao().insert(it) }
+            cheques.forEach { db.chequeDao().insert(it) }
+            bills.forEach { db.billDao().insert(it) }
+            snapshots.forEach { db.snapshotDao().insert(it) }
+            assets.forEach { db.assetDao().insert(it) }
+            assetTrades.forEach { db.assetTradeDao().insert(it) }
+            priceAlerts.forEach { db.priceAlertDao().insert(it) }
+            personRows.forEach { db.personDao().insert(it) }
+            senders.forEach { db.bankSenderDao().insertSender(it) }
+        }
+        // قیمت‌های روزانهٔ پشتیبان به تاریخچهٔ این گوشی افزوده می‌شود (روزهای این گوشی هم می‌ماند)
+        photos?.parentFile?.let { dir ->
+            root.optJSONObject("priceHistory")?.let { h ->
+                withContext(Dispatchers.IO) { runCatching { PriceHistory.merge(dir, PriceHistory.fromJson(h)) } }
             }
         }
-        return count
+        return transactions.size
     }
 
     // ─── spreadsheet export ───
@@ -294,10 +337,15 @@ object Backup {
         csvOf(withContext(Dispatchers.IO) { db.transactionDao().getAllTransactions().first() })
 
     /** The given transactions as CSV (the filtered list on the Transactions screen). */
+    /** مبلغ برای اکسل، بی جداکنندهٔ هزارگان: 1250000 یا برای دلار 12.50 */
+    internal fun csvAmount(v: Long): String =
+        if (Money.current.decimals == 0) v.toString()
+        else (if (v < 0) "-" else "") + (kotlin.math.abs(v) / 100) + "." + String.format(java.util.Locale.US, "%02d", kotlin.math.abs(v) % 100)
+
     suspend fun csvOf(list: List<Transaction>): ByteArray = withContext(Dispatchers.Default) {
         fun cell(v: String) = "\"" + v.replace("\"", "\"\"") + "\""
         val sb = StringBuilder()
-        sb.append("تاریخ,تاریخ میلادی,عنوان,دسته,حساب,نوع,مبلغ (تومان),برچسب\n")
+        sb.append("تاریخ,تاریخ میلادی,عنوان,دسته,حساب,نوع,مبلغ (${com.example.data.Money.label}),برچسب\n")
         val iso = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
         for (t in list) {
             val j = com.example.utils.JalaliDate.fromTimestamp(t.date)
@@ -312,7 +360,7 @@ object Backup {
                 .append(cell(t.category)).append(',')
                 .append(cell(t.bankName)).append(',')
                 .append(cell(kind)).append(',')
-                .append(if (t.isExpense) -t.amount else t.amount).append(',')
+                .append(csvAmount(if (t.isExpense) -t.amount else t.amount)).append(',')
                 .append(cell(t.tags)).append('\n')
         }
         byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()) + sb.toString().toByteArray(Charsets.UTF_8)

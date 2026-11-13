@@ -271,6 +271,38 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         _dailyBudget.value = amount
     }
 
+    // ─── واحد پول ───
+
+    /** نرخ روز دلار به تومان از قیمت‌های روز (برای پیشنهاد در تبدیل واحد)؛ null اگر هنوز گرفته نشده */
+    fun usdTomanRate(): Long? = _prices.value["usd"]?.price?.takeIf { it > 0 }
+
+    /**
+     * واحد پولی دفتر را عوض می‌کند و همهٔ مبلغ‌های ذخیره‌شده را به واحد تازه می‌برد (تومان↔ریال دقیق،
+     * دلار با نرخ [usdToman] تومان برای هر دلار). [onDone] بعد از ذخیره صدا زده می‌شود تا صفحه‌ها با
+     * واحد تازه دوباره ساخته شوند؛ خطا (مثلاً نرخ نامعتبر) با پیام برمی‌گردد و چیزی عوض نمی‌شود.
+     */
+    fun changeCurrency(to: com.example.data.AppCurrency, usdToman: Long?, onDone: (error: String?) -> Unit) {
+        val from = com.example.data.Money.current
+        if (from == to) { onDone(null); return }
+        val needsRate = from == com.example.data.AppCurrency.USD || to == com.example.data.AppCurrency.USD
+        val rate = usdToman ?: 0L
+        if (needsRate && rate <= 0) { onDone("نرخ دلار را وارد کنید."); return }
+        viewModelScope.launch {
+            try {
+                repository.convertCurrency(from, to, rate)
+                val f = com.example.data.Money.factor(from, to, rate)
+                val budget = Math.round(_dailyBudget.value * f)
+                sharedPrefs.edit().putLong("daily_budget", budget).apply()
+                _dailyBudget.value = budget
+                com.example.data.Money.save(getApplication(), to)
+                com.example.widget.TodayWidget.refresh(getApplication())
+                onDone(null)
+            } catch (e: Exception) {
+                onDone("تبدیل انجام نشد: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
     // Reactive Financial Health Score calculation with AI Backend integration
     private val _aiFinancialHealth = MutableStateFlow<FinancialHealthResult?>(null)
 
@@ -503,7 +535,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         val userName = userProfile.value?.name?.takeIf { it.isNotBlank() && it != "کاربر مهمان" }
         val amount = com.example.utils.JalaliDate.toPersianDigits(formatNumber(balance).replace(',', '٬'))
         return "با سلام و احترام، ${person.name} گرامی\n" +
-            "یادآوری می‌شود مبلغ $amount تومان از حساب فی‌مابین نزد شما باقی مانده است. خواهشمند است در اولین فرصت نسبت به تسویه اقدام فرمایید.\n" +
+            "یادآوری می‌شود مبلغ $amount ${com.example.data.Money.label} از حساب فی‌مابین نزد شما باقی مانده است. خواهشمند است در اولین فرصت نسبت به تسویه اقدام فرمایید.\n" +
             "با سپاس" + (userName?.let { "\n$it" } ?: "")
     }
 
@@ -536,7 +568,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     fun deletePersonEntry(debt: Debt) {
         viewModelScope.launch {
             val gone = repository.deletePersonEntry(debt)
-            offerUndo("ردیف «${debt.kindLabel}» حذف شد", "${formatNumber(debt.amount)} تومان · ${debt.person}", gone)
+            offerUndo("ردیف «${debt.kindLabel}» حذف شد", "${formatNumber(debt.amount)} ${com.example.data.Money.label} · ${debt.person}", gone)
         }
     }
 
@@ -545,8 +577,35 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     val assets: StateFlow<List<Asset>> = repository.allAssets
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /** قیمت‌های روز به تومان، همان‌طور که از سایت‌ها می‌آیند (عکس ماهانهٔ دارایی خالص با همین‌ها) */
     private val _prices = MutableStateFlow<Map<String, PriceQuote>>(PriceService.cached(application))
-    val prices: StateFlow<Map<String, PriceQuote>> = _prices.asStateFlow()
+
+    /**
+     * قیمت‌های روز به واحد پولی دفتر (ریال ×۱۰، دلار با نرخ روز دلار به سنت). قیمتی که به دلار
+     * قابل تبدیل نیست (نرخ دلار در دست نیست) کنار می‌رود.
+     */
+    val prices: StateFlow<Map<String, PriceQuote>> = _prices
+        .map { inBookUnit(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, inBookUnit(_prices.value))
+
+    private fun inBookUnit(raw: Map<String, PriceQuote>): Map<String, PriceQuote> {
+        val usd = raw["usd"]?.price
+        // ضریب تومان → واحد دفتر؛ کسر حفظ می‌شود (یک شیبا حدود یک تومان است)
+        val k = when (com.example.data.Money.current) {
+            com.example.data.AppCurrency.TOMAN -> 1.0
+            com.example.data.AppCurrency.RIAL -> 10.0
+            com.example.data.AppCurrency.USD -> usd?.takeIf { it > 0 }?.let { 100.0 / it } ?: return emptyMap()
+        }
+        return raw.mapValues { (_, q) -> q.copy(price = Math.round(q.exact * k), exact = q.exact * k) }
+    }
+
+    private val _priceHistory = MutableStateFlow<Map<String, List<Pair<Int, Double>>>>(emptyMap())
+    /** قیمت روزانهٔ هر کد به تومان، از روزی که تراز قیمت‌ها را می‌خواند (برای نمودار کوچک بازار) */
+    val priceHistory: StateFlow<Map<String, List<Pair<Int, Double>>>> = _priceHistory.asStateFlow()
+
+    init {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { _priceHistory.value = PriceHistory.load(getApplication()) }
+    }
 
     private val _pricesRefreshing = MutableStateFlow(false)
     val pricesRefreshing: StateFlow<Boolean> = _pricesRefreshing.asStateFlow()
@@ -556,27 +615,52 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     val priceErrors: StateFlow<List<String>> = _priceErrors.asStateFlow()
 
     /** قیمت هر واحد: قیمت دستی کاربر، وگرنه قیمت روز */
-    fun unitPrice(asset: Asset): Long = if (asset.manualPrice > 0) asset.manualPrice else _prices.value[asset.code]?.price ?: 0L
+    fun unitPrice(asset: Asset): Long = Math.round(com.example.data.unitPriceOf(asset, prices.value))
 
-    /** قیمت‌های روز را می‌گیرد؛ بی [force] اگر کمتر از ۱۰ دقیقه از آخرین بار گذشته کاری نمی‌کند */
+    /** آخرین باری که از سایت‌ها قیمت گرفته شد (موفق یا ناموفق) */
+    @Volatile private var lastPriceFetch = 0L
+
+    /**
+     * قیمت‌های روز را از سایت‌ها می‌گیرد. صفحهٔ دارایی‌ها هر بار که باز یا دیده می‌شود و تا وقتی باز
+     * است هر دو دقیقه این را صدا می‌زند؛ بی [force] فقط اگر کمتر از ۳۰ ثانیه از دریافت قبلی گذشته
+     * باشد و همهٔ قیمت‌ها در دست باشند کاری نمی‌کند.
+     */
     fun refreshPrices(force: Boolean = false) {
         if (_pricesRefreshing.value) return
-        val codes = assets.value.filter { it.manualPrice <= 0 }.map { it.code }.toSet() + setOf("usd", "gold18", "coin_emami", "btc", "usdt")
-        val newest = codes.mapNotNull { _prices.value[it]?.at }.minOrNull() ?: 0L
-        if (!force && System.currentTimeMillis() - newest < 10 * 60 * 1000L) return
+        // همهٔ فهرست بازار (از tgju و نوبیتکس هر کدام با یک درخواست می‌آید) و دارایی‌های کاربر؛
+        // خطا فقط برای قیمت‌هایی نشان داده می‌شود که کاربر دارد (و دلار، برای تبدیل‌ها)
+        val held = assets.value.filter { it.manualPrice <= 0 && !it.code.startsWith("manual:") }.map { it.code }.toSet()
+        val needed = held + setOf("usd", "gold18")
+        val codes = PriceCatalog.items.map { it.code }.toSet() + held
+        val now = System.currentTimeMillis()
+        val haveAll = needed.all { it in _prices.value }
+        if (!force && haveAll && now - lastPriceFetch < 30_000L) return
+        lastPriceFetch = now
         viewModelScope.launch {
             _pricesRefreshing.value = true
             try {
-                val (quotes, failed) = PriceService.refresh(getApplication(), codes)
+                val (quotes, failed) = PriceService.refresh(getApplication(), codes, needed)
                 _prices.value = quotes
+                _priceHistory.value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { PriceHistory.load(getApplication()) }
                 _priceErrors.value = failed
                 recordSnapshot()
+                checkAlerts(quotes)
             } catch (e: Exception) {
                 _priceErrors.value = listOf("خطا: ${e.message ?: e.javaClass.simpleName}")
             } finally {
                 _pricesRefreshing.value = false
             }
         }
+    }
+
+    // ─── حساب پیش‌فرض: در فرم ثبت تراکنش از پیش انتخاب می‌شود ───
+
+    private val _defaultAccount = MutableStateFlow(sharedPrefs.getString("default_account", null))
+    val defaultAccount: StateFlow<String?> = _defaultAccount.asStateFlow()
+
+    fun setDefaultAccount(name: String?) {
+        _defaultAccount.value = name
+        sharedPrefs.edit().apply { if (name == null) remove("default_account") else putString("default_account", name) }.apply()
     }
 
     // ─── چیدمان صفحهٔ خانه ───
@@ -618,7 +702,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     /** همان دارایی خالص صفحهٔ دارایی‌ها: حساب‌ها + دارایی‌ها − قرض و قسط و بدهی به اشخاص */
     fun currentNetWorth(): Long {
         val accounts = cards.value.sumOf { it.balance }
-        val held = assets.value.sumOf { (unitPrice(it) * it.quantity).toLong() }
+        val held = assets.value.sumOf { com.example.data.valueOf(it, prices.value) }
         val owed = loans.value.filter { !it.isSettled }.sumOf { (it.totalAmount - it.paidAmount).coerceAtLeast(0) } +
             personBalances.value.values.filter { it < 0 }.sumOf { -it }
         return accounts + held - owed
@@ -675,9 +759,90 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
     fun saveAsset(asset: Asset) {
         if (asset.quantity <= 0) return
+        // صندوقی که از جست‌وجو انتخاب شد: قیمتش همان لحظه، پیش از دریافت تازه
+        if (asset.code !in _prices.value) searchedFundQuotes[asset.code]?.let { _prices.value = _prices.value + (asset.code to it) }
         viewModelScope.launch {
             repository.saveAsset(asset)
             refreshPrices(force = asset.manualPrice <= 0 && _prices.value[asset.code] == null)
+        }
+    }
+
+    // ─── خرید و فروش دارایی، هشدار قیمت ───
+
+    val assetTrades: StateFlow<List<AssetTrade>> = repository.allTrades
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val priceAlerts: StateFlow<List<PriceAlert>> = repository.allAlerts
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** قیمت روز [code] به تومان، همان‌طور که از سایت آمده (برای نمودار و هشدار) */
+    fun tomanPrice(code: String): Double? = _prices.value[code]?.exact
+
+    /** چند واحد دفتر در هر تومان: تومان ۱، ریال ۱۰، دلار (سنت) ۱۰۰ ÷ نرخ دلار */
+    fun bookPerToman(): Double? = when (com.example.data.Money.current) {
+        com.example.data.AppCurrency.TOMAN -> 1.0
+        com.example.data.AppCurrency.RIAL -> 10.0
+        com.example.data.AppCurrency.USD -> usdTomanRate()?.let { 100.0 / it }
+    }
+
+    fun recordTrade(asset: Asset?, code: String, name: String, kind: String, isBuy: Boolean, quantity: Double, total: Long, date: Long, bankName: String?) {
+        viewModelScope.launch {
+            try {
+                repository.recordTrade(asset, code, name, kind, isBuy, quantity, total, date, bankName)
+                refreshPrices(force = _prices.value[code] == null)
+            } catch (e: Exception) {
+                _priceErrors.value = listOf("ثبت نشد: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
+    fun updateTrade(old: AssetTrade, isBuy: Boolean, quantity: Double, total: Long, date: Long, bankName: String?) {
+        viewModelScope.launch {
+            try { repository.updateTrade(old, isBuy, quantity, total, date, bankName) }
+            catch (e: Exception) { _priceErrors.value = listOf("ویرایش نشد: ${e.message ?: e.javaClass.simpleName}") }
+        }
+    }
+
+    fun deleteAssetWithTrades(asset: Asset, undoMoney: Boolean) {
+        viewModelScope.launch { repository.deleteAssetWithTrades(asset, undoMoney) }
+    }
+
+    fun deleteTrade(trade: AssetTrade) {
+        viewModelScope.launch { repository.deleteTrade(trade) }
+    }
+
+    /**
+     * هشدار تازه. حدها همان‌طور که کاربر دیده وارد شده‌اند: برای رمزارز به دلار، برای بقیه به واحد
+     * دفتر (که این‌جا به تومان برده می‌شود تا با عوض شدن واحد پول جابه‌جا نشود).
+     */
+    fun addAlert(code: String, name: String, inUsd: Boolean, above: Double, below: Double) {
+        val k = if (inUsd) 1.0 else bookPerToman() ?: return
+        viewModelScope.launch {
+            repository.saveAlert(PriceAlert(code = code, name = name, above = above / k, below = below / k, inUsd = inUsd))
+            syncAlertWork()
+            checkAlerts(_prices.value)
+        }
+    }
+
+    fun toggleAlert(alert: PriceAlert) {
+        viewModelScope.launch { repository.saveAlert(alert.copy(enabled = !alert.enabled)); syncAlertWork() }
+    }
+
+    fun deleteAlert(alert: PriceAlert) {
+        viewModelScope.launch { repository.deleteAlert(alert.id); syncAlertWork() }
+    }
+
+    private suspend fun syncAlertWork() {
+        val on = repository.allAlerts.first().any { it.enabled }
+        com.example.reminders.ReminderScheduler.schedulePriceAlerts(getApplication(), on)
+    }
+
+    private fun checkAlerts(quotes: Map<String, PriceQuote>) {
+        val hits = PriceAlerts.hits(priceAlerts.value, quotes)
+        if (hits.isEmpty()) return
+        viewModelScope.launch {
+            com.example.reminders.PriceAlertWorker.fire(getApplication(), hits, quotes["usd"]?.price) { repository.saveAlert(it) }
+            syncAlertWork()
         }
     }
 
@@ -685,12 +850,25 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { repository.deleteAsset(id) }
     }
 
+    /** قیمت صندوق‌هایی که در جست‌وجو دیده شدند (به تومان)، تا با ذخیرهٔ صندوق قیمتش فوراً معلوم باشد */
+    private val searchedFundQuotes = mutableMapOf<String, PriceQuote>()
+
     fun searchFunds(query: String, onResult: (List<FundMatch>, String?) -> Unit) {
         viewModelScope.launch {
             try {
-                onResult(PriceService.searchFunds(query), null)
+                val k = bookPerToman()
+                val now = System.currentTimeMillis()
+                val list = PriceService.searchFunds(getApplication(), query).map { m ->
+                    m.priceToman?.let { searchedFundQuotes[m.code] = PriceQuote.of(it, m.changePct, now, m.source) }
+                    m.copy(price = m.priceToman?.let { p -> k?.let { p * it } })
+                }
+                onResult(list, null)
             } catch (e: Exception) {
-                onResult(emptyList(), "جست‌وجو انجام نشد؛ اینترنت را بررسی کنید یا قیمت را دستی وارد کنید.")
+                onResult(
+                    emptyList(),
+                    "فهرست صندوق‌ها دریافت نشد (${e.message ?: e.javaClass.simpleName}). اگر فیلترشکن روشن است خاموش کنید؛ " +
+                        "سایت‌های فیپیران و بورس به نشانی‌های خارج از ایران پاسخ نمی‌دهند. صندوق را می‌توانید با نام و قیمت دستی هم ثبت کنید."
+                )
             }
         }
     }
@@ -721,7 +899,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 جملهٔ زیر را که کاربر برای ثبت یک تراکنش گفته، به JSON تبدیل کن. فقط JSON برگردان، بدون هیچ توضیح.
                 فیلدها:
                 "type": "expense" یا "income"
-                "amount": عدد به تومان (در محاوره «۸۰ تومن» یعنی ۸۰ هزار تومان، «۲ میلیون» یعنی ۲۰۰۰۰۰۰، «۵۰۰ تومن» یعنی ۵۰۰ هزار)
+                "amount": عدد به ${com.example.data.Money.label} (در محاوره «۸۰ تومن» یعنی ۸۰ هزار ${com.example.data.Money.label}، «۲ میلیون» یعنی ۲۰۰۰۰۰۰، «۵۰۰ تومن» یعنی ۵۰۰ هزار)
                 "title": عنوان کوتاه
                 "category": یکی از [$cats] یا null
                 "account": یکی از [$accounts] یا null
@@ -768,7 +946,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
         val income = listOf("حقوق", "واریز", "گرفتم", "درآمد", "دریافت").any { text.contains(it) }
         val title = text.replace(Regex("[0-9۰-۹٬,.]+"), "").replace(Regex("(میلیون|هزار|تومن|تومان)"), "").trim().take(40)
-        return EntryDraft(isExpense = !income, amount = amount, title = title.ifBlank { null })
+        // عدد گفته‌شده به واحد کامل است؛ در دفتر دلاری به سنت ذخیره می‌شود
+        return EntryDraft(isExpense = !income, amount = amount * com.example.data.Money.current.unit, title = title.ifBlank { null })
     }
 
     // ─── پشتیبان و خروجی ───
@@ -793,7 +972,13 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 val json = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Backup.decrypt(data, password) }
                 val count = Backup.restore(db, json, Attachments.dir(getApplication()))
                 sharedPrefs.edit().remove("ai_insight_at").apply()
-                onDone(true, "${com.example.utils.JalaliDate.toPersianDigits(count)} تراکنش و همهٔ حساب‌ها بازگردانده شد.")
+                // مبلغ‌های پشتیبان به واحد خودشان‌اند: واحد دفتر هم همان می‌شود
+                val currency = Backup.currencyOf(json)
+                val unitNote = if (currency != com.example.data.Money.current) {
+                    com.example.data.Money.save(getApplication(), currency)
+                    " واحد پول: ${currency.label}."
+                } else ""
+                onDone(true, "${com.example.utils.JalaliDate.toPersianDigits(count)} تراکنش و همهٔ حساب‌ها بازگردانده شد.$unitNote")
             } catch (e: Exception) {
                 onDone(false, e.message ?: "بازگردانی انجام نشد.")
             }
@@ -811,6 +996,102 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     fun setAutoBackupPeriod(days: Int) { AutoBackup.setPeriod(getApplication(), days); refreshAutoBackup() }
     fun setAutoBackupFolder(uri: android.net.Uri) { AutoBackup.setFolder(getApplication(), uri); refreshAutoBackup() }
     fun setAutoBackupPassword(password: String) { AutoBackup.setPassword(getApplication(), password); refreshAutoBackup() }
+
+    // ─── گوگل درایو ───
+
+    fun driveAppInstalled(): Boolean = AutoBackup.driveAppInstalled(getApplication())
+
+    /**
+     * فایل درایو انتخاب شد: وصلش می‌کند و نسخهٔ تازه را همان‌جا می‌نویسد. [password] اگر کاربر همین
+     * حالا رمز داده، رمز پشتیبان خودکار هم می‌شود تا ذخیره‌های بعدی بی‌پرسش انجام شوند.
+     */
+    fun connectDrive(uri: android.net.Uri, password: String?, onDone: (String?) -> Unit) {
+        viewModelScope.launch {
+            if (!password.isNullOrEmpty()) AutoBackup.setPassword(getApplication(), password)
+            AutoBackup.setDriveFile(getApplication(), uri)
+            val err = AutoBackup.writeDrive(getApplication())
+            refreshAutoBackup()
+            onDone(err)
+        }
+    }
+
+    /** فایل پشتیبانی که از درایو انتخاب شد (گوشی تازه): وصلش می‌کند تا بعداً هم همان‌جا ذخیره شود. */
+    fun linkDriveFile(uri: android.net.Uri) { AutoBackup.setDriveFile(getApplication(), uri); refreshAutoBackup() }
+
+    fun backupToDrive(onDone: (String?) -> Unit) {
+        viewModelScope.launch {
+            val err = AutoBackup.writeDrive(getApplication())
+            refreshAutoBackup()
+            onDone(err)
+        }
+    }
+
+    fun readDriveBackup(onDone: (ByteArray?, String?) -> Unit) {
+        viewModelScope.launch { val (b, e) = AutoBackup.readDrive(getApplication()); onDone(b, e) }
+    }
+
+    fun disconnectDrive() { AutoBackup.disconnectDrive(getApplication()); refreshAutoBackup() }
+
+    // ─── گوگل درایو با حساب گوگل (API) ───
+
+    private val _driveApi = MutableStateFlow(DriveApi.status(application))
+    val driveApi: StateFlow<DriveApi.Status> = _driveApi.asStateFlow()
+    private fun refreshDriveApi() { _driveApi.value = DriveApi.status(getApplication()) }
+
+    fun drivePlayServices(): Boolean = DriveApi.playServicesAvailable(getApplication())
+
+    /** پیام کاربرپسند برای خطای درایو */
+    private fun driveMsg(e: Throwable): String = when (e) {
+        is DriveApi.AuthNeeded -> e.message!!
+        is java.net.UnknownHostException, is java.net.ConnectException, is java.net.SocketTimeoutException ->
+            "به گوگل درایو وصل نشد؛ اینترنت (و در صورت نیاز فیلترشکن) را بررسی کنید."
+        else -> e.message ?: e.javaClass.simpleName
+    }
+
+    /**
+     * ورود انجام شد: حساب ثبت و یک پشتیبان تازه بارگذاری می‌شود. [password] رمز تازه وقتی پشتیبان
+     * خودکار هنوز رمز ندارد؛ از آن به بعد ذخیره‌های خودکار با همین رمز انجام می‌شوند.
+     */
+    fun driveApiConnect(token: String, password: String?, onDone: (String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                if (!password.isNullOrEmpty()) AutoBackup.setPassword(getApplication(), password)
+                DriveApi.connect(getApplication(), token)
+                val err = uploadToDriveApi(token)
+                refreshDriveApi(); refreshAutoBackup()
+                onDone(err)
+            } catch (e: Exception) { refreshDriveApi(); onDone(driveMsg(e)) }
+        }
+    }
+
+    private suspend fun uploadToDriveApi(token: String): String? {
+        val pass = com.example.utils.SecurePrefs.get(getApplication()).getString("auto_backup_password", null)
+            ?: return "رمز پشتیبان گذاشته نشده."
+        return try {
+            val bytes = Backup.encrypt(Backup.snapshot(db, Attachments.dir(getApplication())), pass)
+            DriveApi.upload(getApplication(), token, bytes); null
+        } catch (e: Exception) { driveMsg(e) }
+    }
+
+    fun driveApiBackup(token: String, onDone: (String?) -> Unit) {
+        viewModelScope.launch { val err = uploadToDriveApi(token); refreshDriveApi(); onDone(err) }
+    }
+
+    fun driveApiList(token: String, onDone: (List<DriveApi.RemoteFile>?, String?) -> Unit) {
+        viewModelScope.launch {
+            try { onDone(DriveApi.list(getApplication(), token), null) } catch (e: Exception) { onDone(null, driveMsg(e)) }
+        }
+    }
+
+    fun driveApiDownload(token: String, id: String, onDone: (ByteArray?, String?) -> Unit) {
+        viewModelScope.launch {
+            try { onDone(DriveApi.download(token, id), null) } catch (e: Exception) { onDone(null, driveMsg(e)) }
+        }
+    }
+
+    fun driveApiDisconnect(token: String?) {
+        viewModelScope.launch { DriveApi.disconnect(getApplication(), token); refreshDriveApi() }
+    }
 
     /** پشتیبان خودکار را همین حالا اجرا می‌کند؛ [onDone] پیام خطا یا null می‌گیرد */
     fun runAutoBackupNow(onDone: (String?) -> Unit) {
@@ -1171,7 +1452,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 val prompt = """
                     شما یک دستیار مالی هوشمند فارسی هستید.
                     کاربر پیامک تراکنشی دریافت کرده و توضیح داده که این تراکنش بابت چی بوده است.
-                    مبلغ تراکنش: ${tx.amount} تومان
+                    مبلغ تراکنش: ${tx.amount} ${com.example.data.Money.label}
                     نوع تراکنش: $actionType
                     پیامک بانکی: ${tx.smsBody}
                     توضیح کاربر: "$userText"
@@ -1213,7 +1494,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             finalTitle = proposal.title,
             finalCategory = proposal.category,
             finalAmount = tx.amount,
-            finalCard = tx.card,
+            // null: the account is worked out from the card digits and the sender, never named after them
+            finalCard = null,
             isExpense = tx.isExpense
         )
         _smsAiProposal.value = null
@@ -1433,6 +1715,11 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     // Transaction management
     fun addTransaction(title: String, amount: Long, category: String, isExpense: Boolean, bankName: String, date: Long? = null, tags: List<String> = emptyList()) {
         viewModelScope.launch {
+            // هنوز هیچ حسابی ساخته نشده: شیت ثبت نام «کیف پول» را می‌فرستد. بدون حساب، تراکنش ثبت می‌شد ولی
+            // هیچ موجودی‌ای تغییر نمی‌کرد؛ پس همان «کیف پول» به‌عنوان حساب نقدی ساخته می‌شود.
+            if (repository.allCardsNow().isEmpty()) {
+                repository.insertCard(BankCard(bankName = bankName.trim().ifEmpty { "کیف پول" }, balance = 0L, accountType = AccountType.CASH))
+            }
             repository.insertTransaction(
                 Transaction(
                     title = title,
@@ -1440,7 +1727,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     category = category,
                     date = date ?: System.currentTimeMillis(),
                     isExpense = isExpense,
-                    bankName = bankName,
+                    bankName = bankName.trim().ifEmpty { "کیف پول" },
                     type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME,
                     tags = tags.joinToString(",")
                 )
@@ -1460,7 +1747,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             offerUndo(
                 if (transaction.isTransfer) "انتقال حذف شد" else "«${transaction.title}» حذف شد",
                 if (transaction.isTransfer) "موجودی هر دو حساب اصلاح شد"
-                else "${formatNumber(transaction.amount)} تومان ${if (transaction.isExpense) "به" else "از"} ${transaction.bankName} ${if (transaction.isExpense) "بازگشت" else "کسر شد"}",
+                else "${formatNumber(transaction.amount)} ${com.example.data.Money.label} ${if (transaction.isExpense) "به" else "از"} ${transaction.bankName} ${if (transaction.isExpense) "بازگشت" else "کسر شد"}",
                 gone
             )
         }
@@ -1525,7 +1812,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             repository.insertCard(
                 BankCard(
                     bankName = clean,
-                    cardNumber = cardNumber,
+                    // always Latin digits, whatever keyboard typed them
+                    cardNumber = BankBin.digitsOf(cardNumber),
                     balance = balance,
                     cardHolderName = cardHolderName,
                     accountType = accountType,
@@ -1549,7 +1837,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
      */
     fun saveAccount(card: BankCard, newName: String, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
-            repository.insertCard(card)
+            repository.insertCard(card.copy(cardNumber = BankBin.digitsOf(card.cardNumber)))
             onResult(repository.renameAccount(card, newName))
         }
     }
@@ -1762,6 +2050,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
      * review screen; null means «work it out» (see [SmsIngest.accountFor]). When
      * that account does not exist yet it is created with the balance the SMS
      * reports, so after this transaction it matches the bank exactly.
+     *
+     * The work itself is in [SmsApproval], one approval at a time, so a double tap
+     * or «ثبت همه» can never record the same SMS twice.
      */
     fun approvePendingTransaction(
         pendingTx: PendingTransaction,
@@ -1772,33 +2063,32 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         isExpense: Boolean
     ) {
         viewModelScope.launch {
-            val name = finalCard?.trim()?.takeIf { it.isNotEmpty() }
-                ?: SmsIngest.accountFor(pendingTx, repository.allCardsNow(), smsParserRepository.getAllSenders())
-            if (repository.getCardByName(name) == null) {
-                val delta = if (isExpense) -finalAmount else finalAmount
-                repository.insertCard(
-                    BankCard(
-                        bankName = name,
-                        cardNumber = "",
-                        balance = if (pendingTx.balance > 0) pendingTx.balance - delta else 0L,
-                        accountType = AccountType.BANK
-                    )
-                )
+            approveOne(pendingTx.id, finalTitle, finalCategory, finalAmount, finalCard, isExpense)
+            settleSmsBalanceChecks()
+        }
+    }
+
+    /**
+     * «ثبت همه»: هر تراکنش با دسته‌اش. به ترتیب زمان پیامک‌ها (قدیمی‌تر اول) ثبت می‌شوند تا حسابی که
+     * با همین پیامک‌ها ساخته می‌شود از ماندهٔ قدیمی‌ترین پیامک شروع کند و به ماندهٔ تازه‌ترین برسد.
+     */
+    fun approvePendingBatch(items: List<Pair<PendingTransaction, String>>) {
+        if (items.isEmpty()) return
+        viewModelScope.launch {
+            items.sortedBy { it.first.date }.forEach { (p, category) ->
+                approveOne(p.id, p.title.ifBlank { "تراکنش بانکی" }, category, p.amount, null, p.isExpense)
             }
-            repository.insertTransaction(
-                Transaction(
-                    title = finalTitle,
-                    amount = finalAmount,
-                    category = finalCategory,
-                    date = pendingTx.date,
-                    isExpense = isExpense,
-                    bankName = name,
-                    type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME
-                )
-            )
-            // Kept as approved (not deleted) so the same SMS is never offered again.
-            smsParserRepository.setPendingStatus(pendingTx.id, PendingStatus.APPROVED)
-            checkBalanceAgainstSms(name, pendingTx.balance)
+            settleSmsBalanceChecks()
+        }
+    }
+
+    private suspend fun approveOne(id: Int, title: String, category: String, amount: Long, account: String?, isExpense: Boolean) {
+        val done = SmsApproval.approve(db, id, title, category, amount, account, isExpense) ?: return
+        SmsQuickAction.cancel(getApplication<Application>(), listOf(id))
+        val p = done.pending
+        if (p.balance > 0) {
+            val known = latestSmsBalance[done.account]
+            if (known == null || p.date >= known.first) latestSmsBalance[done.account] = p.date to p.balance
         }
     }
 
@@ -1808,10 +2098,31 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     private val _balanceMismatch = MutableStateFlow<BalanceMismatch?>(null)
     val balanceMismatch: StateFlow<BalanceMismatch?> = _balanceMismatch.asStateFlow()
 
-    private suspend fun checkBalanceAgainstSms(account: String, smsBalance: Long) {
-        if (smsBalance <= 0) return
-        val card = repository.getCardByName(account) ?: return
-        if (card.balance != smsBalance) _balanceMismatch.value = BalanceMismatch(account, card.balance, smsBalance)
+    /** «مانده»ٔ تازه‌ترین پیامکِ تأییدشدهٔ هر حساب در همین نشست: نام حساب ← (زمان پیامک، مانده). */
+    private val latestSmsBalance = HashMap<String, Pair<Long, Long>>()
+
+    /**
+     * موجودی حساب را با «مانده»ٔ پیامک بانک می‌سنجد، ولی فقط وقتی معنا دارد: پیامک دیگری برای همان
+     * حساب منتظر تأیید نباشد (وگرنه موجودی هنوز کامل نیست) و بعد از آن پیامک تراکنشی روی حساب ثبت
+     * نشده باشد (وگرنه «مانده»ٔ پیامک قدیمی است). پیش‌تر بعد از هر تأیید سنجیده می‌شد؛ با تأیید
+     * پیامک‌ها از تازه به قدیم، هشدار نادرست می‌داد و پذیرفتنش موجودی را به عددی قدیمی برمی‌گرداند.
+     */
+    private suspend fun settleSmsBalanceChecks() {
+        if (latestSmsBalance.isEmpty() || _balanceMismatch.value != null) return
+        val cardsNow = repository.allCardsNow()
+        val senders = smsParserRepository.getAllSenders()
+        val waiting = db.pendingTransactionDao().getPendingTransactions()
+            .map { SmsIngest.accountFor(it, cardsNow, senders) }.toSet()
+        for (account in latestSmsBalance.keys.toList()) {
+            if (account in waiting) continue
+            val (smsDate, smsBalance) = latestSmsBalance.remove(account) ?: continue
+            if (db.transactionDao().inRangeForAccount(account, smsDate + 1, Long.MAX_VALUE).isNotEmpty()) continue
+            val card = repository.getCardByName(account) ?: continue
+            if (card.balance != smsBalance) {
+                _balanceMismatch.value = BalanceMismatch(account, card.balance, smsBalance)
+                return // یکی‌یکی؛ بقیه بعد از پاسخ کاربر به همین یکی
+            }
+        }
     }
 
     /** موجودی حساب را برابر عدد پیامک بانک می‌کند */
@@ -1820,15 +2131,21 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         _balanceMismatch.value = null
         viewModelScope.launch {
             repository.getCardByName(m.account)?.let { repository.insertCard(it.copy(balance = m.inSms)) }
+            settleSmsBalanceChecks()
         }
     }
 
     fun dismissBalanceMismatch() {
         _balanceMismatch.value = null
+        viewModelScope.launch { settleSmsBalanceChecks() }
     }
 
     fun rejectPendingTransaction(id: Int) {
-        viewModelScope.launch { smsParserRepository.setPendingStatus(id, PendingStatus.REJECTED) }
+        viewModelScope.launch {
+            SmsApproval.reject(db, id)
+            SmsQuickAction.cancel(getApplication<Application>(), listOf(id))
+            settleSmsBalanceChecks()
+        }
     }
 
     fun ignoreUnknownSms(id: Int) {
@@ -2200,22 +2517,22 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
         _isAiLoading.value = true
 
-        val cardsCtx = cards.value.joinToString("\n") { "کارت: ${it.bankName} | شماره کارت: ${it.cardNumber} | موجودی: ${it.balance} تومان" }
+        val cardsCtx = cards.value.joinToString("\n") { "کارت: ${it.bankName} | شماره کارت: ${it.cardNumber} | موجودی: ${it.balance} ${com.example.data.Money.label}" }
         val loansCtx = loans.value.joinToString("\n") { "وام: آیدی: ${it.id} | بانک: ${it.bankName} | نام وام: ${it.loanName} | مبلغ کل وام: ${it.totalAmount} | مبلغ پرداخت‌شده تا الان: ${it.paidAmount} | مبلغ هر قسط: ${it.installmentAmount} | تاریخ سررسید: روز ${it.dueDay} هر ماه | قسط بعدی: ${com.example.utils.JalaliDate.fromTimestamp(com.example.utils.JalaliDate.nextDueTimestamp(it.dueDay)).formatLong()}" }
         val creditCtx = cards.value.filter { it.accountType == AccountType.CREDIT }.joinToString("\n") {
             "کارت اعتباری: ${it.bankName} | سقف: ${it.creditLimit} | استفاده‌شده: ${(-it.balance).coerceAtLeast(0)} | روز بازپرداخت: ${it.dueDay}"
         }
-        val monthCtx = "این ماه: درآمد ${monthlyIncome.value} تومان، هزینه ${monthlyExpense.value} تومان، خرج امروز ${todayExpense.value} تومان"
+        val monthCtx = "این ماه: درآمد ${monthlyIncome.value} ${com.example.data.Money.label}، هزینه ${monthlyExpense.value} ${com.example.data.Money.label}، خرج امروز ${todayExpense.value} ${com.example.data.Money.label}"
         val peopleCtx = persons.value.mapNotNull { p ->
             val bal = personBalances.value[p.id] ?: 0L
-            if (bal == 0L) null else "${p.name}: " + if (bal > 0) "به کاربر $bal تومان بدهکار است (طلب کاربر)" else "کاربر ${-bal} تومان به او بدهکار است"
+            if (bal == 0L) null else "${p.name}: " + if (bal > 0) "به کاربر $bal ${com.example.data.Money.label} بدهکار است (طلب کاربر)" else "کاربر ${-bal} ${com.example.data.Money.label} به او بدهکار است"
         }.take(12).joinToString("\n")
         val chequesCtx = cheques.value.filter { it.status == ChequeStatus.PENDING }.sortedBy { it.dueDate }.take(8).joinToString("\n") {
             (if (it.issued) "چک داده‌شده به ${it.person}" else "چک دریافتی از ${it.person}") +
-                " | ${it.amount} تومان | سررسید ${com.example.utils.JalaliDate.fromTimestamp(it.dueDate).formatLong()} | حساب ${it.bankName}"
+                " | ${it.amount} ${com.example.data.Money.label} | سررسید ${com.example.utils.JalaliDate.fromTimestamp(it.dueDate).formatLong()} | حساب ${it.bankName}"
         }
         val billsCtx = bills.value.filter { it.enabled }.sortedBy { it.dueDate }.take(8).joinToString("\n") {
-            "قبض ${it.title.ifBlank { it.kind }} | ${if (it.amount > 0) "${it.amount} تومان" else "مبلغ نامشخص"} | موعد ${com.example.utils.JalaliDate.fromTimestamp(it.dueDate).formatLong()}"
+            "قبض ${it.title.ifBlank { it.kind }} | ${if (it.amount > 0) "${it.amount} ${com.example.data.Money.label}" else "مبلغ نامشخص"} | موعد ${com.example.utils.JalaliDate.fromTimestamp(it.dueDate).formatLong()}"
         }
         // Duck.ai هر پیام را تا ۱۶ هزار نویسه می‌پذیرد؛ اگر داده‌ها زیاد باشد تراکنش‌های کمتری فرستاده می‌شود
         val txLimit = if (transactions.value.size > 15 && (peopleCtx.length + chequesCtx.length + billsCtx.length) > 2500) 8 else 15
@@ -2258,7 +2575,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             2. **فرمت بولد (Bold)**: حتماً واژه‌های کلیدی، عناوین دسته‌بندی‌ها، مبالغ و عبارات مهم را با علامت `**` بولد کنید (مانند **مخارج خورد و خوراک** یا **موجودی حساب**) تا سریعاً توجه کاربر جلب شود.
             3. **لیست‌ها**: برای مراحل، پیشنهادها یا گزینه‌ها از لیست‌های بالت‌دار مارک‌داون با استفاده از کاراکتر `•` یا `-` در ابتدای خط استفاده کنید.
             4. **جدول‌های مارک‌داون**: هر زمان که لیستی از هزینه‌ها، تراکنش‌ها، مبالغ یا مقایسه‌های ارقام را ارایه می‌دهید، حتماً و بدون استثنا آن را در یک جدول استاندارد با فرمت پایپ `|` قرار دهید. به عنوان مثال:
-               | دسته‌بندی | مبلغ (تومان) | وضعیت |
+               | دسته‌بندی | مبلغ (${com.example.data.Money.label}) | وضعیت |
                | :---: | :---: | :---: |
                | خورد و خوراک | 450,000 | ثبت شده |
                | قسط خودرو | 2,500,000 | سررسید شده |
@@ -2304,16 +2621,16 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             قالب دقیق تگ PROPOSE_ACTION (تنها یک تگ در پاسخ ارسال کن و فرمت JSON آن دقیقاً باید رعایت شود):
             
             - اضافه کردن تراکنش:
-            [PROPOSE_ACTION: {"type": "add_transaction", "txTitle": "خرید نان", "txAmount": 15000, "txCategory": "خورد و خوراک", "txIsExpense": true, "txBankName": "ملی", "description": "ثبت تراکنش هزینه خرید نان به مبلغ 15,000 تومان روی کارت بانک ملی"}]
+            [PROPOSE_ACTION: {"type": "add_transaction", "txTitle": "خرید نان", "txAmount": 15000, "txCategory": "خورد و خوراک", "txIsExpense": true, "txBankName": "ملی", "description": "ثبت تراکنش هزینه خرید نان به مبلغ 15,000 ${com.example.data.Money.label} روی کارت بانک ملی"}]
             
             - حذف تراکنش:
-            [PROPOSE_ACTION: {"type": "delete_transaction", "txId": 12, "txTitle": "کافه", "txAmount": 45000, "txIsExpense": true, "txBankName": "ملت", "description": "حذف تراکنش هزینه کافه به مبلغ 45,000 تومان"}]
+            [PROPOSE_ACTION: {"type": "delete_transaction", "txId": 12, "txTitle": "کافه", "txAmount": 45000, "txIsExpense": true, "txBankName": "ملت", "description": "حذف تراکنش هزینه کافه به مبلغ 45,000 ${com.example.data.Money.label}"}]
             
             - ویرایش تراکنش:
-            [PROPOSE_ACTION: {"type": "edit_transaction", "txId": 12, "txTitle": "خرید میوه", "txAmount": 85000, "txCategory": "خورد و خوراک", "txIsExpense": true, "txBankName": "ملت", "description": "ویرایش تراکنش آیدی 12 به خرید میوه به مبلغ 85,000 تومان"}]
+            [PROPOSE_ACTION: {"type": "edit_transaction", "txId": 12, "txTitle": "خرید میوه", "txAmount": 85000, "txCategory": "خورد و خوراک", "txIsExpense": true, "txBankName": "ملت", "description": "ویرایش تراکنش آیدی 12 به خرید میوه به مبلغ 85,000 ${com.example.data.Money.label}"}]
             
             - اضافه کردن وام:
-            [PROPOSE_ACTION: {"type": "add_loan", "loanBankName": "تجارت", "loanName": "وام مسکن", "loanTotalAmount": 100000000, "loanPaidAmount": 0, "loanInstallmentAmount": 2000000, "loanDueDate": "15 هر ماه", "description": "ثبت وام جدید مسکن بانک تجارت به مبلغ 100,000,000 تومان با قسط 2,000,000 تومان"}]
+            [PROPOSE_ACTION: {"type": "add_loan", "loanBankName": "تجارت", "loanName": "وام مسکن", "loanTotalAmount": 100000000, "loanPaidAmount": 0, "loanInstallmentAmount": 2000000, "loanDueDate": "15 هر ماه", "description": "ثبت وام جدید مسکن بانک تجارت به مبلغ 100,000,000 ${com.example.data.Money.label} با قسط 2,000,000 ${com.example.data.Money.label}"}]
             
             - حذف وام:
             [PROPOSE_ACTION: {"type": "delete_loan", "loanId": 3, "loanName": "وام مسکن", "description": "حذف وام مسکن بانک مسکن"}]
@@ -2322,25 +2639,25 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             [PROPOSE_ACTION: {"type": "edit_loan", "loanId": 3, "loanBankName": "تجارت", "loanName": "وام مسکن مهر", "loanTotalAmount": 120000000, "loanPaidAmount": 4000000, "loanInstallmentAmount": 2000000, "loanDueDate": "20 هر ماه", "description": "ویرایش جزئیات وام مسکن"}]
             
             - پرداخت قسط (installment):
-            [PROPOSE_ACTION: {"type": "pay_installment", "loanId": 3, "loanName": "وام مسکن", "loanInstallmentAmount": 2000000, "description": "پرداخت قسط وام مسکن به مبلغ 2,000,000 تومان"}]
+            [PROPOSE_ACTION: {"type": "pay_installment", "loanId": 3, "loanName": "وام مسکن", "loanInstallmentAmount": 2000000, "description": "پرداخت قسط وام مسکن به مبلغ 2,000,000 ${com.example.data.Money.label}"}]
             
             - ثبت چک (issued=true یعنی چکی که کاربر داده؛ false یعنی گرفته):
-            [PROPOSE_ACTION: {"type": "add_cheque", "issued": true, "amount": 15000000, "person": "صاحبخانه", "dueDate": "1405/09/01", "bankName": "ملت", "description": "ثبت چک 15,000,000 تومانی به صاحبخانه با سررسید 1 آذر"}]
+            [PROPOSE_ACTION: {"type": "add_cheque", "issued": true, "amount": 15000000, "person": "صاحبخانه", "dueDate": "1405/09/01", "bankName": "ملت", "description": "ثبت چک 15,000,000 ${com.example.data.Money.label}ی به صاحبخانه با سررسید 1 آذر"}]
 
             - ثبت قبض (kind یکی از: برق، آب، گاز، تلفن ثابت، موبایل، اینترنت، سایر):
             [PROPOSE_ACTION: {"type": "add_bill", "kind": "برق", "title": "برق خانه", "amount": 620000, "dueInDays": 5, "periodMonths": 2, "description": "ثبت قبض برق خانه با موعد 5 روز دیگر"}]
 
             - پرداخت قبض ثبت‌شده (billTitle همان نام قبض در فهرست بالا):
-            [PROPOSE_ACTION: {"type": "pay_bill", "billTitle": "برق خانه", "amount": 620000, "bankName": "ملت", "description": "پرداخت قبض برق خانه به مبلغ 620,000 تومان"}]
+            [PROPOSE_ACTION: {"type": "pay_bill", "billTitle": "برق خانه", "amount": 620000, "bankName": "ملت", "description": "پرداخت قبض برق خانه به مبلغ 620,000 ${com.example.data.Money.label}"}]
 
             - قرض به شخص یا از شخص (owedToMe=true یعنی کاربر قرض داده یا طلب دارد؛ isRepayment=true یعنی پس دادن/پس گرفتن؛ bankName فقط اگر پول از حسابی جابه‌جا شده):
-            [PROPOSE_ACTION: {"type": "person_entry", "person": "علی", "amount": 2000000, "owedToMe": true, "isRepayment": false, "bankName": "ملت", "dueInDays": 30, "description": "2,000,000 تومان قرض به علی از حساب ملت"}]
+            [PROPOSE_ACTION: {"type": "person_entry", "person": "علی", "amount": 2000000, "owedToMe": true, "isRepayment": false, "bankName": "ملت", "dueInDays": 30, "description": "2,000,000 ${com.example.data.Money.label} قرض به علی از حساب ملت"}]
 
             توجه: برای هر قسطی که کاربر می‌پردازد، علاوه بر آپدیت وام، یک تراکنش هزینه نیز ثبت می‌شود. برای این کار از نوع "pay_installment" استفاده کن.
             
             همیشه یک کادر تایید تعاملی با استفاده از این تگ ایجاد کن. دیتابیس بدون تایید کاربر تغییر نخواهد کرد.
 
-            همیشه تمام اعداد را در پاسخ خود به زبان انگلیسی و با فرمت جداکننده هزارگان بنویسید (مانند 20,000,000 تومان). از نوشتن اعداد به فارسی خودداری کنید.
+            همیشه تمام اعداد را در پاسخ خود به زبان انگلیسی و با فرمت جداکننده هزارگان بنویسید (مانند 20,000,000 ${com.example.data.Money.label}). از نوشتن اعداد به فارسی خودداری کنید.
         """.trimIndent()
 
         // مثل ChatViewModel در AI Studio: تاریخچه به‌صورت پیام‌های جدای user/assistant (۱۰ پیام آخر)
@@ -2454,8 +2771,19 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
      * فقط همان باقی‌مانده پرداخت می‌شود؛ پرداخت در سابقهٔ اقساط هم ثبت می‌شود.
      */
     fun payInstallmentFrom(loan: Loan, fromBank: String) {
-        viewModelScope.launch { repository.payInstallment(loan.id, fromBank) }
+        viewModelScope.launch {
+            val wasOpen = !loan.isSettled
+            repository.payInstallment(loan.id, fromBank)
+            // قسط آخر: یک جشن کوچک (فقط همین یک بار)
+            if (wasOpen && repository.loanById(loan.id)?.isSettled == true) _celebration.value = "${loan.loanName} تمام شد!"
+        }
     }
+
+    private val _celebration = MutableStateFlow<String?>(null)
+    /** پیام جشن برای لحظه‌های بزرگ (فعلاً: پرداخت قسط آخر وام)؛ پس از نمایش، [celebrated] را صدا بزنید */
+    val celebration: StateFlow<String?> = _celebration.asStateFlow()
+
+    fun celebrated() { _celebration.value = null }
 
     // ─── صوت: دیکته، پخش صوتی و گفت‌وگوی زنده ───
 
@@ -2517,13 +2845,13 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
      * در حالت صوتی تگ‌های عملیاتی پشتیبانی نمی‌شوند، پس فقط پاسخ گفتاری خواسته می‌شود.
      */
     private fun buildLiveVoiceInstructions(): String {
-        val cardsCtx = cards.value.joinToString("؛ ") { "${it.bankName}: ${it.balance} تومان" }
+        val cardsCtx = cards.value.joinToString("؛ ") { "${it.bankName}: ${it.balance} ${com.example.data.Money.label}" }
         val loansCtx = loans.value.joinToString("؛ ") {
-            "${it.loanName} (${it.bankName}) قسط ${it.installmentAmount} تومان، روز ${it.dueDay} هر ماه، " +
-                "باقی‌مانده ${it.totalAmount - it.paidAmount} تومان"
+            "${it.loanName} (${it.bankName}) قسط ${it.installmentAmount} ${com.example.data.Money.label}، روز ${it.dueDay} هر ماه، " +
+                "باقی‌مانده ${it.totalAmount - it.paidAmount} ${com.example.data.Money.label}"
         }
         val txCtx = transactions.value.take(10).joinToString("؛ ") {
-            "${it.title} ${it.amount} تومان (${if (it.isExpense) "هزینه" else "درآمد"}، ${it.category})"
+            "${it.title} ${it.amount} ${com.example.data.Money.label} (${if (it.isExpense) "هزینه" else "درآمد"}، ${it.category})"
         }
         return """
             تو «تراز» هستی، دستیار مالی شخصی و صمیمی داخل اپلیکیشن مدیریت مالی تراز.
@@ -2533,7 +2861,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             کارت‌ها: ${cardsCtx.ifBlank { "ثبت نشده" }}
             وام‌ها: ${loansCtx.ifBlank { "ثبت نشده" }}
             ۱۰ تراکنش اخیر: ${txCtx.ifBlank { "ثبت نشده" }}
-            هزینه امروز: ${todayExpense.value} تومان
+            هزینه امروز: ${todayExpense.value} ${com.example.data.Money.label}
         """.trimIndent()
     }
 

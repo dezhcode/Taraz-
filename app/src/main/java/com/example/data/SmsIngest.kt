@@ -1,8 +1,10 @@
 package com.example.data
 
-import com.example.sms.data.parser.BankPatternDb
+import com.example.sms.data.parser.BankSmsDetector
 import com.example.sms.data.parser.CompositeParser
 import com.example.sms.data.parser.SmsFilter
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.security.MessageDigest
 import java.util.Locale
 
@@ -72,9 +74,11 @@ object SmsIngest {
 
     private fun number(s: String?): Long = latinDigits(s.orEmpty()).filter { it.isDigit() }.toLongOrNull() ?: 0L
 
-    /** Bank SMS give rials unless they say toman; Taraz keeps toman everywhere. */
-    fun toToman(raw: Long, body: String): Long =
-        if (body.contains("تومان") && !body.contains("ریال")) raw else raw / 10
+    /**
+     * مبلغ پیامک به واحد دفتر ([Money]): پیامک بانک ریالی است مگر «تومان» بگوید. در دفتر ریالی همان
+     * عدد پیامک بی‌کم‌وکاست ثبت می‌شود، در دفتر تومانی ÷۱۰. دفتر دلاری پیامک نمی‌خواند (۰).
+     */
+    fun toBookUnit(raw: Long, body: String): Long = Money.fromSms(raw, body) ?: 0L
 
     private data class Parsed(val amount: Long, val balance: Long, val card: String, val isExpense: Boolean)
 
@@ -87,25 +91,35 @@ object SmsIngest {
      * Null for one-time codes, failed attempts and anything the readers cannot parse.
      */
     fun preview(body: String, bankName: String, sender: String = ""): Preview? {
-        if (SmsFilter.isNonTransaction(body)) return null
+        // فقط پیامکی که شکل تراکنش دارد؛ تبلیغ «۳۰۰م وام» نباید «درآمد ۳۰ تومان» نشان داده شود.
+        if (SmsFilter.isNonTransaction(body) || !BankSmsDetector.isTransaction(body)) return null
         val p = CompositeParser().parse(body, bankName, sender)?.takeIf { it.amount > 0 } ?: return null
         return Preview(
-            amount = toToman(p.amount, body),
-            balance = toToman(p.balance, body),
+            amount = toBookUnit(p.amount, body),
+            balance = toBookUnit(p.balance, body),
             card = latinDigits(p.cardNumber).filter { it.isDigit() }.takeLast(4),
             isExpense = p.transactionType !in INCOME_TYPES
         )
     }
 
+    /**
+     * گیرندهٔ پیامک، بررسی صندوق ورودی هنگام باز شدن برنامه و بررسی پس‌زمینه ممکن است یک پیامک را
+     * هم‌زمان ببینند؛ یکی‌یکی پردازش می‌شوند تا بررسی تکراری‌بودن معتبر بماند.
+     */
+    private val lock = Mutex()
+
     /** Reads [body] from [address] and files it as pending, unknown, or nothing. */
-    suspend fun process(db: AppDatabase, address: String, body: String, receivedAt: Long): Outcome {
+    suspend fun process(db: AppDatabase, address: String, body: String, receivedAt: Long): Outcome =
+        lock.withLock { processLocked(db, address, body, receivedAt) }
+
+    private suspend fun processLocked(db: AppDatabase, address: String, body: String, receivedAt: Long): Outcome {
         val registered = findSender(db.bankSenderDao(), address)
         // فرستندهٔ ثبت‌نشده‌ای که شماره‌اش در دیتابیس بانک‌ها هست هم پیامک بانکی است (نه فرستنده‌ای که کاربر خاموشش کرده).
-        val known = if (registered == null) BankPatternDb.bankForSender(address) else null
+        val known = if (registered == null) BankSmsDetector.senderBank(address) else null
         if (registered == null && known == null) return Outcome.NotBank
         if (registered != null && !registered.isEnabled) return Outcome.NotBank
-        // رمز یک‌بارمصرف و تراکنش ناموفق: نه ثبت می‌شوند، نه حتی در فهرست ناشناخته‌ها می‌مانند.
-        if (SmsFilter.isNonTransaction(body)) return Outcome.Ignored
+        // رمز یک‌بارمصرف، تراکنش ناموفق و پیامک بی‌مبلغ (تبلیغ، اطلاع‌رسانی): نه ثبت می‌شوند، نه در فهرست ناشناخته‌ها می‌مانند.
+        if (SmsFilter.isNonTransaction(body) || !BankSmsDetector.hasMoney(body)) return Outcome.Ignored
         val sender = registered ?: BankSender(
             bankName = known!!.displayName,
             senderNumber = address,
@@ -159,7 +173,7 @@ object SmsIngest {
 
         val tx = PendingTransaction(
             senderNumber = sender.senderNumber,
-            amount = toToman(found.amount, body),
+            amount = toBookUnit(found.amount, body),
             // When the SMS arrived, not when it was read: the parsers' own dates were "now".
             date = receivedAt,
             isExpense = found.isExpense,
@@ -167,7 +181,7 @@ object SmsIngest {
             title = "تراکنش پیامکی ${sender.bankName}",
             smsBody = body,
             smsBodyHash = hash,
-            balance = toToman(found.balance, body)
+            balance = toBookUnit(found.balance, body)
         )
         val id = db.pendingTransactionDao().insertPendingTransaction(tx).toInt()
         return Outcome.Pending(tx.copy(id = id), sender.bankName)
@@ -180,9 +194,10 @@ object SmsIngest {
      * turn into an account called «۳۱۴۲».
      */
     fun accountFor(p: PendingTransaction, cards: List<BankCard>, senders: List<BankSender>): String {
-        val last4 = p.card.filter { it.isDigit() }.takeLast(4)
+        val last4 = BankBin.digitsOf(p.card).takeLast(4)
         if (last4.length == 4) {
-            cards.firstOrNull { !it.isCash && it.cardNumber.endsWith(last4) }?.let { return it.bankName }
+            // شمارهٔ کارتی که با ارقام فارسی ذخیره شده هم باید پیدا شود
+            cards.firstOrNull { !it.isCash && BankBin.digitsOf(it.cardNumber).endsWith(last4) }?.let { return it.bankName }
         }
         val bank = senders.firstOrNull { sameSender(it.senderNumber, p.senderNumber) }?.bankName?.trim()
             ?.takeIf { it.isNotEmpty() } ?: "حساب بانکی"

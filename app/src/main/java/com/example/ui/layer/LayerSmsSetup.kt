@@ -64,10 +64,13 @@ internal data class SmsCardUi(val bankName: String, val last4: String)
 
 internal data class SmsSenderUi(
     val number: String,
+    /** نام بانک؛ خالی وقتی فرستنده بانک شناخته نشده (آن‌وقت خود سرشماره نشان داده می‌شود). */
     val bankName: String,
     val count: Int,
     val sample: String,
-    val looksBank: Boolean
+    val looksBank: Boolean,
+    /** چند پیامک این فرستنده شکل تراکنش بانکی دارند. */
+    val txCount: Int = 0
 )
 
 internal data class SmsWizardState(
@@ -301,15 +304,16 @@ private fun StepSender(s: SmsWizardState, a: SmsWizardActions) {
                     Modifier.padding(horizontal = 20.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(L.Surface)
                         .border(if (selected) 1.5.dp else 1.dp, if (selected) L.Primary else L.Rail, RoundedCornerShape(20.dp))
                         .clickable { a.onSelectSender(sender.number) }
-                        .semantics { role = Role.RadioButton; stateDescription = if (selected) "انتخاب شده" else "انتخاب نشده"; contentDescription = sender.bankName }
+                        .semantics { role = Role.RadioButton; stateDescription = if (selected) "انتخاب شده" else "انتخاب نشده"; contentDescription = sender.bankName.ifEmpty { sender.number } }
                         .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        BankDot(sender.bankName)
+                        if (sender.bankName.isNotEmpty()) BankDot(sender.bankName) else SenderDot()
                         Column(Modifier.weight(1f)) {
-                            Text(sender.bankName, style = lt(15.sp, FontWeight.Bold), maxLines = 1)
-                            Text("${fa(sender.number)} · ${fa(sender.count)} پیامک", style = lt(12.sp, color = L.Muted), maxLines = 1)
+                            // فرستندهٔ ناشناخته با خود سرشماره نشان داده می‌شود، نه «بانک نامشخص».
+                            Text(sender.bankName.ifEmpty { sender.number }, style = lt(15.sp, FontWeight.Bold), maxLines = 1)
+                            Text(senderLine(sender), style = lt(12.sp, color = L.Muted), maxLines = 1)
                         }
                         Box(
                             Modifier.size(24.dp).clip(RoundedCornerShape(8.dp)).background(if (selected) L.Primary else L.Surface)
@@ -326,7 +330,7 @@ private fun StepSender(s: SmsWizardState, a: SmsWizardActions) {
                             Text("تراز این پیامک را این‌طور فهمید", style = lt(12.sp, FontWeight.Bold, L.PrimaryText))
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 StatusPill(
-                                    (if (preview.isExpense) "هزینه · " else "درآمد · ") + money(preview.amount) + " تومان",
+                                    (if (preview.isExpense) "هزینه · " else "درآمد · ") + money(preview.amount) + " ${com.example.data.Money.label}",
                                     if (preview.isExpense) L.AmberSoft else L.GreenSoft,
                                     if (preview.isExpense) L.AmberText else L.GreenText
                                 )
@@ -404,7 +408,9 @@ internal fun SmsManageScreen(
     onAddSender: () -> Unit,
     onAddCard: () -> Unit,
     onOpenReview: () -> Unit,
-    onOpenUnread: () -> Unit
+    onOpenUnread: () -> Unit,
+    /** «وضعیت دریافت پیامک» ([SmsHealthSection])؛ در تصویرهای آزمون خالی می‌ماند. */
+    healthSection: (@Composable () -> Unit)? = null
 ) {
     LayerScreen(title = "پیامک‌های بانکی", subtitle = "ثبت خودکار تراکنش از پیامک", onBack = onBack) {
         LayerCard(radius = 18.dp, padding = 14.dp) {
@@ -433,6 +439,8 @@ internal fun SmsManageScreen(
             body = "قالب این پیامک‌ها را نمی‌شناسم؛ خودتان ثبتشان کنید.", bg = L.PrimarySoft, titleColor = L.PrimaryText,
             trailing = { SmallAction("دیدن", onOpenUnread) }
         )
+
+        if (readerOn && permissionGranted) healthSection?.invoke()
 
         SectionTitle("سرشماره‌ها")
         LayerCard(radius = 20.dp, padding = 0.dp) {
@@ -494,6 +502,17 @@ fun LayerSmsSetupScreen(
     onOpenUnread: () -> Unit
 ) {
     val context = LocalContext.current
+    // پیامک‌های بانکی ریالی‌اند؛ دفتر دلاری آن‌ها را نمی‌خواند.
+    if (!com.example.data.Money.current.readsBankSms) {
+        LayerScreen(title = "پیامک بانک", subtitle = "ثبت خودکار از پیامک بانک", onBack = onBack) {
+            Callout(
+                "در حالت دلار، پیامک بانکی خوانده نمی‌شود",
+                "پیامک‌های بانک‌های ایران به ریال هستند. برای ثبت خودکار آن‌ها، از «تنظیمات › واحد پول» تومان یا ریال را انتخاب کنید.",
+                L.AmberSoft, L.AmberInk, Modifier.padding(horizontal = 20.dp)
+            )
+        }
+        return
+    }
     val scope = rememberCoroutineScope()
     val smsVm: SmsParserViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     val creators = LocalCreators.current
@@ -512,7 +531,7 @@ fun LayerSmsSetupScreen(
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { p ->
         hasPermission = (p[android.Manifest.permission.READ_SMS] ?: false) && (p[android.Manifest.permission.RECEIVE_SMS] ?: false)
         if (hasPermission) {
-            smsVm.setReaderEnabled(true); smsVm.triggerScan()
+            smsVm.setReaderEnabled(true)
             if (!managing && step == 0) step = 1
         }
     }
@@ -556,7 +575,8 @@ fun LayerSmsSetupScreen(
             onRemoveSender = { smsVm.removeSender(it) },
             onAddSender = { standalone = true; managing = false; step = 2; selected = null; error = null },
             onAddCard = { creators?.addAccount?.invoke() },
-            onOpenReview = onOpenReview, onOpenUnread = onOpenUnread
+            onOpenReview = onOpenReview, onOpenUnread = onOpenUnread,
+            healthSection = { SmsHealthSection() }
         )
         return
     }
@@ -602,13 +622,23 @@ fun LayerSmsSetupScreen(
         onTab = { tab = it; error = null },
         onSelectSender = { selected = it },
         onToggleShowAll = { showAll = !showAll },
-        onManualNumber = { manualNumber = it; error = null },
+        onManualNumber = {
+            manualNumber = it; error = null
+            // سرشمارهٔ شناخته‌شده نام بانکش را خودش پر می‌کند.
+            if (manualBank.isBlank()) com.example.sms.data.parser.BankSmsDetector.senderBank(it)?.let { b -> manualBank = b.displayName }
+        },
         onManualBank = { manualBank = it },
         onSaveSender = {
             val g = if (tab == 0) senderUi.firstOrNull { it.number == selected } else null
+            // بانکِ سرشمارهٔ ناشناخته را حدس نمی‌زنیم: کاربر نامش را در «وارد کردن شماره» می‌نویسد.
+            val unknownBank = g != null && g.bankName.isEmpty()
+            if (unknownBank) {
+                tab = 1; manualNumber = g!!.number; manualBank = ""
+                error = "بانک این سرشماره شناخته نشد؛ نام بانک را بنویسید."
+            }
             val number = if (tab == 0) g?.number.orEmpty() else manualNumber
             val bank = if (tab == 0) g?.bankName.orEmpty() else manualBank
-            if (number.isNotBlank()) scope.launch {
+            if (!unknownBank && number.isNotBlank()) scope.launch {
                 val err = smsVm.addSender(number, bank)
                 if (err != null) {
                     error = err
@@ -625,19 +655,50 @@ fun LayerSmsSetupScreen(
     SmsWizardScreen(state, actions)
 }
 
-/** پیام‌های گوشی را به فرستنده گروه می‌کند؛ فرستنده‌های بانکی اول. */
-private fun groupSenders(messages: List<InboxMessage>, showAll: Boolean): List<SmsSenderUi> =
+/**
+ * پیام‌های گوشی را به فرستنده گروه می‌کند. بانک از سرشماره شناخته می‌شود (شماره‌های بانک‌ها در دیتابیس
+ * الگو)؛ برای سرشمارهٔ ناشناخته فقط وقتی پیامک‌هایش شکل تراکنش دارند، و بانک از متن همان تراکنش‌ها.
+ * فرستنده‌های بانکی اول، و فرستنده‌های دیگر فقط با «نمایش همه».
+ */
+internal fun groupSenders(messages: List<InboxMessage>, showAll: Boolean): List<SmsSenderUi> =
     messages.groupBy { it.address }
         .map { (address, list) ->
-            val bankMsg = list.firstOrNull { it.looksBank } ?: list.first()
+            val txs = list.filter { it.isTransaction }
+            val bank = list.firstOrNull { it.senderIsBank }?.bankGuess
+                ?: txs.mapNotNull { it.bankGuess.takeIf(String::isNotEmpty) }.groupingBy { it }.eachCount()
+                    .maxByOrNull { it.value }?.key
+                ?: ""
             SmsSenderUi(
-                number = address, bankName = bankMsg.bankGuess, count = list.size,
-                sample = bankMsg.body, looksBank = list.any { it.looksBank }
+                number = address, bankName = bank, count = list.size,
+                sample = (txs.firstOrNull() ?: list.first()).body,
+                looksBank = list.any { it.senderIsBank } || txs.isNotEmpty(),
+                txCount = txs.size
             )
         }
         .filter { showAll || it.looksBank }
-        .sortedWith(compareByDescending<SmsSenderUi> { it.looksBank }.thenByDescending { it.count })
+        .sortedWith(
+            compareByDescending<SmsSenderUi> { it.looksBank }
+                .thenByDescending { it.bankName.isNotEmpty() }
+                .thenByDescending { it.txCount }
+                .thenByDescending { it.count }
+        )
         .take(30)
+
+/** زیرعنوان کارت فرستنده: سرشماره، تعداد پیامک و اگر بانکش شناخته نشده، همین را بگوید. */
+private fun senderLine(s: SmsSenderUi): String = buildString {
+    if (s.bankName.isNotEmpty()) append(fa(s.number)).append(" · ")
+    append(fa(s.count)).append(" پیامک")
+    if (s.txCount > 0) append(" · ").append(fa(s.txCount)).append(" تراکنش")
+    if (s.bankName.isEmpty()) append(if (s.looksBank) " · بانک شناخته نشد" else " · غیربانکی")
+}
+
+/** نشان فرستنده‌ای که بانکش معلوم نیست: خاکستری با علامت پرسش، نه حرف اول «بانک». */
+@Composable
+private fun SenderDot(size: androidx.compose.ui.unit.Dp = 36.dp) {
+    Box(Modifier.size(size).clip(RoundedCornerShape(11.dp)).background(L.Chip), contentAlignment = Alignment.Center) {
+        Text("؟", style = lt(15.sp, FontWeight.ExtraBold, L.Muted))
+    }
+}
 
 // ───────────────────────── پیامک‌های خوانده‌نشده ─────────────────────────
 

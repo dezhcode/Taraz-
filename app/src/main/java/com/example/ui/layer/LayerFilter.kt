@@ -152,7 +152,7 @@ fun TxFilterSheet(
                         listOfNotNull(
                             if (spent > 0) "هزینه ${money(spent)}" else null,
                             if (earned > 0) "درآمد ${money(earned)}" else null
-                        ).joinToString(" · ").ifEmpty { "تومان" },
+                        ).joinToString(" · ").ifEmpty { "${com.example.data.Money.label}" },
                         style = lt(12.sp, color = L.Muted), maxLines = 1
                     )
                 }
@@ -231,10 +231,10 @@ fun TxFilterSheet(
             }
         }
 
-        FilterSection("مبلغ (تومان)") {
+        FilterSection("مبلغ (${com.example.data.Money.label})") {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                LField(minText, { minText = groupedInput(it) }, "کمترین", Modifier.weight(1f), placeholder = "۰", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                LField(maxText, { maxText = groupedInput(it) }, "بیشترین", Modifier.weight(1f), placeholder = "بی‌سقف", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                LField(minText, { minText = groupedInput(it) }, "کمترین", Modifier.weight(1f), placeholder = "۰", keyboardOptions = moneyKeyboard)
+                LField(maxText, { maxText = groupedInput(it) }, "بیشترین", Modifier.weight(1f), placeholder = "بی‌سقف", keyboardOptions = moneyKeyboard)
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -250,7 +250,7 @@ fun TxFilterSheet(
                     val to = f.to?.takeIf { it > day }
                     f.copy(from = day, to = to, rangeLabel = customLabel(day, to))
                 } else {
-                    val to = day + DAY_MS
+                    val to = JalaliDate.dayRange(ts).second
                     val from = f.from?.takeIf { it < to }
                     f.copy(from = from, to = to, rangeLabel = customLabel(from, to))
                 }

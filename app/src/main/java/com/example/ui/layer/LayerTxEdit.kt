@@ -149,8 +149,8 @@ fun LayerTxEditSheet(
                     Text(
                         when {
                             tx.isTransfer -> "این انتقال حذف شود؟ هر دو طرف آن پاک می‌شوند و موجودی هر دو حساب به حالت قبل برمی‌گردد."
-                            tx.loanId != null -> "این پرداخت قسط حذف شود؟ ${money(tx.amount)} تومان به موجودی ${tx.bankName} برمی‌گردد و از مبلغ پرداخت‌شدهٔ وام نیز کسر می‌شود."
-                            else -> "این تراکنش حذف شود؟ ${money(tx.amount)} تومان ${if (tx.isExpense) "به موجودی ${tx.bankName} برمی‌گردد" else "از موجودی ${tx.bankName} کم می‌شود"}."
+                            tx.loanId != null -> "این پرداخت قسط حذف شود؟ ${money(tx.amount)} ${com.example.data.Money.label} به موجودی ${tx.bankName} برمی‌گردد و از مبلغ پرداخت‌شدهٔ وام نیز کسر می‌شود."
+                            else -> "این تراکنش حذف شود؟ ${money(tx.amount)} ${com.example.data.Money.label} ${if (tx.isExpense) "به موجودی ${tx.bankName} برمی‌گردد" else "از موجودی ${tx.bankName} کم می‌شود"}."
                         },
                         style = lt(13.sp, color = L.RedInk, lineHeight = 22.sp)
                     )
@@ -177,7 +177,7 @@ fun LayerTxEditSheet(
             }
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(money(amount), style = lt(42.sp, FontWeight.Light, letterSpacing = (-1.5).sp))
-                Text("تومان", style = lt(15.sp), modifier = Modifier.padding(bottom = 8.dp))
+                Text("${com.example.data.Money.label}", style = lt(15.sp), modifier = Modifier.padding(bottom = 8.dp))
             }
             Text(title, style = lt(15.sp, FontWeight.SemiBold), maxLines = 1)
         }
@@ -185,11 +185,11 @@ fun LayerTxEditSheet(
         Box(Modifier.fillMaxWidth().height(1.dp).background(L.Line))
 
         val locked = tx.isTransfer
-        ChangeRow("مبلغ", { Text("${money(amount)} تومان", style = lt(14.sp, FontWeight.SemiBold)) }, onAction = if (locked) null else {
+        ChangeRow("مبلغ", { Text("${money(amount)} ${com.example.data.Money.label}", style = lt(14.sp, FontWeight.SemiBold)) }, onAction = if (locked) null else {
             { editing = if (editing == Editing.AMOUNT) Editing.NONE else Editing.AMOUNT }
         })
         if (editing == Editing.AMOUNT) {
-            LField(amountText, { amountText = groupedInput(it) }, "مبلغ جدید (تومان)", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+            LField(amountText, { amountText = groupedInput(it) }, "مبلغ جدید (${com.example.data.Money.label})", keyboardOptions = moneyKeyboard)
         }
 
         ChangeRow("دسته", { Text(category.ifBlank { "—" }, style = lt(14.sp, FontWeight.SemiBold)) },

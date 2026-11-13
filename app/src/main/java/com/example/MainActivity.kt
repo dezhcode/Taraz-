@@ -14,6 +14,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -35,6 +36,8 @@ import com.example.ui.*
 import com.example.data.tagList
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.layer.edgeGlass
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 class MainActivity : androidx.fragment.app.FragmentActivity() {
 
@@ -50,11 +53,16 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 
     /** «ثبت هزینه / درآمد / صوتی» از میان‌بُر آیکن یا ویجت؛ صفحهٔ ثبت باز می‌شود */
     private val quickAction = mutableStateOf<String?>(null)
+    /** تراکنش پیامکی‌ای که نوتیفیکیشنش زده شد (همراه [quickAction] = SMS_REVIEW)؛ ۰ یعنی هیچ. */
+    private val quickTargetId = mutableStateOf(0)
+    /** با هر بار جلو آمدن برنامه یکی بیشتر می‌شود؛ شیت «تراکنش‌های تازه» با آن دوباره بررسی می‌شود. */
+    private val resumeTick = androidx.compose.runtime.mutableIntStateOf(0)
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         quickAction.value = intent.action?.takeIf { it.startsWith("taraz.dezhcode.app.") }
+        quickTargetId.value = intent.getIntExtra(com.example.utils.NotificationHelper.EXTRA_TARGET_ID, 0)
     }
 
     /** When the app last went to the background; 0 while it is in front. */
@@ -71,6 +79,11 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         // grace period covers a quick look at another app or a system dialog.
         if (backgroundedAt > 0 && System.currentTimeMillis() - backgroundedAt > LOCK_GRACE_MS) viewModel.lockApp()
         backgroundedAt = 0L
+        resumeTick.intValue++
+        // هر بار که تراز جلو می‌آید، پیامک‌های بانکی تازهٔ صندوق ورودی خوانده می‌شوند؛ شیت تراکنش‌ها نشانشان می‌دهد.
+        if (com.example.Features.SMS) {
+            lifecycleScope.launch { com.example.data.SmsCatchUp.run(this@MainActivity, notify = false) }
+        }
     }
 
     private companion object {
@@ -81,7 +94,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        if (savedInstanceState == null) quickAction.value = intent?.action?.takeIf { it.startsWith("taraz.dezhcode.app.") }
+        if (savedInstanceState == null) {
+            quickAction.value = intent?.action?.takeIf { it.startsWith("taraz.dezhcode.app.") }
+            quickTargetId.value = intent?.getIntExtra(com.example.utils.NotificationHelper.EXTRA_TARGET_ID, 0) ?: 0
+        }
         enableEdgeToEdge()
 
         com.example.utils.NotificationHelper.createNotificationChannel(this)
@@ -90,7 +106,12 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         requestNotificationPermissionIfNeeded()
         com.example.reminders.ReminderScheduler.scheduleDailyLoanCheck(this)
         com.example.reminders.ReminderScheduler.scheduleWeeklySummary(this)
+        // پیامک‌های بانکی صندوق ورودی هر ۱۵ دقیقه، برای گوشی‌هایی که پیامک تازه را به برنامه اعلام نمی‌کنند
+        com.example.reminders.ReminderScheduler.scheduleSmsCatchUp(this)
 
+        // واحد پولی دفتر (تومان/ریال/دلار) پیش از هر نمایش مبلغ
+        com.example.data.Money.load(this)
+        com.example.ui.layer.Haptics.load(this)
         // انتخاب روشن/تیرهٔ کاربر قبل از اولین رسم اعمال می‌شود تا صفحه چشمک نزند
         com.example.ui.layer.ThemePrefs.load(this)?.let { com.example.ui.layer.LayerTheme.dark = it }
 
@@ -151,12 +172,21 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 val netWorthSnapshots by viewModel.netWorthSnapshots.collectAsStateWithLifecycle()
                 val homeLayout by viewModel.homeLayout.collectAsStateWithLifecycle()
                 val homeTools by viewModel.homeTools.collectAsStateWithLifecycle()
-                val assetsTotal = assets.sumOf { a ->
-                    val u = if (a.manualPrice > 0) a.manualPrice else prices[a.code]?.price ?: 0L
-                    kotlin.math.round(u * a.quantity).toLong()
-                }
+                val assetsTotal = assets.sumOf { com.example.data.valueOf(it, prices) }
                 var assetSheetFor by remember { mutableStateOf<com.example.data.Asset?>(null) }
                 var isAssetSheetOpen by remember { mutableStateOf(false) }
+                var assetPreset by remember { mutableStateOf<Pair<String, String>?>(null) }
+                val priceHistory by viewModel.priceHistory.collectAsStateWithLifecycle()
+                val assetTrades by viewModel.assetTrades.collectAsStateWithLifecycle()
+                val defaultAccount by viewModel.defaultAccount.collectAsStateWithLifecycle()
+                val priceAlerts by viewModel.priceAlerts.collectAsStateWithLifecycle()
+                var detailCode by remember { mutableStateOf<String?>(null) }
+                var tradeOpen by remember { mutableStateOf(false) }
+                var tradeBuy by remember { mutableStateOf(true) }
+                var tradeEditing by remember { mutableStateOf<com.example.data.AssetTrade?>(null) }
+                var alertOpen by remember { mutableStateOf(false) }
+                fun detailName(code: String): String =
+                    assets.firstOrNull { it.code == code }?.name ?: com.example.data.PriceCatalog.find(code)?.name ?: code
 
                 // Overlays states
                 var isAddTransactionOpen by remember { mutableStateOf(false) }
@@ -164,8 +194,22 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 var initialIsExpenseForDialog by remember { mutableStateOf(true) }
                 val pendingQuick = quickAction.value
                 var weeklyOpen by remember { mutableStateOf(false) }
+                // تغییر واحد پول (تنظیمات)
+                var currencyOpen by remember { mutableStateOf(false) }
+                var currencyBusy by remember { mutableStateOf(false) }
+                var currencyError by remember { mutableStateOf<String?>(null) }
+                // شیت «تراکنش‌های تازه»: با باز شدن برنامه، نوتیفیکیشن یا بنر خانه
+                var pendingSheetOpen by remember { mutableStateOf(false) }
+                var pendingFocusId by remember { mutableStateOf<Int?>(null) }
+                var reviewFocusId by remember { mutableStateOf<Int?>(null) }
+                fun openPendingSheet(focus: Int? = null) {
+                    if (!com.example.Features.SMS) return
+                    pendingFocusId = focus
+                    pendingSheetOpen = true
+                }
                 LaunchedEffect(pendingQuick) {
                     when (pendingQuick) {
+                        com.example.data.SmsQuickAction.ACTION_REVIEW -> openPendingSheet(quickTargetId.value.takeIf { it > 0 })
                         com.example.reminders.WeeklySummaryWorker.ACTION_OPEN -> { viewModel.setTab(Tab.REPORTS); weeklyOpen = true }
                         com.example.widget.QuickAction.ADD_EXPENSE -> { initialIsExpenseForDialog = true; addWithVoice = false; isAddTransactionOpen = true }
                         com.example.widget.QuickAction.ADD_INCOME -> { initialIsExpenseForDialog = false; addWithVoice = false; isAddTransactionOpen = true }
@@ -173,6 +217,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                     }
                     if (pendingQuick != null) quickAction.value = null
                 }
+                val sheetContext = LocalContext.current
+                val newestPendingId = pendingSms.maxOfOrNull { it.id } ?: 0
                 var selectedTransactionForEdit by remember { mutableStateOf<com.example.data.Transaction?>(null) }
                 var isAiSheetOpen by remember { mutableStateOf(false) }
                 var isBudgetOpen by remember { mutableStateOf(false) }
@@ -233,7 +279,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                         "voice" -> if (com.example.Features.VOICE) { initialIsExpenseForDialog = true; addWithVoice = true; isAddTransactionOpen = true }
                             else showToast("ثبت صوتی به‌زودی فعال می‌شود")
                         "transfer" -> isTransferOpen = true
-                        "sms" -> if (com.example.Features.SMS) viewModel.setSmsAssistantSheetOpen(true)
+                        "sms" -> if (com.example.Features.SMS) { if (pendingSms.isNotEmpty()) openPendingSheet() else viewModel.setSmsAssistantSheetOpen(true) }
                             else showToast("ثبت خودکار از پیامک بانک به‌زودی فعال می‌شود")
                         "recurring" -> openSub("recurring")
                         "pay_loan" -> {
@@ -305,10 +351,116 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             backupBusy = false
                             backupMsg = false to "فایل خوانده نشد."
                         } else {
-                            viewModel.restoreBackup(bytes, pass) { ok, msg -> backupBusy = false; backupMsg = ok to msg }
+                            val unitBefore = com.example.data.Money.current
+                            viewModel.restoreBackup(bytes, pass) { ok, msg ->
+                                backupBusy = false
+                                backupMsg = ok to msg
+                                // پشتیبان با واحد پول دیگری بود: صفحه‌ها با واحد تازه از نو ساخته شوند
+                                if (ok && com.example.data.Money.current != unitBefore) {
+                                    android.widget.Toast.makeText(this@MainActivity, msg, android.widget.Toast.LENGTH_LONG).show()
+                                    this@MainActivity.recreate()
+                                }
+                            }
                         }
                     }
                 }
+                // ─── گوگل درایو: یک فایل پشتیبان در درایو که تراز هر بار رویش می‌نویسد ───
+                var pendingDrivePassword by remember { mutableStateOf<String?>(null) }
+                fun restoreBytes(bytes: ByteArray, pass: String, onOk: () -> Unit = {}) {
+                    val unitBefore = com.example.data.Money.current
+                    viewModel.restoreBackup(bytes, pass) { ok, msg ->
+                        backupBusy = false
+                        backupMsg = ok to msg
+                        if (ok) onOk()
+                        if (ok && com.example.data.Money.current != unitBefore) {
+                            android.widget.Toast.makeText(this@MainActivity, msg, android.widget.Toast.LENGTH_LONG).show()
+                            this@MainActivity.recreate()
+                        }
+                    }
+                }
+                // ─── گوگل درایو با حساب گوگل (API): هر کار درایو اول یک توکن دسترسی می‌گیرد ───
+                val driveApiState by viewModel.driveApi.collectAsStateWithLifecycle()
+                val drivePlay = remember { viewModel.drivePlayServices() }
+                var driveFiles by remember { mutableStateOf<List<com.example.data.DriveApi.RemoteFile>?>(null) }
+                var pendingDriveAction by remember { mutableStateOf<((String) -> Unit)?>(null) }
+                fun driveAuthError(e: Throwable) {
+                    backupBusy = false
+                    pendingDriveAction = null
+                    val code = (e as? com.google.android.gms.common.api.ApiException)?.statusCode
+                    backupMsg = false to when (code) {
+                        10 -> "ورود با گوگل هنوز برای این نسخهٔ تراز ثبت نشده (تنظیمات Google Cloud). فعلاً از «روش دوم» استفاده کنید."
+                        7 -> "به گوگل وصل نشد؛ اینترنت (و در صورت نیاز فیلترشکن) را بررسی کنید."
+                        16, 12501 -> "ورود با حساب گوگل لغو شد."
+                        else -> "ورود با حساب گوگل انجام نشد" + (code?.let { " (کد ${com.example.utils.toPersianDigits(it.toString())})" } ?: "") + "."
+                    }
+                }
+                val driveAuthLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()
+                ) { res ->
+                    val action = pendingDriveAction
+                    pendingDriveAction = null
+                    val token = try {
+                        com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(this@MainActivity)
+                            .getAuthorizationResultFromIntent(res.data).accessToken
+                    } catch (e: Exception) {
+                        driveAuthError(e); return@rememberLauncherForActivityResult
+                    }
+                    if (token == null || action == null) { backupBusy = false; backupMsg = false to "ورود با حساب گوگل لغو شد." }
+                    else action(token)
+                }
+                /** یک توکن درایو می‌گیرد (اگر لازم باشد پنجرهٔ انتخاب حساب گوگل باز می‌شود) و [action] را با آن اجرا می‌کند */
+                fun withDriveToken(action: (String) -> Unit) {
+                    backupBusy = true
+                    backupMsg = null
+                    com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(this@MainActivity)
+                        .authorize(com.example.data.DriveApi.request())
+                        .addOnSuccessListener { r ->
+                            val pi = r.pendingIntent
+                            if (r.hasResolution() && pi != null) {
+                                pendingDriveAction = action
+                                try {
+                                    driveAuthLauncher.launch(androidx.activity.result.IntentSenderRequest.Builder(pi.intentSender).build())
+                                } catch (e: Exception) { driveAuthError(e) }
+                            } else {
+                                val t = r.accessToken
+                                if (t == null) { backupBusy = false; backupMsg = false to "ورود با حساب گوگل انجام نشد." } else action(t)
+                            }
+                        }
+                        .addOnFailureListener { driveAuthError(it) }
+                }
+                val driveCreateLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/octet-stream")
+                ) { uri ->
+                    val pass = pendingDrivePassword
+                    pendingDrivePassword = null
+                    if (uri == null) {
+                        backupBusy = false
+                    } else {
+                        viewModel.connectDrive(uri, pass) { err ->
+                            backupBusy = false
+                            backupMsg = if (err == null) true to "به گوگل درایو وصل شد و پشتیبان ذخیره شد." else false to err
+                        }
+                    }
+                }
+                val driveOpenLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+                ) { uri ->
+                    val pass = pendingRestorePassword
+                    pendingRestorePassword = null
+                    if (uri == null || pass == null) {
+                        backupBusy = false
+                    } else {
+                        val bytes = try { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } } catch (e: Exception) { null }
+                        if (bytes == null) {
+                            backupBusy = false
+                            backupMsg = false to "فایل خوانده نشد."
+                        } else {
+                            // بازگردانی موفق: همان فایل برای پشتیبان‌های بعدی وصل می‌ماند
+                            restoreBytes(bytes, pass) { viewModel.linkDriveFile(uri) }
+                        }
+                    }
+                }
+
                 val activity = context as? androidx.fragment.app.FragmentActivity
                 var lastBackPressTime by remember { mutableStateOf(0L) }
                 val exitToastMessage = "برای خروج، دکمهٔ بازگشت را دوباره بزنید"
@@ -374,6 +526,22 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 // راهنمای گام‌به‌گام صفحه‌ها (بار اول هر صفحه)
                 val tourState = remember { com.example.ui.layer.TourState() }
 
+                // شیت «تراکنش‌های تازه» خودش باز می‌شود: وقتی تراز جلو می‌آید یا تراکنش تازه‌ای می‌رسد، ولی
+                // نه وسط کار کاربر (روی برگه یا فرم دیگری که باز است). آن‌وقت بنر خانه و نوتیفیکیشن می‌مانند
+                // و بار بعد که برنامه جلو بیاید باز می‌شود.
+                val resumed = resumeTick.intValue
+                LaunchedEffect(newestPendingId, resumed, screenState, isAppLocked, activeSubScreen) {
+                    if (screenState != Screen.MAIN || isAppLocked) return@LaunchedEffect
+                    if (newestPendingId <= com.example.data.SmsPrefs.sheetSeenMaxId(sheetContext)) return@LaunchedEffect
+                    val busy = isAddTransactionOpen || selectedTransactionForEdit != null || isAiSheetOpen || isBudgetOpen ||
+                        isAddCardOpen || accountToEdit != null || isTransferOpen || isAssetSheetOpen || loanToPay != null ||
+                        isPersonSheetOpen || isEntrySheetOpen || isSplitOpen || chequeSheetOpen || shareMonthTs != null ||
+                        homeLayoutOpen || txFilterOpen || allToolsOpen || billToPay != null || creditToRepay != null ||
+                        searchOpen || weeklyOpen || quickCategory != null || showSmsAssistantSheet ||
+                        activeSubScreen in setOf("add_loan", "add_category", "backup", "sms_setup")
+                    if (!busy) openPendingSheet(pendingFocusId)
+                }
+
                 CompositionLocalProvider(
                     com.example.ui.layer.LocalCreators provides creators,
                     com.example.ui.layer.LocalTour provides tourState
@@ -410,7 +578,14 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         onTransfer = { isTransferOpen = true },
                                         holderName = userProfile?.name.orEmpty(),
                                         assetsTotal = assetsTotal,
-                                        onOpenAssets = { openSub("assets") }
+                                        onOpenAssets = { openSub("assets") },
+                                        assets = remember(assets, prices) { com.example.ui.layer.assetsSummaryOf(assets, prices) },
+                                        onEditAccount = { accountToEdit = it },
+                                        onToggleSms = { viewModel.toggleBankSender(it) },
+                                        onOpenSmsSetup = { openSub("sms_setup") },
+                                        onDeleteAccount = { viewModel.deleteCard(it.id) },
+                                        defaultAccount = defaultAccount,
+                                        onSetDefault = { viewModel.setDefaultAccount(it) }
                                     )
                                 }
 
@@ -496,6 +671,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         onOpenSms = { openSub("sms_setup") },
                                         onOpenBackup = { openBackupGuarded() },
                                         onOpenPrivacy = { openSub("privacy") },
+                                        onOpenCurrency = { currencyOpen = true },
                                         onTestServer = { cb -> viewModel.testAiServerConnection(cb) },
                                         onLogout = {
                                             subStack.clear()
@@ -516,7 +692,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     com.example.ui.layer.LayerSmsSetupScreen(
                                         viewModel = viewModel,
                                         onBack = { closeSub() },
-                                        onOpenReview = { viewModel.setSmsAssistantSheetOpen(true) },
+                                        onOpenReview = { openPendingSheet() },
                                         onOpenUnread = { openSub("sms_unread") }
                                     )
                                 }
@@ -606,10 +782,44 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         hideAmounts = false,
                                         onBack = { closeSub() },
                                         onRefresh = { force -> viewModel.refreshPrices(force) },
-                                        onAdd = { assetSheetFor = null; isAssetSheetOpen = true },
-                                        onOpen = { assetSheetFor = it; isAssetSheetOpen = true },
-                                        snapshots = netWorthSnapshots
+                                        onAdd = { assetSheetFor = null; assetPreset = null; isAssetSheetOpen = true },
+                                        onOpen = { assetSheetFor = it; assetPreset = null; isAssetSheetOpen = true },
+                                        snapshots = netWorthSnapshots,
+                                        history = priceHistory,
+                                        onAddCode = { code ->
+                                            val name = com.example.data.PriceCatalog.find(code)?.name ?: assets.firstOrNull { it.code == code }?.name.orEmpty()
+                                            assetSheetFor = null; assetPreset = code to name; isAssetSheetOpen = true
+                                        },
+                                        onOpenDetail = { code -> detailCode = code; openSub("asset_detail") }
                                     )
+                                }
+
+                                "asset_detail" -> {
+                                    val code = detailCode
+                                    if (code == null) {
+                                        LaunchedEffect(Unit) { closeSub() }
+                                    } else {
+                                        com.example.ui.layer.LayerAssetDetailScreen(
+                                            code = code,
+                                            name = detailName(code),
+                                            holding = assets.firstOrNull { it.code == code },
+                                            quote = prices[code],
+                                            tomanNow = viewModel.tomanPrice(code),
+                                            history = priceHistory[code].orEmpty(),
+                                            trades = assetTrades.filter { it.code == code },
+                                            alerts = priceAlerts.filter { it.code == code },
+                                            usdToman = viewModel.usdTomanRate(),
+                                            hideAmounts = false,
+                                            onBack = { closeSub() },
+                                            onEdit = { assetSheetFor = it; assetPreset = null; isAssetSheetOpen = true },
+                                            onTrade = { buy -> tradeBuy = buy; tradeEditing = null; tradeOpen = true },
+                                            onDeleteTrade = { viewModel.deleteTrade(it) },
+                                            onEditTrade = { t -> tradeEditing = t; tradeBuy = t.isBuy; tradeOpen = true },
+                                            onAddAlert = { alertOpen = true },
+                                            onToggleAlert = { viewModel.toggleAlert(it) },
+                                            onDeleteAlert = { viewModel.deleteAlert(it) }
+                                        )
+                                    }
                                 }
 
                                 "person_detail" -> {
@@ -669,6 +879,86 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                             readFileLauncher.launch(arrayOf("*/*"))
                                         },
                                         auto = autoBackupState,
+                                        driveInstalled = remember { viewModel.driveAppInstalled() },
+                                        onDriveConnect = { pass ->
+                                            backupBusy = true
+                                            backupMsg = null
+                                            pendingDrivePassword = pass
+                                            driveCreateLauncher.launch("taraz-backup.taraz")
+                                        },
+                                        onDriveSaveNow = {
+                                            backupBusy = true
+                                            backupMsg = null
+                                            viewModel.backupToDrive { err ->
+                                                backupBusy = false
+                                                backupMsg = if (err == null) true to "پشتیبان در گوگل درایو ذخیره شد." else false to err
+                                            }
+                                        },
+                                        onDriveRestore = { pass ->
+                                            backupBusy = true
+                                            backupMsg = null
+                                            viewModel.readDriveBackup { bytes, err ->
+                                                if (bytes == null) {
+                                                    backupBusy = false
+                                                    backupMsg = false to (err ?: "فایل درایو خوانده نشد.")
+                                                } else restoreBytes(bytes, pass)
+                                            }
+                                        },
+                                        onDriveOpenExisting = { pass ->
+                                            backupBusy = true
+                                            backupMsg = null
+                                            pendingRestorePassword = pass
+                                            driveOpenLauncher.launch(arrayOf("*/*"))
+                                        },
+                                        onDriveDisconnect = { viewModel.disconnectDrive(); backupMsg = true to "اتصال گوگل درایو قطع شد؛ فایل در درایو می‌ماند." },
+                                        driveApi = driveApiState,
+                                        drivePlay = drivePlay,
+                                        onDriveApiConnect = { pass ->
+                                            withDriveToken { token ->
+                                                viewModel.driveApiConnect(token, pass) { err ->
+                                                    backupBusy = false
+                                                    backupMsg = if (err == null) true to "به گوگل درایو وصل شد و پشتیبان بارگذاری شد." else false to err
+                                                }
+                                            }
+                                        },
+                                        onDriveApiBackup = {
+                                            withDriveToken { token ->
+                                                viewModel.driveApiBackup(token) { err ->
+                                                    backupBusy = false
+                                                    backupMsg = if (err == null) true to "پشتیبان در گوگل درایو بارگذاری شد." else false to err
+                                                }
+                                            }
+                                        },
+                                        onDriveApiRestore = {
+                                            withDriveToken { token ->
+                                                viewModel.driveApiList(token) { files, err ->
+                                                    backupBusy = false
+                                                    if (files == null) backupMsg = false to (err ?: "فهرست درایو خوانده نشد.") else driveFiles = files
+                                                }
+                                            }
+                                        },
+                                        onDriveApiSignOut = {
+                                            // توکن فعلی (اگر بی‌پنجره در دسترس باشد) باطل می‌شود؛ پشتیبان‌ها در درایو می‌مانند
+                                            com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(this@MainActivity)
+                                                .authorize(com.example.data.DriveApi.request())
+                                                .addOnCompleteListener { t ->
+                                                    val tok = if (t.isSuccessful && !t.result.hasResolution()) t.result.accessToken else null
+                                                    viewModel.driveApiDisconnect(tok)
+                                                }
+                                            backupMsg = true to "از حساب گوگل خارج شدید؛ پشتیبان‌ها در درایو می‌مانند."
+                                        },
+                                        driveFiles = driveFiles,
+                                        onDriveFilesDismiss = { driveFiles = null },
+                                        onDriveFilePick = { f, pass ->
+                                            withDriveToken { token ->
+                                                viewModel.driveApiDownload(token, f.id) { bytes, err ->
+                                                    if (bytes == null) {
+                                                        backupBusy = false
+                                                        backupMsg = false to (err ?: "فایل درایو خوانده نشد.")
+                                                    } else restoreBytes(bytes, pass)
+                                                }
+                                            }
+                                        },
                                         onAutoEnabled = { viewModel.setAutoBackupEnabled(it) },
                                         onAutoPeriod = { viewModel.setAutoBackupPeriod(it) },
                                         onPickFolder = { folderLauncher.launch(null) },
@@ -719,7 +1009,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         onAlertsChange = { viewModel.setAlertsEnabled(it) },
                                         onBack = { closeSub() },
                                         onPay = { loanToPay = it },
-                                        onReviewSms = { viewModel.setSmsAssistantSheetOpen(true) }
+                                        onReviewSms = { openPendingSheet() },
+                                        payments = loanPayments
                                     )
                                 }
 
@@ -847,7 +1138,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             onOpenNotifications = { openSub("notifications") },
                                                             onOpenAccounts = { openSub("accounts") },
                                                             onOpenSettings = { openSub("settings") },
-                                                            onOpenSmsInbox = { viewModel.setSmsAssistantSheetOpen(true) },
+                                                            onOpenSmsInbox = { openPendingSheet() },
                                                             onOpenReports = { viewModel.setTab(Tab.REPORTS) },
                                                             onOpenDay = { day ->
                                                                 txSelectedDay = day
@@ -859,15 +1150,11 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             },
                                                             onPayLoan = { loanToPay = it },
                                                             onApproveSms = { p ->
-                                                                val cat = categories.firstOrNull { c ->
-                                                                    c.isIncome == !p.isExpense && p.title.contains(c.name)
-                                                                }?.name ?: if (p.isExpense) "سایر" else "درآمد"
+                                                                val cat = com.example.data.SmsApproval.guessCategory(p, categories)
                                                                 viewModel.approvePendingTransaction(p, p.title.ifBlank { "تراکنش بانکی" }, cat, p.amount, null, p.isExpense)
                                                             },
                                                             onDismissSms = { p -> viewModel.rejectPendingTransaction(p.id) },
-                                                            onReviewSms = { p ->
-                                                                viewModel.setSmsAssistantSheetOpen(true)
-                                                            },
+                                                            onReviewSms = { p -> openPendingSheet(p.id) },
                                                             onTransactionClick = { tx -> selectedTransactionForEdit = tx },
                                                             activeGoal = activeGoal,
                                                             onOpenGoals = { openSub("goals") },
@@ -920,7 +1207,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                             onOpenCheque = { chequeEditing = it; chequeSheetOpen = true },
                                                             creditUsed = cards.filter { it.accountType == com.example.data.AccountType.CREDIT && it.balance < 0 }.sumOf { -it.balance },
                                                             segment = loansSegment,
-                                                            onSegment = { loansSegment = it }
+                                                            onSegment = { loansSegment = it },
+                                                            loanPayments = loanPayments
                                                         )
                                                     }
 
@@ -1009,7 +1297,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             if (isAddTransactionOpen) {
                                 com.example.ui.layer.LayerAddSheet(
                                     categories = categories,
-                                    cards = cards,
+                                    // حساب پیش‌فرض اول، تا از پیش انتخاب شود
+                                    cards = remember(cards, defaultAccount) { cards.sortedByDescending { it.bankName == defaultAccount } },
                                     transactions = transactions,
                                     startAsExpense = initialIsExpenseForDialog,
                                     onDismiss = { isAddTransactionOpen = false; addWithVoice = false },
@@ -1052,6 +1341,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     loan = loan,
                                     cards = cards,
                                     onConfirm = { l, from -> viewModel.payInstallmentFrom(l, from) },
+                                    payments = loanPayments,
                                     onDismiss = { loanToPay = null },
                                     onGoHome = {
                                         loanToPay = null
@@ -1110,13 +1400,88 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     onDismiss = { isAssetSheetOpen = false },
                                     onSearchFunds = { q, cb -> viewModel.searchFunds(q, cb) },
                                     onSave = { viewModel.saveAsset(it) },
-                                    onDelete = { viewModel.deleteAsset(it.id) }
+                                    onDelete = { viewModel.deleteAsset(it.id) },
+                                    preset = assetPreset,
+                                    trades = assetSheetFor?.let { a -> assetTrades.filter { it.assetId == a.id || it.code == a.code } }.orEmpty(),
+                                    onDeleteWithTrades = { a, undo -> viewModel.deleteAssetWithTrades(a, undo) }
+                                )
+                            }
+
+                            if (tradeOpen) detailCode?.let { code ->
+                                val holding = assets.firstOrNull { it.code == code }
+                                val name = detailName(code)
+                                val kind = holding?.kind ?: com.example.data.PriceCatalog.find(code)?.kind
+                                    ?: if (com.example.data.PriceCatalog.isFund(code)) com.example.data.AssetKind.FUND else com.example.data.AssetKind.CURRENCY
+                                com.example.ui.layer.TradeSheet(
+                                    name = name,
+                                    unitName = com.example.data.PriceCatalog.find(code)?.unit ?: "واحد",
+                                    holding = holding,
+                                    startBuy = tradeBuy,
+                                    livePrice = holding?.manualPrice?.takeIf { it > 0 }?.toDouble() ?: prices[code]?.exact,
+                                    cards = cards,
+                                    onDismiss = { tradeOpen = false; tradeEditing = null },
+                                    onSave = { isBuy, q, total, date, bank ->
+                                        val old = tradeEditing
+                                        if (old != null) viewModel.updateTrade(old, isBuy, q, total, date, bank)
+                                        else viewModel.recordTrade(holding, code, name, kind, isBuy, q, total, date, bank)
+                                    },
+                                    editing = tradeEditing,
+                                    onDelete = tradeEditing?.let { t -> { viewModel.deleteTrade(t) } }
+                                )
+                            }
+
+                            if (alertOpen) detailCode?.let { code ->
+                                val inUsd = com.example.ui.layer.inDollars(code) && prices[code]?.usd != null
+                                com.example.ui.layer.AlertSheet(
+                                    name = detailName(code),
+                                    inUsd = inUsd,
+                                    current = if (inUsd) prices[code]?.usd else prices[code]?.exact,
+                                    onDismiss = { alertOpen = false },
+                                    onSave = { above, below -> viewModel.addAlert(code, detailName(code), inUsd, above, below) }
+                                )
+                            }
+
+                            // جشن پرداخت قسط آخر: کاغذرنگی، لرزش جشن و پیام کوتاه
+                            val celebration by viewModel.celebration.collectAsStateWithLifecycle()
+                            celebration?.let { msg ->
+                                val buzz = com.example.ui.layer.rememberBuzz()
+                                LaunchedEffect(msg) { buzz(com.example.ui.layer.Buzz.PARTY) }
+                                Box(Modifier.fillMaxSize()) {
+                                    com.example.ui.layer.Confetti(onDone = { viewModel.celebrated() })
+                                    Box(
+                                        Modifier.align(Alignment.Center).clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
+                                            .background(Color(0xE6161A22)).padding(horizontal = 22.dp, vertical = 14.dp)
+                                    ) { Text(msg, style = com.example.ui.layer.lt(17.sp, FontWeight.ExtraBold, Color.White)) }
+                                }
+                            }
+
+                            if (currencyOpen) {
+                                com.example.ui.layer.CurrencySheet(
+                                    current = com.example.data.Money.current,
+                                    suggestedUsdToman = viewModel.usdTomanRate(),
+                                    busy = currencyBusy,
+                                    error = currencyError,
+                                    onDismiss = { if (!currencyBusy) { currencyOpen = false; currencyError = null } },
+                                    onOpenBackup = { currencyOpen = false; currencyError = null; openBackupGuarded() },
+                                    onConvert = { to, rate ->
+                                        currencyBusy = true
+                                        currencyError = null
+                                        viewModel.changeCurrency(to, rate) { err ->
+                                            currencyBusy = false
+                                            if (err != null) currencyError = err
+                                            else {
+                                                currencyOpen = false
+                                                // همهٔ صفحه‌ها با واحد تازه از نو ساخته شوند
+                                                this@MainActivity.recreate()
+                                            }
+                                        }
+                                    }
                                 )
                             }
 
                             if (weeklyOpen) {
-                                val digest = remember(transactions, loans, cheques, bills) {
-                                    com.example.data.WeeklyDigest.build(transactions, loans, cheques, bills)
+                                val digest = remember(transactions, loans, cheques, bills, loanPayments) {
+                                    com.example.data.WeeklyDigest.build(transactions, loans, cheques, bills, payments = loanPayments)
                                 }
                                 com.example.ui.layer.WeeklySummarySheet(
                                     digest = digest,
@@ -1282,14 +1647,36 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 }
                             }
 
+                            // شیت «تراکنش‌های تازه»؛ ویرایش یک ردیف صفحهٔ کامل بررسی را رویش باز می‌کند
+                            if (pendingSheetOpen && pendingSms.isNotEmpty() && !showSmsAssistantSheet) {
+                                com.example.ui.layer.LayerPendingSheet(
+                                    pending = pendingSms,
+                                    categories = categories,
+                                    cards = cards,
+                                    senders = bankSenders,
+                                    focusId = pendingFocusId,
+                                    onApprove = { p, category ->
+                                        viewModel.approvePendingTransaction(p, p.title.ifBlank { "تراکنش بانکی" }, category, p.amount, null, p.isExpense)
+                                    },
+                                    onApproveAll = { viewModel.approvePendingBatch(it) },
+                                    onReject = { p -> viewModel.rejectPendingTransaction(p.id) },
+                                    onEdit = { p -> reviewFocusId = p.id; viewModel.setSmsAssistantSheetOpen(true) },
+                                    onLater = {
+                                        com.example.data.SmsPrefs.setSheetSeenMaxId(sheetContext, newestPendingId)
+                                        pendingSheetOpen = false
+                                        pendingFocusId = null
+                                    }
+                                )
+                            }
+
                             // بررسی پیامک‌ها تمام‌صفحه روی همه چیز
                             if (showSmsAssistantSheet) {
                                 com.example.ui.layer.LayerSmsReviewScreen(
                                     viewModel = viewModel,
-                                    pending = pendingSms,
+                                    pending = pendingSms.sortedByDescending { it.id == reviewFocusId },
                                     categories = categories,
                                     cards = cards,
-                                    onBack = { viewModel.setSmsAssistantSheetOpen(false) }
+                                    onBack = { reviewFocusId = null; viewModel.setSmsAssistantSheetOpen(false) }
                                 )
                             }
 
@@ -1317,8 +1704,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     }
                                 ) {
                                     androidx.compose.material3.Text(
-                                        "در تراز: ${com.example.ui.layer.money(m.inApp)} تومان\n" +
-                                            "طبق پیامک بانک: ${com.example.ui.layer.money(m.inSms)} تومان\n\n" +
+                                        "در تراز: ${com.example.ui.layer.money(m.inApp)} ${com.example.data.Money.label}\n" +
+                                            "طبق پیامک بانک: ${com.example.ui.layer.money(m.inSms)} ${com.example.data.Money.label}\n\n" +
                                             "معمولاً یعنی تراکنشی بیرون از تراز ثبت نشده یا موجودی اول درست وارد نشده بود.",
                                         style = com.example.ui.layer.lt(14.sp, lineHeight = 24.sp)
                                     )

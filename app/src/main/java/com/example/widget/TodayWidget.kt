@@ -53,6 +53,7 @@ class TodayWidget : AppWidgetProvider() {
 
         private suspend fun render(context: Context, manager: AppWidgetManager, ids: IntArray) {
             val db = AppDatabase.getDatabase(context, CoroutineScope(Dispatchers.IO))
+            com.example.data.Money.load(context)
             val now = System.currentTimeMillis()
             val (start, end) = JalaliDate.dayRange(now)
             val today = db.transactionDao().getAllTransactions().first()
@@ -62,11 +63,15 @@ class TodayWidget : AppWidgetProvider() {
 
             val next = db.loanDao().getAllLoans().first()
                 .filter { !it.isSettled }
-                .map { it to JalaliDate.nextDueTimestamp(it.dueDay, now) }
+                .map { loan ->
+                    // قسطی که برای این ماه پرداخت شده دیگر «پیش رو» نیست
+                    val paid = db.loanPaymentDao().forLoan(loan.id).map { it.monthKey }.toSet()
+                    loan to JalaliDate.nextUnpaidDueTimestamp(loan.dueDay, paid, now)
+                }
                 .minByOrNull { it.second }
 
             val views = RemoteViews(context.packageName, R.layout.widget_today)
-            views.setTextViewText(R.id.widget_today, "${fa(today)} تومان")
+            views.setTextViewText(R.id.widget_today, "${fa(today)} ${com.example.data.Money.label}")
             views.setTextViewText(
                 R.id.widget_budget,
                 if (budget > 0) {
@@ -83,7 +88,7 @@ class TodayWidget : AppWidgetProvider() {
                         1 -> "فردا"
                         else -> "${JalaliDate.toPersianDigits(days)} روز دیگر"
                     }
-                    "قسط ${loan.loanName}: ${fa(minOf(loan.installmentAmount, loan.totalAmount - loan.paidAmount))} تومان، $whenText"
+                    "قسط ${loan.loanName}: ${fa(minOf(loan.installmentAmount, loan.totalAmount - loan.paidAmount))} ${com.example.data.Money.label}، $whenText"
                 } ?: "قسط پیش رویی وجود ندارد"
             )
             val open = PendingIntent.getActivity(
@@ -110,7 +115,7 @@ class TodayWidget : AppWidgetProvider() {
             ids.forEach { manager.updateAppWidget(it, views) }
         }
 
-        private fun fa(v: Long): String =
-            JalaliDate.toPersianDigits(String.format(java.util.Locale.ENGLISH, "%,d", v).replace(',', '٬'))
+        /** مبلغ به واحد پولی دفتر */
+        private fun fa(v: Long): String = com.example.data.Money.format(v)
     }
 }

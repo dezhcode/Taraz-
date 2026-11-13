@@ -140,7 +140,7 @@ fun LayerReportsScreen(
                     lt(44.sp, FontWeight.Light, if (cur.saved < 0) L.RedText else L.Ink, letterSpacing = (-1.5).sp),
                     modifier = Modifier.weight(1f, fill = false)
                 )
-                Text("تومان", style = lt(14.sp, FontWeight.SemiBold), modifier = Modifier.padding(bottom = 8.dp))
+                Text("${com.example.data.Money.label}", style = lt(14.sp, FontWeight.SemiBold), modifier = Modifier.padding(bottom = 8.dp))
                 if (cur.income > 0 && cur.saved > 0) {
                     val pct = (cur.saved * 100 / cur.income).toInt()
                     Box(
@@ -169,7 +169,7 @@ fun LayerReportsScreen(
                 else "پس‌انداز شش ماه اخیر",
                 style = lt(14.sp, FontWeight.Bold)
             )
-            Text("پس‌انداز هر ماه، به تومان", style = lt(12.sp, color = L.Muted), modifier = Modifier.padding(top = 2.dp))
+            Text("پس‌انداز هر ماه، به ${com.example.data.Money.label}", style = lt(12.sp, color = L.Muted), modifier = Modifier.padding(top = 2.dp))
             Row(
                 Modifier.padding(top = 14.dp).fillMaxWidth().height(150.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -254,7 +254,7 @@ fun LayerReportsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("# $tag", style = lt(14.sp, FontWeight.SemiBold, L.PrimaryText), modifier = Modifier.weight(1f))
-                        Text("${fa(list.size)} مورد · ${money(total)} تومان", style = lt(13.sp, color = L.Muted))
+                        Text("${fa(list.size)} مورد · ${money(total)} ${com.example.data.Money.label}", style = lt(13.sp, color = L.Muted))
                     }
                     if (openTag == tag) {
                         list.take(6).forEach { t ->
@@ -350,11 +350,11 @@ fun LayerReportsScreen(
                     // خلاصهٔ واقعی همین ماه برای دستیار؛ پاسخ در چت ذخیره می‌شود
                     val cats = byCategory.take(6).joinToString("، ") { (n, v) ->
                         val b = prevByCategory[n] ?: 0L
-                        "$n ${v} تومان" + if (b > 0) " (ماه قبل $b)" else ""
+                        "$n ${v} ${com.example.data.Money.label}" + if (b > 0) " (ماه قبل $b)" else ""
                     }
                     onAskAssistant(
                         "گزارش ${date.formatMonthYear()} من را کوتاه و کاربردی تحلیل کن.\n" +
-                            "دریافتی: ${cur.income} تومان، هزینه: ${cur.expense} تومان، پس‌انداز: ${cur.saved} تومان.\n" +
+                            "دریافتی: ${cur.income} ${com.example.data.Money.label}، هزینه: ${cur.expense} ${com.example.data.Money.label}، پس‌انداز: ${cur.saved} ${com.example.data.Money.label}.\n" +
                             "ماه قبل: دریافتی ${prev.income}، هزینه ${prev.expense}.\n" +
                             "هزینه به تفکیک دسته: ${cats.ifBlank { "ثبت نشده" }}.\n" +
                             "بگو کجا بیشتر از معمول خرج کرده‌ام و برای ماه بعد سه پیشنهاد مشخص بده."

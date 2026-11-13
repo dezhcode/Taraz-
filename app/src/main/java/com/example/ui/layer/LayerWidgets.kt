@@ -4,6 +4,13 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -26,7 +33,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -34,6 +40,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -144,21 +152,27 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier) {
 /** کلید روشن/خاموش ۴۸×۳۰ */
 @Composable
 fun LSwitch(checked: Boolean, label: String, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+    val buzz = rememberBuzz()
+    // دایره با کمی پرش (فنری) جابه‌جا می‌شود و رنگ زمینه نرم عوض می‌شود
+    val knob by animateDpAsState(if (checked) 18.dp else 0.dp, spring(dampingRatio = 0.6f, stiffness = 500f), label = "knob")
+    val track by animateColorAsState(
+        if (checked && enabled) L.Primary else if (checked) L.PrimaryDisabled else L.SwitchOff, label = "track"
+    )
     Box(
         Modifier
             .width(48.dp).height(30.dp)
             .clip(CircleShape)
-            .background(if (checked && enabled) L.Primary else if (checked) L.PrimaryDisabled else L.SwitchOff)
-            .clickable(enabled = enabled) { onChange(!checked) }
+            .background(track)
+            .clickable(enabled = enabled) { buzz(Buzz.TICK); onChange(!checked) }
             .padding(3.dp)
             .semantics {
                 role = Role.Switch
                 contentDescription = label
                 stateDescription = if (checked) "روشن" else "خاموش"
             },
-        contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart
+        contentAlignment = Alignment.CenterStart
     ) {
-        Box(Modifier.size(24.dp).clip(CircleShape).background(Color.White))
+        Box(Modifier.offset(x = knob).size(24.dp).clip(CircleShape).background(Color.White))
     }
 }
 
@@ -173,13 +187,16 @@ fun BigButton(
     height: Dp = 54.dp,
     onClick: () -> Unit
 ) {
+    val buzz = rememberBuzz()
+    val press = remember { MutableInteractionSource() }
     Box(
         modifier
             .fillMaxWidth()
             .height(height)
+            .pressScale(press)
             .clip(RoundedCornerShape(16.dp))
             .background(if (enabled) background else L.Disabled)
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(interactionSource = press, indication = LocalIndication.current, enabled = enabled) { buzz(Buzz.TICK); onClick() },
         contentAlignment = Alignment.Center
     ) {
         Text(text, style = lt(16.sp, FontWeight.Bold, if (enabled) foreground else L.Faint))
@@ -189,13 +206,16 @@ fun BigButton(
 /** دکمهٔ ثانویهٔ ملایم (آبی کمرنگ) تمام‌عرض */
 @Composable
 fun SoftBigButton(text: String, modifier: Modifier = Modifier, height: Dp = 50.dp, onClick: () -> Unit) {
+    val buzz = rememberBuzz()
+    val press = remember { MutableInteractionSource() }
     Box(
         modifier
             .fillMaxWidth()
             .height(height)
+            .pressScale(press)
             .clip(RoundedCornerShape(16.dp))
             .background(L.PrimarySoft)
-            .clickable(onClick = onClick),
+            .clickable(interactionSource = press, indication = LocalIndication.current) { buzz(Buzz.TICK); onClick() },
         contentAlignment = Alignment.Center
     ) {
         Text(text, style = lt(15.sp, FontWeight.Bold, L.PrimaryText))
@@ -239,7 +259,7 @@ fun LField(
                     if (value.isEmpty() && placeholder.isNotEmpty()) {
                         Text(placeholder, style = lt(14.sp, color = L.Placeholder).let { if (ltr) it.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr) else it })
                     }
-                    BasicTextField(
+                    StableTextField(
                         value = value,
                         onValueChange = onChange,
                         singleLine = singleLine,
@@ -262,13 +282,17 @@ fun LField(
 /** چیپ قابل انتخاب (قرص) */
 @Composable
 fun LChip(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val buzz = rememberBuzz()
+    val press = remember { MutableInteractionSource() }
+    val bg by animateColorAsState(if (selected) L.Primary else L.Surface, label = "chip")
     Box(
         modifier
             .height(38.dp)
+            .pressScale(press, 0.94f)
             .clip(CircleShape)
-            .background(if (selected) L.Primary else L.Surface)
+            .background(bg)
             .then(if (selected) Modifier else Modifier.border(1.dp, L.Rail, CircleShape))
-            .clickable(onClick = onClick)
+            .clickable(interactionSource = press, indication = LocalIndication.current) { buzz(Buzz.TICK); onClick() }
             .padding(horizontal = 14.dp)
             .semantics { role = Role.RadioButton },
         contentAlignment = Alignment.Center
@@ -359,26 +383,21 @@ fun shiftJalaliMonth(ts: Long, delta: Int): Long {
     return com.example.utils.JalaliDate.toTimestamp(y, m, 1)
 }
 
-/** عدد از متن ورودی (ارقام فارسی/عربی هم قبول است)؛ ورودی نامعتبر = ۰ */
-fun parseAmount(text: String): Long {
-    val sb = StringBuilder()
-    for (ch in text) {
-        val p = "۰۱۲۳۴۵۶۷۸۹".indexOf(ch)
-        val a = "٠١٢٣٤٥٦٧٨٩".indexOf(ch)
-        when {
-            ch in '0'..'9' -> sb.append(ch)
-            p >= 0 -> sb.append(('0' + p))
-            a >= 0 -> sb.append(('0' + a))
-        }
-    }
-    return sb.toString().take(15).toLongOrNull() ?: 0L
-}
+/** مبلغ از متن ورودی (ارقام فارسی/عربی هم قبول است)، به واحد ذخیرهٔ پول انتخاب‌شده؛ ورودی نامعتبر = ۰ */
+fun parseAmount(text: String): Long = com.example.data.Money.parse(text)
 
-/** ۱۲٬۵۰۰٬۰۰۰ از متن ورودی؛ برای نمایش داخل فیلد */
-fun groupedInput(text: String): String {
-    val n = parseAmount(text)
-    return if (n == 0L && text.none { it.isDigit() || it in "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩" }) "" else money(n)
-}
+/** عدد صحیح ساده از متن (روز ماه، تعداد)؛ برخلاف [parseAmount] واحد پول و اعشار ندارد */
+fun parseInt(text: String): Int = com.example.data.Money.parse(text, com.example.data.AppCurrency.TOMAN).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+
+/** ۱۲٬۵۰۰٬۰۰۰ (یا ۱۲٫۵ برای دلار) از متن ورودی؛ برای نمایش داخل فیلد مبلغ */
+fun groupedInput(text: String): String = com.example.data.Money.inputText(text)
+
+/** صفحه‌کلید کادرهای مبلغ: برای دلار با ممیز */
+val moneyKeyboard: androidx.compose.foundation.text.KeyboardOptions
+    get() = androidx.compose.foundation.text.KeyboardOptions(
+        keyboardType = if (com.example.data.Money.current.decimals > 0) androidx.compose.ui.text.input.KeyboardType.Decimal
+        else androidx.compose.ui.text.input.KeyboardType.Number
+    )
 
 /**
  * شیت پایین‌آمدنی تمام‌عرض: پس‌زمینهٔ تیره، گوشه‌های گرد، دستگیره، عنوان و «انصراف».
@@ -443,20 +462,24 @@ fun Modifier.androidx_tapOutside(onTap: () -> Unit): Modifier =
 /** سه‌گزینه‌ای قرصی (مثل «کارت / نقد / دیگر») */
 @Composable
 fun LSegmented(options: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
-    Row(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(L.Track).padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        options.forEachIndexed { i, label ->
-            val on = i == selectedIndex
-            Box(
-                Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(10.dp))
-                    .background(if (on) L.Surface else Color.Transparent)
-                    .clickable { onSelect(i) }
-                    .semantics { role = Role.RadioButton },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(label, style = lt(14.sp, if (on) FontWeight.Bold else FontWeight.Normal, if (on) L.Ink else L.Muted))
+    val buzz = rememberBuzz()
+    BoxWithConstraints(modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(L.Track).padding(4.dp)) {
+        val n = options.size.coerceAtLeast(1)
+        val itemW = (maxWidth - 4.dp * (n - 1)) / n
+        // پس‌زمینهٔ گزینهٔ انتخاب‌شده به گزینهٔ تازه سُر می‌خورد، به‌جای پریدن
+        val x by animateDpAsState((itemW + 4.dp) * selectedIndex.coerceIn(0, n - 1), spring(dampingRatio = 0.75f, stiffness = 500f), label = "seg")
+        Box(Modifier.offset(x = x).width(itemW).height(40.dp).clip(RoundedCornerShape(10.dp)).background(L.Surface))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            options.forEachIndexed { i, label ->
+                val on = i == selectedIndex
+                Box(
+                    Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(10.dp))
+                        .clickable { if (!on) buzz(Buzz.TICK); onSelect(i) }
+                        .semantics { role = Role.RadioButton },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(label, style = lt(14.sp, if (on) FontWeight.Bold else FontWeight.Normal, if (on) L.Ink else L.Muted))
+                }
             }
         }
     }

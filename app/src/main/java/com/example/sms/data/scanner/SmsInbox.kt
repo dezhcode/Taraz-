@@ -5,7 +5,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.example.sms.data.parser.SmsFilter
-import com.example.sms.util.BankUtils
+import com.example.sms.data.parser.BankSmsDetector
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -14,10 +14,14 @@ data class InboxMessage(
     val address: String,
     val body: String,
     val date: Long,
-    /** نام بانکی که تراز از شماره یا متن حدس می‌زند؛ «بانک نامشخص» اگر حدسی نباشد. */
+    /** نام بانک (از سرشماره، یا برای پیامک تراکنشِ فرستندهٔ ناشناخته از متن)؛ رشتهٔ خالی اگر معلوم نباشد. */
     val bankGuess: String,
-    /** متن شبیه پیامک بانکی است (واژه‌هایی مثل برداشت، واریز، مانده). */
-    val looksBank: Boolean
+    /** فرستنده بانک است یا این پیامک شکل تراکنش بانکی دارد. */
+    val looksBank: Boolean,
+    /** سرشماره خودش بانک شناخته شد (شماره یا نام لاتین بانک). */
+    val senderIsBank: Boolean = false,
+    /** خود پیامک تراکنش بانکی است (مبلغ، جهت، و مانده/حساب/تاریخ). */
+    val isTransaction: Boolean = false
 )
 
 /**
@@ -33,6 +37,9 @@ class SmsInbox(private val context: Context) {
 
         val q = SmsFilter.normalize(query).trim()
         val out = ArrayList<InboxMessage>()
+        // بانکِ هر سرشماره یک‌بار پیدا می‌شود؛ بانک از متن فقط برای چند پیامک تراکنشِ فرستندهٔ ناشناخته.
+        val senderBanks = HashMap<String, String?>()
+        val contentTries = HashMap<String, Int>()
         try {
             context.contentResolver.query(
                 Uri.parse("content://sms/inbox"),
@@ -49,12 +56,20 @@ class SmsInbox(private val context: Context) {
                     if (address.isEmpty() || body.isBlank()) continue
                     if (SmsFilter.isOneTimeCode(body)) continue
                     if (q.isNotEmpty() && !SmsFilter.normalize(body).contains(q) && !SmsFilter.normalize(address).contains(q)) continue
+                    val senderBank = senderBanks.getOrPut(address) { BankSmsDetector.senderBank(address)?.displayName }
+                    val tx = BankSmsDetector.isTransaction(body)
+                    val bank = senderBank ?: if (tx && (contentTries[address] ?: 0) < 3) {
+                        contentTries[address] = (contentTries[address] ?: 0) + 1
+                        BankSmsDetector.contentBank(body)
+                    } else null
                     out += InboxMessage(
                         address = address,
                         body = body,
                         date = if (d >= 0) c.getLong(d) else 0L,
-                        bankGuess = BankUtils.detectBankName(address, body),
-                        looksBank = BankUtils.isBankSms(body)
+                        bankGuess = bank.orEmpty(),
+                        looksBank = senderBank != null || tx,
+                        senderIsBank = senderBank != null,
+                        isTransaction = tx
                     )
                 }
             }

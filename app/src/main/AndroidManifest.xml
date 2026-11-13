@@ -12,6 +12,11 @@
       ثبت با صدا و دستیار خاموش‌اند (Features.kt)، پس RECORD_AUDIO هنوز برداشته است.
     -->
 
+    <!-- برای دانستن اینکه برنامهٔ گوگل درایو نصب است (پشتیبان در درایو) -->
+    <queries>
+        <package android:name="com.google.android.apps.docs" />
+    </queries>
+
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"

@@ -16,11 +16,14 @@ import kotlinx.coroutines.launch
  */
 class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        Money.load(context)
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
         val parts = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
         if (parts.isEmpty()) return
         // کلید اصلی پیامک‌خوان خاموش است؛ هیچ پیامکی خوانده نمی‌شود.
         if (!SmsPrefs.enabled(context)) return
+        // برای «وضعیت دریافت» در تنظیمات: اندروید پیامک تازه را مستقیم به تراز می‌دهد یا نه.
+        SmsPrefs.markBroadcast(context)
 
         // A long SMS arrives in several parts; join them per sender before reading.
         val messages = parts.filterNotNull()
@@ -35,10 +38,14 @@ class SmsReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val db = AppDatabase.getDatabase(appContext, CoroutineScope(Dispatchers.IO))
+                var anyPending = false
                 for ((address, body, sentAt) in messages) {
                     val receivedAt = if (sentAt > 0) sentAt else System.currentTimeMillis()
                     when (val outcome = SmsIngest.process(db, address, body, receivedAt)) {
-                        is SmsIngest.Outcome.Pending -> SmsQuickAction.notify(appContext, outcome.tx, outcome.bankName)
+                        is SmsIngest.Outcome.Pending -> {
+                            anyPending = true
+                            SmsQuickAction.notify(appContext, outcome.tx, outcome.bankName)
+                        }
                         is SmsIngest.Outcome.Unknown -> NotificationHelper.showNotification(
                             appContext,
                             "پیامک تازه از ${outcome.bankName} خوانده نشد",
@@ -47,6 +54,7 @@ class SmsReceiver : BroadcastReceiver() {
                         else -> Unit
                     }
                 }
+                if (anyPending) SmsQuickAction.notifySummary(appContext)
             } catch (e: Exception) {
                 Log.e("SmsReceiver", "Could not process incoming SMS", e)
             } finally {

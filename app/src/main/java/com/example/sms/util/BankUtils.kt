@@ -33,54 +33,16 @@ object BankUtils {
     }
 
     /**
-     * Resolves the bank name from sender number or SMS content.
+     * نام بانکِ یک سرشماره. همان روش موتور اصلی: شمارهٔ فرستنده با شماره‌های هر بانک در دیتابیس الگو
+     * (یا نام لاتین دقیق بانک، مثل BankMellat). متن پیامک فقط وقتی به کار می‌آید که خودِ پیامک تراکنش
+     * باشد و نام بانک را صریح ببرد؛ تبلیغ «وام بانک ملت» یا «سامانه» بانک را تعیین نمی‌کند.
      */
     fun detectBankName(sender: String, body: String): String {
-        val senderLower = sender.lowercase().trim()
-        val bodyClean = convertNumeralsAndClean(body)
-
-        // اول شماره‌های ثبت‌شدهٔ بانک‌ها در دیتابیس الگو (۳۵۴ شماره از ۴۷ بانک)
-        com.example.sms.data.parser.BankPatternDb.bankForSender(sender)?.let { return it.displayName }
-
-        return when {
-            // Check sender string
-            senderLower.contains("melli") || senderLower.contains("bmi") || senderLower.contains("ملی") -> "بانک ملی"
-            senderLower.contains("mellat") || senderLower.contains("melat") || senderLower.contains("ملت") -> "بانک ملت"
-            senderLower.contains("tejarat") || senderLower.contains("تجارت") -> "بانک تجارت"
-            senderLower.contains("saman") || senderLower.contains("سامان") -> "بانک سامان"
-            senderLower.contains("refah") || senderLower.contains("رفاه") -> "بانک رفاه"
-            senderLower.contains("ayandeh") || senderLower.contains("آینده") -> "بانک آینده"
-            senderLower.contains("parsian") || senderLower.contains("پارسیان") -> "بانک پارسیان"
-            senderLower.contains("sepah") || senderLower.contains("سپه") -> "بانک سپه"
-            senderLower.contains("saderat") || senderLower.contains("bsi") || senderLower.contains("صادرات") -> "بانک صادرات"
-            senderLower.contains("pasargad") || senderLower.contains("bpi") || senderLower.contains("پاسارگاد") -> "بانک پاسارگاد"
-            senderLower.contains("maskan") || senderLower.contains("مسکن") -> "بانک مسکن"
-            senderLower.contains("keshavarzi") || senderLower.contains("کشاورزی") -> "بانک کشاورزی"
-            senderLower.contains("shahr") || senderLower.contains("شهر") -> "بانک شهر"
-            senderLower.contains("sina") || senderLower.contains("سینا") -> "بانک سینا"
-            senderLower.contains("mehr") || senderLower.contains("مهر") -> "بانک مهر ایران"
-            senderLower.contains("resalat") || senderLower.contains("رسالت") -> "بانک رسالت"
-
-            // Fallback to checking body text
-            bodyClean.contains("بانک ملی") -> "بانک ملی"
-            bodyClean.contains("بانک ملت") -> "بانک ملت"
-            bodyClean.contains("تجارت") -> "بانک تجارت"
-            bodyClean.contains("سامان") -> "بانک سامان"
-            bodyClean.contains("رفاه کارگران") -> "بانک رفاه"
-            bodyClean.contains("آینده") -> "بانک آینده"
-            bodyClean.contains("پارسیان") -> "بانک پارسیان"
-            bodyClean.contains("سپه") -> "بانک سپه"
-            bodyClean.contains("صادرات") -> "بانک صادرات"
-            bodyClean.contains("پاسارگاد") -> "بانک پاسارگاد"
-            bodyClean.contains("مسکن") -> "بانک مسکن"
-            bodyClean.contains("کشاورزی") -> "بانک کشاورزی"
-            bodyClean.contains("بانک شهر") -> "بانک شهر"
-            bodyClean.contains("سینا") -> "بانک سینا"
-            bodyClean.contains("مهر ایران") -> "بانک مهر ایران"
-            bodyClean.contains("قرض الحسنه رسالت") -> "بانک رسالت"
-
-            else -> "بانک نامشخص ($sender)"
+        com.example.sms.data.parser.BankSmsDetector.senderBank(sender)?.let { return it.displayName }
+        if (com.example.sms.data.parser.BankSmsDetector.isTransaction(body)) {
+            com.example.sms.data.parser.BankSmsDetector.bankNamedIn(body)?.let { return it }
         }
+        return "بانک نامشخص ($sender)"
     }
 
     /**

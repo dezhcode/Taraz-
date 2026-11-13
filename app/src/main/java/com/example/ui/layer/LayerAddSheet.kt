@@ -109,10 +109,15 @@ fun LayerAddSheet(
     var note by remember { mutableStateOf("") }
     var editingNote by remember { mutableStateOf(false) }
     var account by remember { mutableStateOf(cards.firstOrNull()?.bankName) }
+    val buzz = rememberBuzz()
+    // با هر تلاش برای ثبت بی‌مبلغ یک بار بیشتر می‌شود و کادر مبلغ را می‌لرزاند
+    var amountShake by remember { mutableStateOf(0) }
     var transferTo by remember { mutableStateOf(cards.getOrNull(1)?.bankName) }
     var suggestionUsed by remember { mutableStateOf(false) }
 
-    val n = amount.toLongOrNull() ?: 0L
+    // [amount] متن صفحه‌کلید است («12.5» برای دلار)؛ [n] همان مبلغ به واحد ذخیره
+    val decimals = com.example.data.Money.current.decimals
+    val n = com.example.data.Money.parse(amount)
     val typeCats = categories.filter { it.isIncome == (type == EntryType.INCOME) }.sortedBy { it.sortOrder }
     // موردی که همین حالا از «+ … جدید» ساخته شد، خودش انتخاب می‌شود
     WatchNew(cards, { it.id }) { account = it.bankName }
@@ -122,7 +127,7 @@ fun LayerAddSheet(
     ScreenTour("add", Tours.add)
 
     fun applyDraft(d: com.example.ui.FinanceViewModel.EntryDraft) {
-        if (d.amount > 0) amount = d.amount.toString()
+        if (d.amount > 0) amount = com.example.data.Money.toInput(d.amount)
         type = if (d.isExpense) EntryType.EXPENSE else EntryType.INCOME
         val cats = categories.filter { it.isIncome == !d.isExpense }
         category = d.category?.let { c -> cats.firstOrNull { it.name == c }?.name }
@@ -141,7 +146,7 @@ fun LayerAddSheet(
         if (startWithVoice && com.example.Features.VOICE) {
             val ok = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED
-            if (ok) { helperMsg = "بفرمایید؛ مثلاً «۸۰ هزار تومان ناهار»"; onVoice { applyDraft(it) } }
+            if (ok) { helperMsg = "بفرمایید؛ مثلاً «۸۰ هزار ${com.example.data.Money.label} ناهار»"; onVoice { applyDraft(it) } }
             else micLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
         }
     }
@@ -201,7 +206,7 @@ fun LayerAddSheet(
                         }
                         Box(
                             Modifier.height(36.dp).clip(PillShape).background(L.Primary).clickable {
-                                amount = suggestion.amount.toString()
+                                amount = com.example.data.Money.toInput(suggestion.amount)
                                 category = suggestion.category
                                 note = suggestion.title
                                 if (cards.any { it.bankName == suggestion.bank }) account = suggestion.bank
@@ -213,13 +218,14 @@ fun LayerAddSheet(
                 }
 
                 // مبلغ
-                Column(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 6.dp).tourTarget("add.amount"), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 6.dp).tourTarget("add.amount").shake(amountShake), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        money(n),
+                        // دلار: ممیز و رقم اعشاری در حال تایپ هم دیده شود («۱۲٫»)
+                        if (decimals > 0 && amount.isNotEmpty()) com.example.data.Money.inputText(amount) else money(n),
                         style = lt(54.sp, FontWeight.Normal, if (n == 0L) L.Placeholder else if (type == EntryType.INCOME) L.Green else L.Ink, letterSpacing = (-1.5).sp)
                     )
                     Text(
-                        if (n == 0L) "تومان" else NumberToPersianWords.convert(n) + " تومان",
+                        if (n == 0L) com.example.data.Money.label else com.example.data.Money.words(n),
                         style = lt(13.sp, color = L.Muted), maxLines = 2
                     )
                 }
@@ -235,7 +241,7 @@ fun LayerAddSheet(
                                     }
                                     val ok = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
                                         android.content.pm.PackageManager.PERMISSION_GRANTED
-                                    if (ok) { helperMsg = if (isListening) null else "بفرمایید؛ مثلاً «۸۰ هزار تومان ناهار»"; onVoice { applyDraft(it) } }
+                                    if (ok) { helperMsg = if (isListening) null else "بفرمایید؛ مثلاً «۸۰ هزار ${com.example.data.Money.label} ناهار»"; onVoice { applyDraft(it) } }
                                     else micLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
                                 }
                                 .padding(horizontal = 14.dp),
@@ -399,22 +405,27 @@ fun LayerAddSheet(
             // صفحه‌کلید عددی
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 Column {
-                    listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf("000", "0", "back")).forEach { row ->
+                    listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf(if (decimals > 0) "." else "000", "0", "back")).forEach { row ->
                         Row(Modifier.fillMaxWidth()) {
                             row.forEach { k ->
                                 Box(
                                     Modifier.weight(1f).height(54.dp).clip(RoundedCornerShape(16.dp)).clickable {
+                                        // پاک کردن مبلغ خالی: لرزش خطا؛ بقیهٔ کلیدها تیک سبک
+                                        buzz(if (k == "back" && amount.isEmpty()) Buzz.REJECT else Buzz.KEY)
                                         amount = when {
                                             k == "back" -> amount.dropLast(1)
+                                            // ممیز فقط یک بار، و بعدش حداکثر دو رقم (سنت)
+                                            k == "." -> if ('.' in amount) amount else if (amount.isEmpty()) "0." else "$amount."
+                                            '.' in amount && amount.substringAfter('.').length >= decimals -> amount
                                             amount.isEmpty() || amount == "0" -> if (k == "0" || k == "000") "" else k
                                             amount.length + k.length <= 12 -> amount + k
                                             else -> amount
                                         }
-                                    }.semantics { contentDescription = if (k == "back") "پاک کردن" else fa(k) },
+                                    }.semantics { contentDescription = when (k) { "back" -> "پاک کردن"; "." -> "ممیز"; else -> fa(k) } },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (k == "back") Icon(Icons.AutoMirrored.Filled.Backspace, null, tint = L.Ink, modifier = Modifier.size(24.dp))
-                                    else Text(fa(k), style = lt(26.sp))
+                                    else Text(if (k == ".") "٫" else fa(k), style = lt(26.sp))
                                 }
                             }
                         }
@@ -427,14 +438,23 @@ fun LayerAddSheet(
             Box(
                 Modifier.padding(top = 10.dp).fillMaxWidth().height(56.dp).tourTarget("add.save").clip(PillShape)
                     .background(if (enabled) L.Primary else L.PrimaryDisabled)
-                    .clickable(enabled = enabled) {
+                    .clickable {
+                        // بی‌مبلغ (یا انتقال ناقص): کادر مبلغ می‌لرزد، چیزی ثبت نمی‌شود
+                        if (!enabled) {
+                            buzz(Buzz.REJECT)
+                            if (n <= 0) amountShake++ else helperMsg = "حساب مبدأ و مقصد انتقال را انتخاب کنید."
+                            return@clickable
+                        }
+                        buzz(Buzz.CONFIRM)
                         val pid = personId
                         if (type == EntryType.TRANSFER) {
                             onTransfer(account!!, transferTo!!, n)
                         } else if (pid != null) {
                             onPersonMoney(pid, n, type == EntryType.EXPENSE, account, note)
                         } else {
-                            val cat = category ?: typeCats.firstOrNull()?.name ?: if (type == EntryType.INCOME) "درآمد" else "سایر"
+                            // دسته‌ای انتخاب نشده: «سایر» (یا «سایر درآمدها»)، نه اولین دستهٔ فهرست که «غذا» است
+                            val other = if (type == EntryType.INCOME) "سایر درآمدها" else "سایر"
+                            val cat = category ?: typeCats.firstOrNull { it.name == other }?.name ?: typeCats.lastOrNull()?.name ?: other
                             onSave(note.ifBlank { cat }, n, cat, type == EntryType.EXPENSE, account ?: "کیف پول", dateOverride, tags)
                         }
                         onDismiss()

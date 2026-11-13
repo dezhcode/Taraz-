@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.first
 class WeeklySummaryWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = try {
+        com.example.data.Money.load(applicationContext)
         val prefs = applicationContext.getSharedPreferences("fidar_prefs", Context.MODE_PRIVATE)
         if (prefs.getBoolean("alerts_enabled", true) && prefs.getBoolean(KEY_ENABLED, true)) {
             val db = AppDatabase.getDatabase(applicationContext, CoroutineScope(Dispatchers.IO))
@@ -21,7 +22,8 @@ class WeeklySummaryWorker(context: Context, params: WorkerParameters) : Coroutin
                 db.transactionDao().getAllTransactions().first(),
                 db.loanDao().getAllLoans().first(),
                 db.chequeDao().getAllNow(),
-                db.billDao().getAllNow()
+                db.billDao().getAllNow(),
+                payments = db.loanPaymentDao().getAll().first()
             )
             // Nothing recorded and nothing coming up: stay quiet.
             if (digest.count > 0 || digest.upcoming.isNotEmpty()) {

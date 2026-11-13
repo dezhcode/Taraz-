@@ -90,6 +90,9 @@ interface ChequeDao {
 
     @Query("DELETE FROM cheques WHERE id = :id")
     suspend fun delete(id: Int)
+
+    @Query("UPDATE cheques SET bankName = :newName WHERE bankName = :oldName")
+    suspend fun renameAccount(oldName: String, newName: String)
 }
 
 @Dao
@@ -105,6 +108,9 @@ interface BillDao {
 
     @Query("DELETE FROM bills WHERE id = :id")
     suspend fun delete(id: Int)
+
+    @Query("UPDATE bills SET bankName = :newName WHERE bankName = :oldName")
+    suspend fun renameAccount(oldName: String, newName: String)
 }
 
 @Dao

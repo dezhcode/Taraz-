@@ -33,7 +33,7 @@ class BankRuleParser(private val now: () -> Long = System::currentTimeMillis) : 
     override fun parse(body: String, bankName: String): ParsedTransactionModel? {
         val sms = SmsText.normalize(body).trim()
         if (sms.isEmpty() || isNonTransactionMessage(sms)) return null
-        val key = bankKey(bankName) ?: bankKey(com.example.sms.util.BankUtils.detectBankName("", sms)) ?: return null
+        val key = bankKey(bankName) ?: BankSmsDetector.bankNamedIn(sms)?.let { bankKey(it) } ?: return null
         val r = try {
             dispatch(key, sms)
         } catch (e: Fail) {

@@ -50,9 +50,10 @@ class PureLogicTest {
 
     @Test
     fun rialsBecomeTomanUnlessTheSmsSaysToman() {
-        assertEquals(1_250_000L, SmsIngest.toToman(12_500_000L, "برداشت 12,500,000 ریال"))
-        assertEquals(12_500_000L, SmsIngest.toToman(12_500_000L, "مبلغ 12,500,000 تومان"))
-        assertEquals(1_250_000L, SmsIngest.toToman(12_500_000L, "-12,500,000"))
+        com.example.data.Money.setForTest(com.example.data.AppCurrency.TOMAN)
+        assertEquals(1_250_000L, SmsIngest.toBookUnit(12_500_000L, "برداشت 12,500,000 ریال"))
+        assertEquals(12_500_000L, SmsIngest.toBookUnit(12_500_000L, "مبلغ 12,500,000 تومان"))
+        assertEquals(1_250_000L, SmsIngest.toBookUnit(12_500_000L, "-12,500,000"))
     }
 
     @Test

@@ -205,18 +205,42 @@ data class JalaliDate(
             return key
         }
 
-        /** Whole days from today until [timestamp]; 0 means today, negative is past. */
+        /**
+         * Whole days from today until [timestamp]; 0 means today, negative is past.
+         * Rounded, not truncated: where clocks change, two midnights can be 23 or 25
+         * hours apart, and truncating 23 hours gave «today» for tomorrow.
+         */
         fun daysUntil(timestamp: Long, from: Long = System.currentTimeMillis()): Int {
             val start = dayRange(from).first
             val target = dayRange(timestamp).first
-            return ((target - start) / (24L * 60 * 60 * 1000)).toInt()
+            return Math.round((target - start) / (24.0 * 60 * 60 * 1000)).toInt()
         }
 
         /** [start, end) epoch-millis bounds of the Jalali day containing [timestamp]. */
         fun dayRange(timestamp: Long): Pair<Long, Long> {
             val date = fromTimestamp(timestamp)
             val start = toTimestamp(date.year, date.month, date.day)
-            return start to (start + 24L * 60 * 60 * 1000)
+            // The next day's own midnight (noon of the next day lands inside it even
+            // when this day is 23 or 25 hours long), not simply 24 hours later.
+            val next = fromTimestamp(start + 36L * 60 * 60 * 1000)
+            return start to toTimestamp(next.year, next.month, next.day)
+        }
+
+        /**
+         * The due date of the next instalment that is still unpaid: the next
+         * occurrence of [dueDay] at or after [from], skipping months already
+         * settled ([paidKeys], year*100+month). After this month's instalment is
+         * paid, even ahead of its day, the next one is next month's.
+         */
+        fun nextUnpaidDueTimestamp(dueDay: Int, paidKeys: Set<Int>, from: Long = System.currentTimeMillis()): Long {
+            var due = nextDueTimestamp(dueDay, from)
+            var key = fromTimestamp(due).monthKey()
+            var guard = 0
+            while (key in paidKeys && guard++ < 600) {
+                key = nextMonthKey(key)
+                due = dueTimestampFor(key, dueDay)
+            }
+            return due
         }
     }
 }

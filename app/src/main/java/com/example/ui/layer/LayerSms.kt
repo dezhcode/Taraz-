@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.BankCard
 import com.example.data.Category
+import com.example.data.SmsApproval
 import com.example.data.SmsIngest
 import com.example.data.PendingTransaction
 import com.example.sms.permission.SmsPermissionHelper
@@ -103,13 +104,22 @@ fun LayerSmsReviewScreen(
         return
     }
 
-    val kindCats = categories.filter { it.isIncome == !current.isExpense }.map { it.name }
-    val guess = kindCats.firstOrNull { current.title.contains(it) || current.smsBody.contains(it) } ?: if (current.isExpense) "سایر" else "درآمد"
-    var category by remember(current.id) { mutableStateOf(guess) }
+    // هر چیزی که تراز از پیامک خوانده قابل اصلاح است: نوع (هزینه/درآمد)، مبلغ، عنوان، حساب و دسته
+    var isExpense by remember(current.id) { mutableStateOf(current.isExpense) }
+    val kindCats = categories.filter { it.isIncome == !isExpense }.map { it.name }
+    var category by remember(current.id) { mutableStateOf(SmsApproval.guessCategory(current, categories)) }
     var title by remember(current.id) { mutableStateOf(current.title.ifBlank { "تراکنش بانکی" }) }
     var explain by remember(current.id) { mutableStateOf("") }
+    var amountText by remember(current.id) { mutableStateOf(money(current.amount)) }
+    var editingAmount by remember(current.id) { mutableStateOf(false) }
+    var pickingAccount by remember(current.id) { mutableStateOf(false) }
+    val amount = parseAmount(amountText)
     val senders by viewModel.bankSenders.collectAsState()
-    val account = remember(current.id, cards, senders) { SmsIngest.accountFor(current, cards, senders) }
+    val suggested = remember(current.id, cards, senders) { SmsIngest.accountFor(current, cards, senders) }
+    // null یعنی همان حساب پیشنهادی تراز
+    var chosenAccount by remember(current.id) { mutableStateOf<String?>(null) }
+    val account = chosenAccount ?: suggested
+    val accountIsNew = cards.none { it.bankName == account }
 
     LaunchedEffect(proposal) {
         proposal?.let { category = it.category; title = it.title }
@@ -124,8 +134,8 @@ fun LayerSmsReviewScreen(
         subtitle = "${fa(pending.size)} پیامک منتظر تأیید · ${fa(done + 1)} از ${fa(total)}",
         onBack = onBack,
         bottomBar = {
-            BigButton("ثبت و پیامک بعدی") {
-                viewModel.approvePendingTransaction(current, title.trim().ifBlank { "تراکنش بانکی" }, category, current.amount, account, current.isExpense)
+            BigButton("ثبت و پیامک بعدی", enabled = amount > 0) {
+                viewModel.approvePendingTransaction(current, title.trim().ifBlank { "تراکنش بانکی" }, category, amount, account, isExpense)
             }
             Box(
                 Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(14.dp)).clickable { viewModel.rejectPendingTransaction(current.id) },
@@ -142,18 +152,39 @@ fun LayerSmsReviewScreen(
             Column(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(L.Bg).padding(horizontal = 12.dp, vertical = 10.dp)
             ) {
-                Text("${current.card.ifBlank { "پیامک بانکی" }} · ${date.formatShort()} ${timeOfDay(current.date)}", style = lt(12.sp, FontWeight.Bold))
+                Text(
+                    (if (current.card.isBlank()) "پیامک بانکی" else "کارت ${fa(current.card)}") + " · ${date.formatShort()} ${timeOfDay(current.date)}",
+                    style = lt(12.sp, FontWeight.Bold)
+                )
                 Text(current.smsBody, style = lt(12.sp, color = L.Muted, lineHeight = 22.sp), modifier = Modifier.padding(top = 2.dp))
             }
             Row(Modifier.padding(top = 12.dp).fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-                Row(Modifier.weight(1f), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(money(current.amount), style = lt(32.sp, FontWeight.Light, letterSpacing = (-1).sp))
-                    Text("تومان", style = lt(13.sp), modifier = Modifier.padding(bottom = 5.dp))
+                Row(
+                    Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { editingAmount = !editingAmount }
+                        .semantics { contentDescription = "تغییر مبلغ" },
+                    verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(money(amount), style = lt(32.sp, FontWeight.Light, letterSpacing = (-1).sp))
+                    Text("${com.example.data.Money.label}", style = lt(13.sp), modifier = Modifier.padding(bottom = 5.dp))
                 }
+                // اگر تراز جهت تراکنش را برعکس خوانده، با یک ضربه درست می‌شود
                 Box(
-                    Modifier.height(28.dp).clip(CircleShape).background(if (current.isExpense) L.AmberSoft else L.GreenSoft).padding(horizontal = 10.dp),
+                    Modifier.height(32.dp).clip(CircleShape).background(if (isExpense) L.AmberSoft else L.GreenSoft)
+                        .clickable {
+                            isExpense = !isExpense
+                            category = SmsApproval.guessCategory(current.copy(isExpense = isExpense), categories)
+                        }
+                        .semantics { contentDescription = "تغییر نوع تراکنش" }
+                        .padding(horizontal = 12.dp),
                     contentAlignment = Alignment.Center
-                ) { Text(if (current.isExpense) "هزینه" else "درآمد", style = lt(12.sp, FontWeight.Bold, if (current.isExpense) L.AmberText else L.GreenText)) }
+                ) { Text((if (isExpense) "هزینه" else "درآمد") + " ⇄", style = lt(12.sp, FontWeight.Bold, if (isExpense) L.AmberText else L.GreenText)) }
+            }
+            Text("برای تغییر مبلغ یا نوع تراکنش، روی آن بزنید.", style = lt(11.sp, color = L.Muted), modifier = Modifier.padding(top = 4.dp))
+            if (editingAmount) {
+                LField(
+                    amountText, { amountText = groupedInput(it) }, "مبلغ (${com.example.data.Money.label})", Modifier.padding(top = 8.dp),
+                    keyboardOptions = moneyKeyboard
+                )
             }
             Box(Modifier.padding(top = 10.dp).fillMaxWidth().height(1.dp).background(L.Line))
             Row(Modifier.fillMaxWidth().height(46.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -167,11 +198,30 @@ fun LayerSmsReviewScreen(
                 }
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(L.Line))
-            Row(Modifier.fillMaxWidth().height(46.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(10.dp)).clickable { pickingAccount = !pickingAccount },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text("حساب", style = lt(14.sp, color = L.Muted), modifier = Modifier.width(60.dp))
                 AccountSwatch(account, cards, 24.dp, 16.dp)
                 Spacer(Modifier.width(8.dp))
-                Text(account.ifBlank { "—" }, style = lt(14.sp, FontWeight.SemiBold))
+                Text(account.ifBlank { "—" }, style = lt(14.sp, FontWeight.SemiBold), modifier = Modifier.weight(1f), maxLines = 1)
+                Text(if (pickingAccount) "بستن" else "تغییر", style = lt(13.sp, FontWeight.Bold, L.PrimaryText))
+            }
+            if (pickingAccount) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    cards.forEach { c -> LChip(c.bankName, c.bankName == account) { chosenAccount = c.bankName; pickingAccount = false } }
+                    if (cards.none { it.bankName == suggested }) {
+                        LChip("$suggested (حساب جدید)", account == suggested) { chosenAccount = null; pickingAccount = false }
+                    }
+                }
+            }
+            if (accountIsNew) {
+                Text(
+                    "حساب «$account» هنوز در تراز نیست؛ با ثبت این تراکنش ساخته می‌شود" +
+                        (if (current.balance > 0) " و موجودی‌اش از «مانده»ٔ همین پیامک گرفته می‌شود." else "."),
+                    style = lt(11.sp, color = L.Muted, lineHeight = 19.sp), modifier = Modifier.padding(top = 4.dp)
+                )
             }
         }
 

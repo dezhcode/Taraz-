@@ -73,12 +73,15 @@ internal fun ColumnScope.LoansSection(
     loans: List<Loan>,
     onAddLoan: () -> Unit,
     onPay: (Loan) -> Unit,
-    onOpenLoan: (Loan) -> Unit
+    onOpenLoan: (Loan) -> Unit,
+    payments: List<com.example.data.LoanPayment> = emptyList()
 ) {
 
     val now = System.currentTimeMillis()
     val active = loans.filter { !it.isSettled }
-    val withDue = active.map { it to JalaliDate.nextDueTimestamp(it.dueDay, now) }.sortedBy { it.second }
+    // ماه‌هایی که قسطشان پرداخت شده: قسط بعدیِ چنین وامی ماه بعد است، نه همین ماه که پرداخت شده
+    val paidKeys = remember(payments) { payments.groupBy { it.loanId }.mapValues { (_, l) -> l.map { it.monthKey }.toSet() } }
+    val withDue = active.map { it to JalaliDate.nextUnpaidDueTimestamp(it.dueDay, paidKeys[it.id].orEmpty(), now) }.sortedBy { it.second }
     val today = JalaliDate.today()
 
     var monthShift by remember { mutableIntStateOf(0) }
@@ -89,7 +92,7 @@ internal fun ColumnScope.LoansSection(
                 Text("وام‌ها و خریدهای اقساطی", style = lt(17.sp, FontWeight.Bold))
                 Text(
                     if (active.isEmpty()) "قسط فعالی وجود ندارد"
-                    else "${fa(active.size)} مورد فعال · قسط ${today.monthName} ${money(active.sumOf { it.installmentAmount })} تومان",
+                    else "${fa(active.size)} مورد فعال · قسط ${today.monthName} ${money(active.sumOf { it.installmentAmount })} ${com.example.data.Money.label}",
                     style = lt(12.sp, color = L.Muted)
                 )
             }
@@ -121,7 +124,7 @@ internal fun ColumnScope.LoansSection(
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(money(loan.installmentAmount), style = lt(24.sp, letterSpacing = (-0.8).sp))
                         Spacer(Modifier.width(4.dp))
-                        Text("تومان", style = lt(12.sp), modifier = Modifier.padding(bottom = 4.dp))
+                        Text("${com.example.data.Money.label}", style = lt(12.sp), modifier = Modifier.padding(bottom = 4.dp))
                     }
                 }
                 PrimaryButton("پرداخت این قسط", Modifier.fillMaxWidth().height(50.dp)) { onPay(loan) }
@@ -136,6 +139,7 @@ internal fun ColumnScope.LoansSection(
         val firstCol = saturdayFirstIndex(JalaliDate.toTimestamp(year, month, 1))
         val dueByDay: Map<Int, List<Loan>> = active.groupBy { it.dueDay.coerceIn(1, dim) }
         val firstDueLoanId = withDue.firstOrNull()?.first?.id
+        val firstDueKey = withDue.firstOrNull()?.second?.let { JalaliDate.fromTimestamp(it).monthKey() }
 
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp).fillMaxWidth().cardSurface(22.dp).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 14.dp)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -164,7 +168,7 @@ internal fun ColumnScope.LoansSection(
                                 val isToday = monthShift == 0 && day == today.day
                                 val past = monthShift < 0 || (monthShift == 0 && day < today.day)
                                 val dues = dueByDay[day]
-                                val isFirst = dues?.any { it.id == firstDueLoanId } == true && monthShift == 0
+                                val isFirst = dues?.any { it.id == firstDueLoanId } == true && year * 100 + month == firstDueKey
                                 val bg = when { isToday -> L.Primary; isFirst -> L.AmberText; else -> Color.Transparent }
                                 val fg = when { isToday || isFirst -> Color.White; past -> L.Faint; else -> L.Ink }
                                 Box(
@@ -205,7 +209,7 @@ internal fun ColumnScope.LoansSection(
             Box(Modifier.padding(start = 4.dp, end = 4.dp, top = 10.dp).fillMaxWidth().clip(ButtonShape).background(L.Bg).padding(horizontal = 12.dp, vertical = 10.dp)) {
                 Text(
                     if (pickedLoans != null) pickedLoans.joinToString("\n") {
-                        "${fa(picked!!)} ${JalaliDate.MONTH_NAMES[month - 1]}: قسط ${it.loanName} · ${money(it.installmentAmount)} تومان · ${it.bankName}"
+                        "${fa(picked!!)} ${JalaliDate.MONTH_NAMES[month - 1]}: قسط ${it.loanName} · ${money(it.installmentAmount)} ${com.example.data.Money.label} · ${it.bankName}"
                     } else if (active.isEmpty()) "وام فعالی ثبت نشده است."
                     else "برای مشاهدهٔ جزئیات قسط، روی روزهای رنگی ضربه بزنید.",
                     style = lt(12.sp, if (pickedLoans != null) FontWeight.SemiBold else FontWeight.Normal, if (pickedLoans != null) L.Ink else L.Muted, lineHeight = 20.sp)
@@ -257,7 +261,8 @@ fun LayerPaySheet(
     cards: List<BankCard>,
     onConfirm: (loan: Loan, fromBank: String) -> Unit,
     onDismiss: () -> Unit,
-    onGoHome: () -> Unit
+    onGoHome: () -> Unit,
+    payments: List<com.example.data.LoanPayment> = emptyList()
 ) {
     BackHandler(onBack = onDismiss)
     var done by remember { mutableStateOf(false) }
@@ -266,9 +271,16 @@ fun LayerPaySheet(
     val fromCard = cards.firstOrNull { it.bankName == from }
     val remainingBefore = remainingInstallments(loan)
     // آخرین قسط ممکن است کمتر از قسط عادی باشد؛ همان باقی‌مانده پرداخت می‌شود
-    val payAmount = minOf(loan.installmentAmount, (loan.totalAmount - loan.paidAmount).coerceAtLeast(0))
+    val leftToPay = (loan.totalAmount - loan.paidAmount).coerceAtLeast(0)
+    val payAmount = minOf(loan.installmentAmount.takeIf { it > 0 } ?: leftToPay, leftToPay)
     val total = totalInstallments(loan)
-    val nextDue = JalaliDate.nextDueTimestamp(loan.dueDay, System.currentTimeMillis() + DAY_MS * 2)
+    // قسط بعد از همین پرداخت: ماهی که این پرداخت صاف می‌کند هم پرداخت‌شده حساب می‌شود. یک بار هنگام باز شدن
+    // شیت حساب می‌شود؛ بعد از تأیید، خود این پرداخت به فهرست اضافه می‌شود و نباید دو بار حساب شود.
+    val nextDue = remember(loan.id) {
+        val now = System.currentTimeMillis()
+        val paid = payments.filter { it.loanId == loan.id }.map { it.monthKey }.toSet()
+        JalaliDate.nextUnpaidDueTimestamp(loan.dueDay, paid + JalaliDate.settledMonthKey(loan.dueDay, now, paid), now)
+    }
 
     Box(Modifier.fillMaxSize().background(Color(0x990E1116)).pointerInput(Unit) { detectTapGestures { onDismiss() } }) {
         Column(
@@ -293,7 +305,7 @@ fun LayerPaySheet(
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(money(payAmount), style = lt(42.sp, letterSpacing = (-1.5).sp))
                         Spacer(Modifier.width(6.dp))
-                        Text("تومان", style = lt(15.sp), modifier = Modifier.padding(bottom = 8.dp))
+                        Text("${com.example.data.Money.label}", style = lt(15.sp), modifier = Modifier.padding(bottom = 8.dp))
                     }
                 }
                 Box(Modifier.padding(top = 8.dp).fillMaxWidth().height(1.dp).background(L.Line))
@@ -354,7 +366,7 @@ fun LayerPaySheet(
                     Spacer(Modifier.height(12.dp))
                     Text(
                         (if (total > 0) "قسط ${fa(total - remainingBefore + 1)} از ${fa(total)} ${loan.loanName}\n" else "") +
-                            "${money(payAmount)} تومان از ${fromCard?.let { shortAccountLabel(it) } ?: from}",
+                            "${money(payAmount)} ${com.example.data.Money.label} از ${fromCard?.let { shortAccountLabel(it) } ?: from}",
                         style = lt(14.sp, color = L.Muted, lineHeight = 25.sp), textAlign = TextAlign.Center
                     )
                     if (remainingBefore > 1) {

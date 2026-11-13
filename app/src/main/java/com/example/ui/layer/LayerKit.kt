@@ -108,9 +108,11 @@ fun lt(
 
 fun fa(value: Any): String = JalaliDate.toPersianDigits(value)
 
-/** ۱۲۳٬۴۵۶ */
-fun money(value: Long): String =
-    fa(String.format(Locale.ENGLISH, "%,d", value).replace(',', '٬'))
+/** ۱۲۳٬۴۵۶ (یا ۱۲٬۳۴۵٫۶۷ در دفتر دلاری): مبلغ به واحد پولی انتخاب‌شده، بدون نام واحد */
+fun money(value: Long): String = com.example.data.Money.format(value)
+
+/** نام واحد پولی انتخاب‌شده: تومان، ریال یا دلار */
+val unitLabel: String get() = com.example.data.Money.label
 
 /** ۱۲۳٬۴۵۶ با علامت: −۱۲۳٬۴۵۶ / +۱۲۳٬۴۵۶ */
 fun signedMoney(value: Long, isExpense: Boolean): String =
@@ -122,8 +124,8 @@ fun signedMoney(value: Long, isExpense: Boolean): String =
  */
 fun millions(value: Long): String = money(value)
 
-/** عدد کامل با واحد: ۴۲٬۰۰۰٬۰۰۰ تومان */
-fun toman(value: Long): String = money(value) + " تومان"
+/** عدد کامل با واحد: ۴۲٬۰۰۰٬۰۰۰ تومان (یا ریال/دلار، هرچه کاربر انتخاب کرده) */
+fun toman(value: Long): String = com.example.data.Money.withLabel(value)
 
 /**
  * متن یک‌خطی که اگر جا نشود، اندازه‌اش را کم‌کم کوچک می‌کند تا کامل دیده شود

@@ -41,7 +41,7 @@ import com.example.data.ChequeStatus
 import com.example.data.isCash
 import com.example.utils.JalaliDate
 
-private fun daysUntil(ts: Long): Int = ((startOfDay(ts) - startOfDay(System.currentTimeMillis())) / DAY_MS).toInt()
+private fun daysUntil(ts: Long): Int = JalaliDate.daysUntil(ts)
 
 /** «۳ روز دیگر»، «امروز»، «۲ روز گذشته» */
 internal fun dueLabel(ts: Long): String {
@@ -158,7 +158,13 @@ fun ChequeSheet(
     var amountText by remember { mutableStateOf(cheque?.amount?.let { money(it) } ?: "") }
     var person by remember { mutableStateOf(cheque?.person ?: "") }
     var due by remember { mutableLongStateOf(cheque?.dueDate ?: (startOfDay(System.currentTimeMillis()) + 30 * DAY_MS + 10 * 3_600_000L)) }
-    var account by remember { mutableStateOf(cheque?.bankName ?: cards.firstOrNull { !it.isCash }?.bankName ?: cards.firstOrNull()?.bankName ?: "") }
+    // حساب چک اگر هنوز هست؛ وگرنه (حذف شده) اولین حساب، تا «وصول شد» روی حسابی که وجود ندارد ثبت نشود
+    var account by remember {
+        mutableStateOf(
+            cheque?.bankName?.takeIf { n -> cards.isEmpty() || cards.any { it.bankName == n } }
+                ?: cards.firstOrNull { !it.isCash }?.bankName ?: cards.firstOrNull()?.bankName ?: ""
+        )
+    }
     var sayadi by remember { mutableStateOf(cheque?.sayadi ?: "") }
     var category by remember { mutableStateOf(cheque?.category ?: "سایر") }
     var note by remember { mutableStateOf(cheque?.note ?: "") }
@@ -221,7 +227,7 @@ fun ChequeSheet(
         }
     ) {
         if (cheque != null && cheque.status == ChequeStatus.CLEARED) {
-            Callout("این چک وصول شده است", "${money(cheque.amount)} تومان روی حساب ${cheque.bankName} ثبت شده است. تغییر وضعیت به «در انتظار»، آن تراکنش را حذف می‌کند.", L.GreenSoft, L.GreenText)
+            Callout("این چک وصول شده است", "${money(cheque.amount)} ${com.example.data.Money.label} روی حساب ${cheque.bankName} ثبت شده است. تغییر وضعیت به «در انتظار»، آن تراکنش را حذف می‌کند.", L.GreenSoft, L.GreenText)
         }
         LSegmented(listOf("پرداخت چک", "دریافت چک"), if (issued) 0 else 1, {
             issued = it == 0
@@ -229,7 +235,7 @@ fun ChequeSheet(
             val fits = categories.filter { c -> c.isIncome == !issued }.map { c -> c.name }
             if (category !in fits) category = fits.firstOrNull() ?: category
         })
-        LField(amountText, { amountText = groupedInput(it) }, "مبلغ (تومان)", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+        LField(amountText, { amountText = groupedInput(it) }, "مبلغ (${com.example.data.Money.label})", keyboardOptions = moneyKeyboard)
         LField(person, { person = it }, if (issued) "در وجه" else "از طرف", placeholder = "نام شخص یا فروشگاه")
         val sugg = personNames.filter { it != person && (person.isBlank() || it.contains(person.trim())) }.take(6)
         if (sugg.isNotEmpty()) {

@@ -8,7 +8,6 @@ import androidx.core.app.NotificationManagerCompat
 import com.example.utils.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -19,6 +18,7 @@ import kotlinx.coroutines.launch
 class SmsQuickAction : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        Money.load(context)
         val id = intent.getIntExtra(EXTRA_ID, -1)
         if (id < 0) return
         val appContext = context.applicationContext
@@ -28,9 +28,10 @@ class SmsQuickAction : BroadcastReceiver() {
                 val db = AppDatabase.getDatabase(appContext, CoroutineScope(Dispatchers.IO))
                 when (intent.action) {
                     ACTION_APPROVE -> approve(db, id)
-                    ACTION_DISMISS -> db.pendingTransactionDao().setStatus(id, PendingStatus.REJECTED)
+                    ACTION_DISMISS -> SmsApproval.reject(db, id)
                 }
                 NotificationManagerCompat.from(appContext).cancel(notificationId(id))
+                refreshSummary(appContext, db)
             } catch (e: Exception) {
                 android.util.Log.e("SmsQuickAction", "Could not handle SMS action", e)
             } finally {
@@ -42,7 +43,11 @@ class SmsQuickAction : BroadcastReceiver() {
     companion object {
         const val ACTION_APPROVE = "taraz.dezhcode.app.SMS_APPROVE"
         const val ACTION_DISMISS = "taraz.dezhcode.app.SMS_DISMISS"
+        /** باز کردن تراز روی شیت تراکنش‌های تازه (با شناسهٔ تراکنش در [NotificationHelper.EXTRA_TARGET_ID]). */
+        const val ACTION_REVIEW = "taraz.dezhcode.app.SMS_REVIEW"
         private const val EXTRA_ID = "pending_id"
+        private const val GROUP = "taraz_sms_pending"
+        private const val SUMMARY_ID = 29_999
 
         fun notificationId(pendingId: Int) = 30_000 + pendingId
 
@@ -53,45 +58,61 @@ class SmsQuickAction : BroadcastReceiver() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-        /** The notification for a new bank SMS, with its two buttons. */
+        /**
+         * «تراکنش جدید شناسایی شد»: مبلغ، جهت، بانک و کارت. زدن روی خودش تراز را روی شیت همین تراکنش
+         * باز می‌کند؛ «ثبت سریع» بدون باز کردن برنامه ثبتش می‌کند.
+         */
         fun notify(c: Context, tx: PendingTransaction, bankName: String) {
+            val card = tx.card.filter { it.isDigit() }.takeLast(4)
+            val line = "${NotificationHelper.formatAmount(tx.amount)} ${com.example.data.Money.label} " + (if (tx.isExpense) "برداشت" else "واریز") +
+                " · " + bankName + (if (card.length == 4) " · کارت " + com.example.utils.JalaliDate.toPersianDigits(card) else "")
             NotificationHelper.showNotification(
                 c,
-                "تراکنش تازه از $bankName",
-                "${NotificationHelper.formatAmount(tx.amount)} تومان " + (if (tx.isExpense) "برداشت" else "واریز") +
-                    " — «ثبت کن» یا برای بررسی بزنید.",
+                "تراکنش جدید شناسایی شد",
+                "$line\nبرای ثبت در تراز بزنید.",
                 notificationId = notificationId(tx.id),
+                action = ACTION_REVIEW,
+                targetId = tx.id,
+                group = GROUP,
                 buttons = listOf(
-                    "ثبت کن" to intent(c, ACTION_APPROVE, tx.id),
+                    "ثبت سریع" to intent(c, ACTION_APPROVE, tx.id),
                     "مال من نیست" to intent(c, ACTION_DISMISS, tx.id)
                 )
             )
         }
 
-        /** Same result as approving in the review sheet without changing anything. */
-        suspend fun approve(db: AppDatabase, id: Int) {
-            val dao = db.pendingTransactionDao()
-            val p = dao.getById(id) ?: return
-            if (p.status != PendingStatus.PENDING) return
-            val repo = FinanceRepository(db)
-            val name = SmsIngest.accountFor(p, repo.allCardsNow(), db.bankSenderDao().getAllSenders())
-            if (repo.getCardByName(name) == null) {
-                val delta = if (p.isExpense) -p.amount else p.amount
-                repo.insertCard(
-                    BankCard(bankName = name, cardNumber = "", balance = if (p.balance > 0) p.balance - delta else 0L, accountType = AccountType.BANK)
-                )
+        /** خلاصهٔ گروه وقتی دو تراکنش یا بیشتر منتظرند: «۳ تراکنش جدید برای ثبت». */
+        suspend fun notifySummary(c: Context) {
+            refreshSummary(c, AppDatabase.getDatabase(c, CoroutineScope(Dispatchers.IO)))
+        }
+
+        private suspend fun refreshSummary(c: Context, db: AppDatabase) {
+            val count = db.pendingTransactionDao().getPendingTransactions().size
+            if (count < 2) {
+                NotificationManagerCompat.from(c).cancel(SUMMARY_ID)
+                return
             }
-            val categories = db.categoryDao().getAllCategories().first()
-            val category = categories.firstOrNull { c -> c.isIncome == !p.isExpense && p.title.contains(c.name) }?.name
-                ?: if (p.isExpense) "سایر" else "درآمد"
-            repo.insertTransaction(
-                Transaction(
-                    title = p.title.ifBlank { "تراکنش بانکی" }, amount = p.amount, category = category, date = p.date,
-                    isExpense = p.isExpense, bankName = name,
-                    type = if (p.isExpense) TransactionType.EXPENSE else TransactionType.INCOME
-                )
+            NotificationHelper.showNotification(
+                c,
+                "${com.example.utils.JalaliDate.toPersianDigits(count)} تراکنش جدید برای ثبت",
+                "برای دیدن و ثبت در تراز بزنید.",
+                notificationId = SUMMARY_ID,
+                action = ACTION_REVIEW,
+                group = GROUP,
+                groupSummary = true
             )
-            dao.setStatus(id, PendingStatus.APPROVED)
+        }
+
+        /** وقتی تراکنشی در خود برنامه ثبت یا رد شد، نوتیفیکیشنش هم برود. */
+        fun cancel(c: Context, pendingIds: Collection<Int>) {
+            val nm = NotificationManagerCompat.from(c)
+            pendingIds.forEach { nm.cancel(notificationId(it)) }
+            nm.cancel(SUMMARY_ID)
+        }
+
+        /** Same result as approving in the sheet without changing anything; see [SmsApproval]. */
+        suspend fun approve(db: AppDatabase, id: Int) {
+            SmsApproval.approve(db, id)
         }
     }
 }

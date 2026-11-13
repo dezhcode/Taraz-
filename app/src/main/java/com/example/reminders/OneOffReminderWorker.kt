@@ -12,6 +12,7 @@ class OneOffReminderWorker(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        com.example.data.Money.load(applicationContext)
         val prefs = applicationContext.getSharedPreferences("fidar_prefs", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("alerts_enabled", true)) return Result.success()
 
